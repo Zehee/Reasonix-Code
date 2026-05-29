@@ -3,6 +3,94 @@
 All notable changes to Reasonix. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.0] — 2026-05-29
+
+**Cache diagnostics v1.** `/cache-miss-report`, `doctor --cache`, and
+prefix-hash evidence in turn telemetry make cache-miss root-causes
+visible without instrumenting the loop by hand (#2188). The healing
+pipeline and token count are now skipped when the log is unchanged
+(#2180), sync FS I/O is eliminated from agent loop hot paths and the
+server API (#2162, #2219), and tokenizer + prompt builder hot paths
+are tightened (#2163, #2176).
+
+**Edit tools — unified diff display.** `edit_file`, `write_file`, and
+`multi_edit` render as one consistent diff card in both TUI and
+desktop (#2173, #2177). Two new symbol-precise tools land:
+AST-aware `delete_symbol` (#2191) and anchor-based `delete_range`
+(#2190). Auto git rollback checkpoints are now enforced before any
+write (#2169).
+
+**TUI — split-pane plan panel.** Plans render in a dedicated
+right-side panel instead of inline cards, keeping conversation flow
+intact (#2227). Themed background now applies to the input area and
+app surface (#2182, #2183), ANSI dim is replaced with explicit
+`FG.faint` colors for WCAG contrast (#2221), and mouse-wheel scroll
+jitter (#2076) plus VS Code terminal lag (#2080) are throttled. A
+windowed `AppendOnlyLog` (200 messages) with lazy file fallback keeps
+long sessions responsive (#2057).
+
+**Remote channels.** Telegram support lands with bind-callback
+confirmations and improved remote rendering / ingress (#2168, #2213,
+#2222). Weixin gains a trusted iLink channel (#2240) and terminal QR
+rendering for ilink login (#2246). QQ gets desktop support (#2058)
+plus model and mode controls in remote commands (#2062).
+
+**Sessions.** `/session-persist` toggles auto-resume on launch
+(#2238, #2243). Session resume warns when the system prompt has
+changed (#2212). Desktop sessions stay alive when the window closes
+(#2144), prompt history persists across sessions (#2068), and the
+session picker now polls for renames (#2127).
+
+**Permissions + shell.** Global shell allowlist cascades with
+per-project overrides (#2059, #2091). Allowlisted commands are
+demoted when path args escape the workspace (#2081, #2089, #2138).
+Per-turn iteration cap is configurable via `maxIterPerTurn` (#2037).
+
+**MCP.** Tool schemas are canonicalized for cache stability across
+turns (#2189). `${VAR}` env vars expand in `mcpServers` header values
+(#2148). `cc-switch` migration imports existing server configs
+(#2135). MCP search tools are preferred over built-in defaults when
+configured (#2066). Per-server `requestTimeoutMs` (#2023, #2036).
+
+**Skills.** `references/` files are inlined at load time for
+Anthropic Skills compatibility (#2214). Symlinked entries are
+followed in `SkillStore.readEntry` (#2104, #2124, #2137). Built-in
+QQ helper skill (#2004).
+
+**Web search.** Baidu AI Search backend (#2147), `bing-intl` engine
+for international index (#1990), Baidu / Metaso HTTP errors are
+classified before JSON parse to surface clearer failures (#2206).
+
+**Lifecycle.** Explicit plan-first intent detection (#2070) and
+plan-rails suggestion for high-risk tasks (#2119). Plan suggestion
+shows once per session (#2208). Plan cancel/refine carries a
+feedback text input (#2053). Desktop aborts the agent loop on
+`plan_response` cancel (#2225).
+
+**i18n.** Russian (`ru`) locale added across desktop and dashboard
+(#2217). `ja` layer files now use the spread-fallback pattern across
+all three layers (#2216) so missing keys fall back to English instead
+of rendering bare keys. `t()` uses `replaceAll` instead of regex
+(#2176).
+
+**Desktop.** Virtual list with Virtuoso renders only visible
+messages in the thread (#2056). Composer inline mentions, command
+chips, and text highlighting (#2143). Streaming output follows the
+bottom when user is at bottom (#2159). `write_file` results render
+as a DiffCard in thread view (#2177). Pending tool/path approval is
+grantable with Enter (#2015). Markdown rendering for plan body and
+memory body (#2042). Theme palettes expanded (#2134). Cache
+percentage shows 2 decimal places with details on hover (#2158).
+
+**Loop / agent.** `/max-tokens` slash command caps output tokens per
+turn (#2196, #2207). Force-summary uses the active model instead of
+hard-coded flash (#1986). Headless `NEEDS_PRO` escalation is
+one-shot (#2236).
+
+**CLI bundle.** macOS dmg split by arch — separate Apple Silicon
+and Intel DMGs (#2050). Bundled CLI version metadata is preserved
+across rebuilds (#1997).
+
 ## [0.52.0] — 2026-05-26
 
 **Ink renderer in-tree as `@esengine/ink`.** The vendored Ink fork now
