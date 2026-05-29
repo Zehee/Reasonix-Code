@@ -1,6 +1,6 @@
 {
   "name": "reasonix",
-  "version": "0.54.0",
+  "version": "0.54.1",
   "description": "DeepSeek-native coding agent: cache-first loop, flash-first cost control, tool-call repair.",
   "type": "module",
   "bin": {
@@ -95,7 +95,6 @@
     "iconv-lite": "^0.7.2",
     "ignore": "^7.0.5",
     "indent-string": "^5.0.0",
-    "ink": "workspace:*",
     "lodash-es": "^4.17.21",
     "node-html-parser": "^7.1.0",
     "picomatch": "^4.0.4",
