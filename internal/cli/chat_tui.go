@@ -175,11 +175,6 @@ func (m *chatTUI) prompts() []plugin.Prompt {
 	return m.host.Prompts()
 }
 
-// planModeMarker is prepended to every user message while plan mode is on. It
-// is part of the user message (not the system prompt or tools), so the existing
-// cache prefix stays valid.
-const planModeMarker = "[Plan mode — read-only. Explore and propose; do not write files, edit, or run side-effecting bash. Read-only tools (read_file, ls, grep, glob, web_fetch, task) are available; writers are refused by the harness. End with a concrete plan the user can approve.]"
-
 func (m chatTUI) Init() tea.Cmd {
 	return tea.Batch(
 		textarea.Blink,
@@ -305,14 +300,15 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.input.Reset()
 			m.input.SetHeight(1)
 
-			// @references (local files / MCP resources) are fetched off the event
-			// loop; the turn starts when they resolve (refsResolvedMsg).
-			if refs := m.detectRefs(line); len(refs) > 0 {
-				cmds = append(cmds, m.fetchRefs(line, refs))
+			// @references (local files / MCP resources) are resolved off the event
+			// loop by the controller; the turn starts when they resolve
+			// (refsResolvedMsg).
+			if m.ctrl.HasRefs(line) {
+				cmds = append(cmds, m.resolveRefs(line))
 				return m, finalize(m, cmds)
 			}
 
-			cmds = append(cmds, m.startTurn(m.composeSent(line), line))
+			cmds = append(cmds, m.startTurn(m.ctrl.Compose(line), line))
 			return m, finalize(m, cmds)
 		}
 
@@ -327,7 +323,7 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case strings.TrimSpace(msg.sent) == "":
 			m.notice(i18n.M.SlashPromptEmpty)
 		default:
-			cmds = append(cmds, m.startTurn(m.composeSent(msg.sent), msg.display))
+			cmds = append(cmds, m.startTurn(m.ctrl.Compose(msg.sent), msg.display))
 		}
 
 	case refsResolvedMsg:
@@ -338,7 +334,7 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.block != "" {
 			sent = "Referenced context:\n\n" + msg.block + "\n\n" + msg.line
 		}
-		cmds = append(cmds, m.startTurn(m.composeSent(sent), msg.line))
+		cmds = append(cmds, m.startTurn(m.ctrl.Compose(sent), msg.line))
 
 	case elapsedTickMsg:
 		if m.state == tuiRunning {
@@ -843,23 +839,12 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 			m.notice("custom: " + names)
 		}
 	default:
-		if c, ok := m.lookupCommand(strings.TrimPrefix(cmd, "/")); ok {
-			args := strings.Fields(input)
-			return m.startTurn(m.composeSent(c.Render(args[1:])), input)
+		if sent, ok := m.ctrl.CustomCommand(input); ok {
+			return m.startTurn(m.ctrl.Compose(sent), input)
 		}
 		m.notice(fmt.Sprintf("%s: %s", i18n.M.SlashUnknown, cmd))
 	}
 	return nil
-}
-
-// lookupCommand finds a custom slash command by name.
-func (m *chatTUI) lookupCommand(name string) (command.Command, bool) {
-	for _, c := range m.commands {
-		if c.Name == name {
-			return c, true
-		}
-	}
-	return command.Command{}, false
 }
 
 // commandNames renders the custom command list for /help, "" when there are none.
@@ -906,46 +891,25 @@ func (m *chatTUI) notice(note string) {
 	m.commitLine(dim("  · " + note))
 }
 
-// composeSent applies the plan-mode marker (when active) to a turn's input.
-func (m *chatTUI) composeSent(text string) string {
-	if m.planMode {
-		return planModeMarker + "\n\n" + text
+// resolveRefs resolves a line's @references off the event loop via the
+// controller, delivering a refsResolvedMsg with the tagged context block.
+func (m *chatTUI) resolveRefs(line string) tea.Cmd {
+	return func() tea.Msg {
+		block, errs := m.ctrl.ResolveRefs(context.Background(), line)
+		return refsResolvedMsg{line: line, block: block, errs: errs}
 	}
-	return text
 }
 
-// runMCPPrompt resolves a /mcp__server__prompt command: it maps positional args
-// onto the prompt's declared arguments and returns a tea.Cmd that fetches the
-// rendered prompt off the event loop, delivering a promptResolvedMsg.
+// runMCPPrompt resolves a /mcp__server__prompt command off the event loop via
+// the controller, delivering a promptResolvedMsg with the rendered prompt.
 func (m *chatTUI) runMCPPrompt(input string) tea.Cmd {
-	fields := strings.Fields(input)
-	name := strings.TrimPrefix(fields[0], "/")
-
-	prompts := m.prompts()
-	var found *plugin.Prompt
-	for i := range prompts {
-		if prompts[i].Name == name {
-			found = &prompts[i]
-			break
-		}
-	}
-	if found == nil {
-		m.notice(fmt.Sprintf("%s: /%s", i18n.M.SlashUnknown, name))
-		return nil
-	}
-
-	args := map[string]string{}
-	for i, a := range found.Args {
-		if i+1 < len(fields) {
-			args[a.Name] = fields[i+1]
-		}
-	}
-
-	prompt := *found
-	display := input
 	return func() tea.Msg {
-		text, err := prompt.Get(context.Background(), args)
-		return promptResolvedMsg{display: display, sent: text, err: err}
+		sent, found, err := m.ctrl.MCPPrompt(context.Background(), input)
+		if !found {
+			name := strings.TrimPrefix(strings.Fields(input)[0], "/")
+			return promptResolvedMsg{display: input, err: fmt.Errorf("%s: /%s", i18n.M.SlashUnknown, name)}
+		}
+		return promptResolvedMsg{display: input, sent: sent, err: err}
 	}
 }
 
@@ -957,7 +921,7 @@ func replaySectionsFor(history []provider.Message, width int, renderer *mdRender
 	for _, m := range history {
 		switch m.Role {
 		case provider.RoleUser:
-			content := strings.TrimPrefix(m.Content, planModeMarker+"\n\n")
+			content := strings.TrimPrefix(m.Content, control.PlanModeMarker+"\n\n")
 			out = append(out, renderUserBubble(content, width, false)+"\n\n")
 		case provider.RoleAssistant:
 			body := strings.TrimSpace(m.Content)

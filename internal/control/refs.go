@@ -1,4 +1,4 @@
-package cli
+package control
 
 import (
 	"bytes"
@@ -8,8 +8,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-
-	tea "charm.land/bubbletea/v2"
 )
 
 // maxFileRefBytes caps how much of an @-referenced file is injected into a
@@ -67,12 +65,12 @@ func classifyRef(token string, known map[string]bool, exists func(string) bool) 
 	return ref{}, false
 }
 
-// detectRefs finds the @references in a submitted line: MCP resources for
-// connected servers, and local paths that exist on disk.
-func (m *chatTUI) detectRefs(line string) []ref {
+// detectRefs finds the @references in a line: MCP resources for connected
+// servers, and local paths that exist on disk.
+func (c *Controller) detectRefs(line string) []ref {
 	known := map[string]bool{}
-	if m.host != nil {
-		for _, n := range m.host.ServerNames() {
+	if c.host != nil {
+		for _, n := range c.host.ServerNames() {
 			known[n] = true
 		}
 	}
@@ -87,37 +85,41 @@ func (m *chatTUI) detectRefs(line string) []ref {
 	return refs
 }
 
-// fetchRefs resolves each reference off the event loop and returns a
-// refsResolvedMsg with the concatenated, tagged content (or per-ref errors).
-func (m *chatTUI) fetchRefs(line string, refs []ref) tea.Cmd {
-	host := m.host
-	return func() tea.Msg {
-		var b strings.Builder
-		var errs []string
-		for _, r := range refs {
-			switch r.kind {
-			case refResource:
-				text, err := host.ReadResource(context.Background(), r.server, r.uri)
-				if err != nil {
-					errs = append(errs, "@"+r.raw+" — "+err.Error())
-					continue
-				}
-				appendRefBlock(&b, "resource", `ref="@`+r.raw+`"`, text)
-			case refFile:
-				text, isDir, err := readFileRef(r.path)
-				if err != nil {
-					errs = append(errs, "@"+r.raw+" — "+err.Error())
-					continue
-				}
-				tag := "file"
-				if isDir {
-					tag = "dir"
-				}
-				appendRefBlock(&b, tag, `path="`+r.path+`"`, text)
+// HasRefs reports whether a line contains any resolvable @references, so a
+// frontend can decide to resolve off its event loop only when needed.
+func (c *Controller) HasRefs(line string) bool {
+	return len(c.detectRefs(line)) > 0
+}
+
+// ResolveRefs resolves the @references in a line into a single tagged context
+// block (file/dir contents, MCP resource bodies), plus per-reference error
+// strings for any that failed. An empty block means no references resolved.
+// Safe to call off a frontend's event loop; honours ctx for the resource reads.
+func (c *Controller) ResolveRefs(ctx context.Context, line string) (block string, errs []string) {
+	var b strings.Builder
+	for _, r := range c.detectRefs(line) {
+		switch r.kind {
+		case refResource:
+			text, err := c.host.ReadResource(ctx, r.server, r.uri)
+			if err != nil {
+				errs = append(errs, "@"+r.raw+" — "+err.Error())
+				continue
 			}
+			appendRefBlock(&b, "resource", `ref="@`+r.raw+`"`, text)
+		case refFile:
+			text, isDir, err := readFileRef(r.path)
+			if err != nil {
+				errs = append(errs, "@"+r.raw+" — "+err.Error())
+				continue
+			}
+			tag := "file"
+			if isDir {
+				tag = "dir"
+			}
+			appendRefBlock(&b, tag, `path="`+r.path+`"`, text)
 		}
-		return refsResolvedMsg{line: line, block: b.String(), errs: errs}
 	}
+	return b.String(), errs
 }
 
 func appendRefBlock(b *strings.Builder, tag, attr, body string) {

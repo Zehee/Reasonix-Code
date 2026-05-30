@@ -50,6 +50,7 @@ type Controller struct {
 	mu          sync.Mutex
 	cancel      context.CancelFunc
 	running     bool
+	planMode    bool
 	sessionPath string
 	approvals   map[string]chan approvalReply
 	granted     map[string]bool
@@ -175,8 +176,12 @@ func (c *Controller) EnableInteractiveApproval() {
 }
 
 // SetPlanMode flips the executor's read-only gate without touching the
-// cache-stable prompt prefix.
+// cache-stable prompt prefix, and remembers the state so Compose can prepend the
+// plan-mode marker to outgoing turns.
 func (c *Controller) SetPlanMode(v bool) {
+	c.mu.Lock()
+	c.planMode = v
+	c.mu.Unlock()
 	if c.executor != nil {
 		c.executor.SetPlanMode(v)
 	}
