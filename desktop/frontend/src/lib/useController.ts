@@ -11,6 +11,7 @@ import type {
   BalanceInfo,
   ContextInfo,
   HistoryMessage,
+  JobView,
   MemoryView,
   Meta,
   QuestionAnswer,
@@ -52,6 +53,9 @@ interface State {
   // balance is the active provider's wallet readout, refreshed on mount and after
   // each turn; undefined until first fetched, available:false when not configured.
   balance?: BalanceInfo;
+  // jobs are the running background jobs, refreshed on mount, turn end, and on
+  // each notice (job start/finish emit notices).
+  jobs: JobView[];
   // currentAssistant tracks the in-flight assistant item that text/reasoning
   // deltas accumulate into; cleared at turn boundaries.
   currentAssistant?: string;
@@ -77,6 +81,7 @@ const initialState: State = {
   items: [],
   running: false,
   context: { used: 0, window: 0 },
+  jobs: [],
   turnStartAt: 0,
   turnTokens: 0,
   seq: 0,
@@ -89,6 +94,7 @@ type Action =
   | { type: "meta"; meta: Meta }
   | { type: "context"; context: ContextInfo }
   | { type: "balance"; balance: BalanceInfo }
+  | { type: "jobs"; jobs: JobView[] }
   | { type: "history"; messages: HistoryMessage[] }
   | { type: "clearApproval" }
   | { type: "clearAsk" }
@@ -293,6 +299,8 @@ function reducer(s: State, a: Action): State {
       return { ...s, context: a.context };
     case "balance":
       return { ...s, balance: a.balance };
+    case "jobs":
+      return { ...s, jobs: a.jobs };
     case "history": {
       // Only user/assistant turns with visible text — never the system prompt or
       // tool-result messages, and not the empty content of a tool-call-only turn.
@@ -311,7 +319,9 @@ function reducer(s: State, a: Action): State {
     case "clearAsk":
       return { ...s, ask: undefined };
     case "reset":
-      return { ...initialState, meta: s.meta, context: { ...s.context, used: 0 } };
+      // Background jobs and the balance are session-scoped (the controller and its
+      // job manager survive a new-session rotation), so carry them across a reset.
+      return { ...initialState, meta: s.meta, context: { ...s.context, used: 0 }, balance: s.balance, jobs: s.jobs };
     case "event":
       return applyEvent(s, a.e);
   }
@@ -340,6 +350,14 @@ export function useController() {
           .then((balance) => dispatch({ type: "balance", balance }))
           .catch(() => {});
       }
+      // Background jobs start/finish via notices and bound around a turn, so
+      // refresh the running set on both — keeps the status-bar count live.
+      if (e.kind === "turn_done" || e.kind === "notice") {
+        app
+          .Jobs()
+          .then((jobs) => dispatch({ type: "jobs", jobs }))
+          .catch(() => {});
+      }
     });
 
     void (async () => {
@@ -359,6 +377,10 @@ export function useController() {
     app
       .Balance()
       .then((balance) => dispatch({ type: "balance", balance }))
+      .catch(() => {});
+    app
+      .Jobs()
+      .then((jobs) => dispatch({ type: "jobs", jobs }))
       .catch(() => {});
 
     return off;

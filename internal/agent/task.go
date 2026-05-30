@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"reasonix/internal/event"
+	"reasonix/internal/jobs"
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
 )
@@ -75,7 +77,8 @@ func (t *TaskTool) Schema() json.RawMessage {
   "prompt":{"type":"string","description":"What the sub-agent should accomplish. Be specific about the deliverable — the sub-agent does not see this conversation."},
   "description":{"type":"string","description":"Short label for the sub-task (3-7 words). Surfaced in the dispatch line so the user sees what's running."},
   "tools":{"type":"array","items":{"type":"string"},"description":"Optional tool whitelist. Defaults to every parent tool except 'task'."},
-  "max_steps":{"type":"integer","description":"Optional cap on tool-call rounds. Defaults to half the parent's cap (min 5).","minimum":1}
+  "max_steps":{"type":"integer","description":"Optional cap on tool-call rounds. Defaults to half the parent's cap (min 5).","minimum":1},
+  "run_in_background":{"type":"boolean","description":"Run the sub-agent asynchronously: returns a job id immediately and keeps working across turns. Collect its final answer with wait, and you'll be notified when it finishes. Use for long, independent sub-tasks you don't need to block on right now."}
 },
 "required":["prompt"]
 }`)
@@ -88,10 +91,11 @@ func (t *TaskTool) ReadOnly() bool { return false }
 
 func (t *TaskTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {
-		Prompt      string   `json:"prompt"`
-		Description string   `json:"description"`
-		Tools       []string `json:"tools"`
-		MaxSteps    int      `json:"max_steps"`
+		Prompt          string   `json:"prompt"`
+		Description     string   `json:"description"`
+		Tools           []string `json:"tools"`
+		MaxSteps        int      `json:"max_steps"`
+		RunInBackground bool     `json:"run_in_background"`
 	}
 	if err := json.Unmarshal(args, &p); err != nil {
 		return "", fmt.Errorf("invalid args: %w", err)
@@ -115,31 +119,56 @@ func (t *TaskTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 		}
 	}
 
-	subReg := tool.NewRegistry()
-	if len(p.Tools) > 0 {
-		for _, name := range p.Tools {
-			if name == t.Name() {
-				continue // no recursive nesting
-			}
-			if tl, ok := t.parentReg.Get(name); ok {
-				subReg.Add(tl)
-			}
+	subReg := t.buildSubReg(p.Tools)
+
+	// Background: register a job that runs the sub-agent under the manager's
+	// session context (so it survives this turn) and return immediately. The
+	// sub-agent's tool activity still streams, nested under this call, because the
+	// nested sink captures the parent ID + stream now (not from the job ctx).
+	if p.RunInBackground {
+		jm, ok := jobs.FromContext(ctx)
+		if !ok {
+			return "", fmt.Errorf("background execution is not available in this context")
 		}
-	} else {
-		for _, name := range t.parentReg.Names() {
-			if name == t.Name() {
-				continue
-			}
-			if tl, ok := t.parentReg.Get(name); ok {
-				subReg.Add(tl)
-			}
+		parentID, parent, _, _ := CallContext(ctx)
+		nested := subSinkFor(parentID, parent)
+		label := p.Description
+		if label == "" {
+			label = "task"
 		}
+		job := jm.Start("task", label, func(jobCtx context.Context, _ io.Writer) (string, error) {
+			return t.runSub(jobCtx, p.Prompt, subReg, nested, maxSteps)
+		})
+		return fmt.Sprintf("Started background task %q (%s). It runs across turns; collect its final answer with wait (or wait will return it once done), and you'll be notified when it finishes.", job.ID, label), nil
 	}
 
-	// The sub-agent's tool calls are forwarded to the parent stream, nested under
-	// this task call (see subSink), so the UI can show the sub-agent's work live.
-	// Its text/reasoning/usage stay hidden — only the final answer, returned
-	// below, surfaces to the parent model.
+	// Foreground: run synchronously, nesting events under this call.
+	return t.runSub(ctx, p.Prompt, subReg, subSink(ctx), maxSteps)
+}
+
+// buildSubReg returns the sub-agent's tool set: the named whitelist (minus
+// `task`, to bar recursive nesting), or every parent tool except `task`.
+func (t *TaskTool) buildSubReg(names []string) *tool.Registry {
+	subReg := tool.NewRegistry()
+	src := names
+	if len(src) == 0 {
+		src = t.parentReg.Names()
+	}
+	for _, name := range src {
+		if name == t.Name() {
+			continue // no recursive nesting
+		}
+		if tl, ok := t.parentReg.Get(name); ok {
+			subReg.Add(tl)
+		}
+	}
+	return subReg
+}
+
+// runSub builds a sub-agent over subReg, runs prompt to completion emitting to
+// sink, and returns its final assistant answer. Shared by the foreground and
+// background paths.
+func (t *TaskTool) runSub(ctx context.Context, prompt string, subReg *tool.Registry, sink event.Sink, maxSteps int) (string, error) {
 	subSession := NewSession(t.sysPrompt)
 	subAgent := New(t.prov, subReg, subSession, Options{
 		MaxSteps:      maxSteps,
@@ -148,9 +177,9 @@ func (t *TaskTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 		Gate:          t.gate,
 		ContextWindow: t.contextWindow,
 		ArchiveDir:    t.archiveDir,
-	}, subSink(ctx))
+	}, sink)
 
-	if err := subAgent.Run(ctx, p.Prompt); err != nil {
+	if err := subAgent.Run(ctx, prompt); err != nil {
 		return "", fmt.Errorf("sub-agent: %w", err)
 	}
 
@@ -177,6 +206,16 @@ func (t *TaskTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 func subSink(ctx context.Context) event.Sink {
 	parentID, parent, _, ok := CallContext(ctx)
 	if !ok || parent == nil {
+		return event.Discard
+	}
+	return subSinkFor(parentID, parent)
+}
+
+// subSinkFor builds the nesting sink from an already-captured parent ID + stream,
+// for the background path where the job runs under a context that no longer
+// carries the call context. Falls back to Discard when there's no parent stream.
+func subSinkFor(parentID string, parent event.Sink) event.Sink {
+	if parent == nil {
 		return event.Discard
 	}
 	return event.FuncSink(func(e event.Event) {

@@ -182,6 +182,7 @@ export default function App() {
           context={state.context}
           usage={state.usage}
           balance={state.balance}
+          jobs={state.jobs}
           running={state.running}
           plan={plan}
           turnStartAt={state.turnStartAt}

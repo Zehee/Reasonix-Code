@@ -176,6 +176,15 @@ export interface BalanceInfo {
   err?: string;
 }
 
+// JobView is one running background job (desktop/app.go Jobs) for the status bar.
+export interface JobView {
+  id: string;
+  kind: string; // "bash" | "task"
+  label: string;
+  status: string; // "running"
+  startedAt: number; // unix milliseconds
+}
+
 export interface PermissionsView {
   mode: string; // "ask" | "allow" | "deny"
   allow: string[];

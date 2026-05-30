@@ -53,6 +53,8 @@ export const zh: Record<DictKey, string> = {
   "status.tokens": "tokens",
   "status.cache": "缓存 {pct}%",
   "status.balanceTitle": "钱包余额",
+  "status.jobs": "{n} 个运行中",
+  "status.jobsTitle": "后台作业",
 
   // 审批弹窗
   "approval.planTitle": "可以开始写代码了吗？",

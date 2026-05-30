@@ -346,6 +346,29 @@ func (a *App) Balance() BalanceInfo {
 	return BalanceInfo{Available: true, Display: b.Display()}
 }
 
+// JobView is one running background job (bash/task started with
+// run_in_background) for the status-bar indicator.
+type JobView struct {
+	ID        string `json:"id"`
+	Kind      string `json:"kind"`
+	Label     string `json:"label"`
+	Status    string `json:"status"`
+	StartedAt int64  `json:"startedAt"`
+}
+
+// Jobs returns the still-running background jobs for the status bar. It refreshes
+// on demand (mount, turn end, and on each notice the frontend receives).
+func (a *App) Jobs() []JobView {
+	out := []JobView{}
+	if a.ctrl == nil {
+		return out
+	}
+	for _, v := range a.ctrl.Jobs() {
+		out = append(out, JobView{ID: v.ID, Kind: v.Kind, Label: v.Label, Status: v.Status, StartedAt: v.StartedAt})
+	}
+	return out
+}
+
 // Meta describes the session for the frontend's header and status line.
 type Meta struct {
 	Label        string `json:"label"`

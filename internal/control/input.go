@@ -37,6 +37,15 @@ func (c *Controller) Compose(text string) string {
 		b.WriteString("</memory-update>\n\n")
 		text = b.String() + text
 	}
+
+	// Background jobs that finished since the last turn ride the turn too, so the
+	// model learns of completions even though the user-facing notices don't reach
+	// its context. Like memory, this never touches the cache-stable prefix.
+	if c.jobs != nil {
+		if note := c.jobs.DrainCompletedNote(); note != "" {
+			text = "<background-jobs>\n" + note + "\n</background-jobs>\n\n" + text
+		}
+	}
 	return text
 }
 

@@ -11,6 +11,7 @@ import type {
   ContextInfo,
   DirEntry,
   HistoryMessage,
+  JobView,
   MemoryView,
   Meta,
   ModelInfo,
@@ -45,6 +46,9 @@ export interface AppBindings {
   // Balance queries the active provider's wallet balance (a network call);
   // returns an unavailable readout when no balance_url is configured or it fails.
   Balance(): Promise<BalanceInfo>;
+  // Jobs lists the running background jobs (bash/task started in the background)
+  // for the status-bar indicator.
+  Jobs(): Promise<JobView[]>;
   Meta(): Promise<Meta>;
   Commands(): Promise<CommandInfo[]>;
   ListDir(rel: string): Promise<DirEntry[]>;
@@ -265,6 +269,9 @@ function makeMockApp(): AppBindings {
       const p = settings.providers.find((x) => x.name === settings.defaultModel);
       if (!p?.balanceUrl) return { available: false, display: "" };
       return { available: true, display: "¥128.50" };
+    },
+    async Jobs() {
+      return []; // browser dev mock has no background jobs
     },
     async Meta() {
       return {

@@ -1,8 +1,40 @@
 import { useEffect, useState } from "react";
-import { FolderGit2, Wallet } from "lucide-react";
+import { Cpu, FolderGit2, Wallet } from "lucide-react";
 import { ModelSwitcher } from "./ModelSwitcher";
 import { SPINNER_WORDS, useI18n } from "../lib/i18n";
-import type { BalanceInfo, ContextInfo, Meta, WireUsage } from "../lib/types";
+import type { BalanceInfo, ContextInfo, JobView, Meta, WireUsage } from "../lib/types";
+
+// JobsChip is the status-bar background-jobs indicator: a count that opens an
+// upward popover listing the running jobs (id · label · status), mirroring the
+// ModelSwitcher's click-to-open pattern. It renders nothing when there are no
+// jobs, so the caller guards on jobs.length first.
+function JobsChip({ jobs }: { jobs: JobView[] }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="statusbar__jobswrap">
+      <button className="statusbar__jobs" onClick={() => setOpen((v) => !v)} title={t("status.jobsTitle")}>
+        <Cpu size={11} />
+        {t("status.jobs", { n: jobs.length })}
+      </button>
+      {open && (
+        <>
+          <div className="modelsw__backdrop" onClick={() => setOpen(false)} />
+          <div className="modelsw__menu jobsmenu" role="listbox">
+            <div className="jobsmenu__head">{t("status.jobsTitle")}</div>
+            {jobs.map((j) => (
+              <div className="jobsmenu__item" key={j.id} role="option">
+                <span className="jobsmenu__id">{j.id}</span>
+                <span className="jobsmenu__label">{j.label || j.kind}</span>
+                <span className="jobsmenu__status">{j.status}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 // cacheRate is the prompt cache-hit percentage from the last turn's usage, or
 // null when there's nothing to show. Mirrors the kernel's cached/new accounting:
@@ -50,6 +82,7 @@ export function StatusBar({
   context,
   usage,
   balance,
+  jobs,
   running,
   plan,
   turnStartAt,
@@ -61,6 +94,7 @@ export function StatusBar({
   context: ContextInfo;
   usage?: WireUsage;
   balance?: BalanceInfo;
+  jobs?: JobView[];
   running: boolean;
   plan: boolean;
   turnStartAt: number;
@@ -105,6 +139,12 @@ export function StatusBar({
         <>
           <span className="statusbar__sep">·</span>
           <span className="statusbar__cache">{t("status.cache", { pct: cachePct })}</span>
+        </>
+      )}
+      {jobs && jobs.length > 0 && (
+        <>
+          <span className="statusbar__sep">·</span>
+          <JobsChip jobs={jobs} />
         </>
       )}
       {balance?.available && balance.display && (

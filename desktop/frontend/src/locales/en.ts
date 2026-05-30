@@ -52,6 +52,8 @@ export const en = {
   "status.tokens": "tokens",
   "status.cache": "cache {pct}%",
   "status.balanceTitle": "Wallet balance",
+  "status.jobs": "{n} running",
+  "status.jobsTitle": "Background jobs",
 
   // approval modal
   "approval.planTitle": "Ready to start coding?",

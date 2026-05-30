@@ -23,6 +23,7 @@ import (
 	"reasonix/internal/command"
 	"reasonix/internal/config"
 	"reasonix/internal/event"
+	"reasonix/internal/jobs"
 	"reasonix/internal/memory"
 	"reasonix/internal/permission"
 	"reasonix/internal/plugin"
@@ -51,6 +52,11 @@ type Controller struct {
 	// model/key switch — which rebuilds the controller — refreshes them.
 	balanceURL string
 	balanceKey string
+
+	// jobs is the session-scoped background-job manager. The agent's background
+	// tools spawn into it; Compose drains its completion notes into the next turn;
+	// Close cancels its still-running jobs.
+	jobs *jobs.Manager
 
 	// reg is the live tool registry the executor reads each turn; pluginCtx is the
 	// session-scoped context a hot-added stdio server binds its subprocess to.
@@ -116,6 +122,8 @@ type Options struct {
 	// endpoint and bearer key; empty when the provider declares no balance_url.
 	BalanceURL string
 	BalanceKey string
+	// Jobs is the session-scoped background-job manager (nil disables background jobs).
+	Jobs *jobs.Manager
 	// Registry is the executor's live tool set, and PluginCtx the session-scoped
 	// context; both are needed for hot-adding MCP servers via AddMCPServer.
 	Registry  *tool.Registry
@@ -147,6 +155,7 @@ func New(opts Options) *Controller {
 		cleanup:      opts.Cleanup,
 		balanceURL:   opts.BalanceURL,
 		balanceKey:   opts.BalanceKey,
+		jobs:         opts.Jobs,
 		reg:          opts.Registry,
 		pluginCtx:    pluginCtx,
 		approvals:    map[string]chan approvalReply{},
@@ -634,9 +643,21 @@ func (c *Controller) Label() string { return c.label }
 
 // Close stops plugin subprocesses and releases resources.
 func (c *Controller) Close() {
+	if c.jobs != nil {
+		c.jobs.Close() // cancel any still-running background jobs
+	}
 	if c.cleanup != nil {
 		c.cleanup()
 	}
+}
+
+// Jobs returns the still-running background jobs for the status bar (nil when
+// background jobs are disabled).
+func (c *Controller) Jobs() []jobs.View {
+	if c.jobs == nil {
+		return nil
+	}
+	return c.jobs.Running()
 }
 
 // --- memory ---

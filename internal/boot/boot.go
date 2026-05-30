@@ -19,6 +19,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
+	"reasonix/internal/jobs"
 	"reasonix/internal/memory"
 	"reasonix/internal/permission"
 	"reasonix/internal/plugin"
@@ -63,6 +64,13 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 			return nil, err
 		}
 	}
+
+	// Serialize the frontend's sink once: background jobs (below) emit from their
+	// own goroutines, which can overlap a running turn's emission, so every emitter
+	// shares this synchronized sink. The job manager is session-scoped — its jobs
+	// outlive a turn and are cancelled by Controller.Close.
+	sink := event.Sync(opts.Sink)
+	jm := jobs.NewManager(sink)
 
 	execProv, err := NewProvider(entry)
 	if err != nil {
@@ -141,9 +149,10 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		Temperature:   cfg.Agent.Temperature,
 		Pricing:       entry.Price,
 		Gate:          headlessGate,
+		Jobs:          jm,
 		ContextWindow: entry.ContextWindow,
 		ArchiveDir:    config.ArchiveDir(),
-	}, opts.Sink)
+	}, sink)
 
 	// Custom slash commands (.reasonix/commands + user dir). Best-effort: a malformed
 	// file is skipped, and a load error never blocks the session.
@@ -165,7 +174,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 				return nil, fmt.Errorf("planner %q: %w", pm, err)
 			}
 			plannerSess := agent.NewSession(agent.DefaultPlannerPrompt)
-			runner = agent.NewCoordinator(plannerProv, plannerSess, pe.Price, executor, cfg.Agent.Temperature, opts.Sink)
+			runner = agent.NewCoordinator(plannerProv, plannerSess, pe.Price, executor, cfg.Agent.Temperature, sink)
 			label = entry.Model + " + planner " + pe.Model
 		}
 	}
@@ -173,7 +182,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	return control.New(control.Options{
 		Runner:       runner,
 		Executor:     executor,
-		Sink:         opts.Sink,
+		Sink:         sink,
 		Policy:       policy,
 		Label:        label,
 		SystemPrompt: sysPrompt,
@@ -184,6 +193,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		Cleanup:      cleanup,
 		BalanceURL:   entry.BalanceURL,
 		BalanceKey:   entry.APIKey(),
+		Jobs:         jm,
 		Registry:     reg,
 		PluginCtx:    ctx,
 	}), nil

@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"reasonix/internal/event"
+	"reasonix/internal/jobs"
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
 )
@@ -114,6 +115,12 @@ type Agent struct {
 	// headless runs (no interactive user). Set via SetAsker.
 	asker Asker
 
+	// jobs, when non-nil, is the session's background-job manager. executeOne
+	// stamps it onto each tool call's context so the background tools (bash
+	// run_in_background, task run_in_background, bash_output/kill_shell/wait) can
+	// reach it. nil leaves those tools to degrade gracefully.
+	jobs *jobs.Manager
+
 	// Context management: when a turn's prompt nears contextWindow, the older
 	// middle of the session is summarized away, keeping recentKeep messages
 	// verbatim and archiving the originals under archiveDir.
@@ -172,6 +179,9 @@ type Options struct {
 	// Gate is the per-call permission gate. nil disables gating.
 	Gate Gate
 
+	// Jobs is the session's background-job manager (nil disables background tools).
+	Jobs *jobs.Manager
+
 	// Context management. ContextWindow <= 0 disables compaction. CompactRatio
 	// and RecentKeep fall back to defaults when unset.
 	ContextWindow int
@@ -203,6 +213,7 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 		pricing:       opts.Pricing,
 		sink:          sink,
 		gate:          opts.Gate,
+		jobs:          opts.Jobs,
 		contextWindow: opts.ContextWindow,
 		compactRatio:  opts.CompactRatio,
 		recentKeep:    opts.RecentKeep,
@@ -433,7 +444,11 @@ func (a *Agent) executeOne(ctx context.Context, call provider.ToolCall) toolOutc
 			}
 		}
 	}
-	result, err := t.Execute(withCallContext(ctx, call.ID, a.sink, a.asker), json.RawMessage(call.Arguments))
+	cctx := withCallContext(ctx, call.ID, a.sink, a.asker)
+	if a.jobs != nil {
+		cctx = jobs.WithManager(cctx, a.jobs)
+	}
+	result, err := t.Execute(cctx, json.RawMessage(call.Arguments))
 	if err != nil {
 		body, truncMsg := truncateToolOutput(fmt.Sprintf("error: %v\n%s", err, result))
 		return toolOutcome{output: body, errMsg: firstLine(err.Error()), truncated: truncMsg != "", truncMsg: truncMsg}

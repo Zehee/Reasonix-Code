@@ -686,6 +686,9 @@ func (m chatTUI) View() tea.View {
 	if cache := m.cacheTag(); cache != "" {
 		status += " · " + cache
 	}
+	if jt := m.jobsTag(); jt != "" {
+		status += " · " + jt
+	}
 	if m.balance != "" {
 		status += " · " + dim(m.balance)
 	}
@@ -769,6 +772,17 @@ func (m chatTUI) cacheTag() string {
 		return ""
 	}
 	return dim(fmt.Sprintf("cache %d%%", u.CacheHitTokens*100/denom))
+}
+
+// jobsTag shows the count of running background jobs in the status line. Job
+// start/finish emit Notices that arrive on eventCh and re-render the frame, so
+// the count stays current without a dedicated tick.
+func (m chatTUI) jobsTag() string {
+	n := len(m.ctrl.Jobs())
+	if n == 0 {
+		return ""
+	}
+	return dim(fmt.Sprintf("⚙ %d", n))
 }
 
 // shortTokens prints token counts compactly: 142_000 → "142K", 1_000_000 → "1M".

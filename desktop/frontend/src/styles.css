@@ -864,6 +864,17 @@ body {
   font-family: var(--mono);
   font-size: 11px;
   color: var(--fg-faint);
+  /* One line, always: without this a narrow window squeezes the flex items and
+     CJK text breaks one character per line. The metric chips keep their width
+     (flex-shrink: 0) and only the model label ellipsizes to absorb the squeeze. */
+  white-space: nowrap;
+}
+.statusbar > * {
+  flex-shrink: 0;
+}
+.statusbar .modelsw {
+  flex-shrink: 1;
+  min-width: 0;
 }
 .statusbar__dot {
   width: 6px;
@@ -898,6 +909,58 @@ body {
   align-items: center;
   gap: 4px;
   color: var(--fg-dim);
+}
+.statusbar__jobswrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.statusbar__jobs {
+  --wails-draggable: no-drag;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  cursor: pointer;
+}
+.statusbar__jobs:hover {
+  color: var(--fg);
+}
+/* Jobs popover: reuses .modelsw__menu's elevated box; only the rows differ. */
+.jobsmenu {
+  min-width: 220px;
+}
+.jobsmenu__head {
+  padding: 2px 9px 6px;
+  font-size: 11px;
+  color: var(--fg-faint);
+}
+.jobsmenu__item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 9px;
+  font-size: 12px;
+}
+.jobsmenu__id {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.jobsmenu__label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg-dim);
+}
+.jobsmenu__status {
+  color: var(--fg-faint);
+  flex-shrink: 0;
 }
 .statusbar__cwd {
   --wails-draggable: no-drag;
@@ -952,6 +1015,16 @@ body {
   cursor: pointer;
   padding: 0;
   white-space: nowrap;
+  min-width: 0; /* let the label ellipsize when the status bar is tight */
+}
+.modelsw__trigger svg {
+  flex-shrink: 0;
+}
+.modelsw__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 .modelsw__trigger:hover {
   color: var(--fg);
