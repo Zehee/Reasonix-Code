@@ -312,8 +312,14 @@ type streamOptions struct {
 }
 
 type chatMessage struct {
-	Role             string         `json:"role"`
-	Content          string         `json:"content,omitempty"`
+	Role string `json:"role"`
+	// content is always serialized, even when empty: an assistant turn that is
+	// pure tool_calls (no preamble text) has empty content, and DeepSeek's
+	// strict deserializer rejects a message missing the field ("missing field
+	// `content`"). An empty string satisfies presence and is accepted by every
+	// OpenAI-compatible backend for all roles (unlike null, which some reject
+	// for a tool message).
+	Content          string         `json:"content"`
 	ReasoningContent string         `json:"reasoning_content,omitempty"`
 	ToolCalls        []chatToolCall `json:"tool_calls,omitempty"`
 	ToolCallID       string         `json:"tool_call_id,omitempty"`

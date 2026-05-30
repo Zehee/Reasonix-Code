@@ -2,6 +2,7 @@ package openai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -76,6 +77,46 @@ func TestStreamAuthError(t *testing.T) {
 	}
 	if msg := authErr.Error(); !strings.Contains(msg, "DEEPSEEK_API_KEY") || strings.Contains(msg, "ae54") {
 		t.Errorf("message should name the env var and not dump the raw body: %q", msg)
+	}
+}
+
+// TestBuildRequestAlwaysSerializesContent guards the DeepSeek 400 regression:
+// an assistant turn that is pure tool_calls (no preamble text) has empty
+// content, and DeepSeek rejects a message missing the `content` field. Every
+// message — including that one — must serialize a content field.
+func TestBuildRequestAlwaysSerializesContent(t *testing.T) {
+	c := &client{model: "deepseek-v4"}
+	req := c.buildRequest(provider.Request{
+		Messages: []provider.Message{
+			{Role: provider.RoleUser, Content: "list the files"},
+			// Assistant turn with no text, only a tool call — the offending shape.
+			{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
+				{ID: "call_1", Name: "ls", Arguments: `{"path":"."}`},
+			}},
+			{Role: provider.RoleTool, Content: "main.go", ToolCallID: "call_1", Name: "ls"},
+		},
+	})
+
+	b, err := json.Marshal(req.Messages)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	// Decode generically so we can assert the key's presence (not just its value).
+	var raw []map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for i, m := range raw {
+		if _, ok := m["content"]; !ok {
+			t.Errorf("messages[%d] is missing the content field: %s", i, b)
+		}
+	}
+	// The tool-call-only assistant message must carry content:"" and its tool_calls.
+	if got := string(raw[1]["content"]); got != `""` {
+		t.Errorf("assistant content = %s, want \"\"", got)
+	}
+	if _, ok := raw[1]["tool_calls"]; !ok {
+		t.Errorf("assistant message lost its tool_calls: %s", b)
 	}
 }
 
