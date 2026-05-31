@@ -241,14 +241,15 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		// Inline (non-alt-screen) mode doesn't repaint scrollback on a resize, so
-		// the previous frame's input-box border (drawn at the old width) wraps and
-		// strands a partial ─── line — one ghost per drag. Clear the screen on an
-		// actual size change so the new-width frame repaints clean. Skip the first
-		// sizing (nothing to ghost yet; it also commits the banner below).
-		if m.started && (m.width != msg.Width || m.height != msg.Height) {
-			cmds = append(cmds, func() tea.Msg { return tea.ClearScreen() })
-		}
+		// bubbletea's program loop already calls renderer.resize() on a size
+		// change, which Erases and forces a full redraw — so we only update our
+		// own width-derived state here. We must NOT emit tea.ClearScreen: in
+		// inline (non-alt-screen) mode clearScreen does MoveTo(0,0) into the
+		// scrollback region and redraws there, stranding the prior frame — it
+		// causes the ghosting it looks like it should fix. The actual fix for
+		// resize artifacts is keeping every frame line within m.width (the status
+		// line is clamped; the input box renders exactly m.width) so the native
+		// redraw never leaves a wrapped remnant.
 		m.width = msg.Width
 		m.height = msg.Height
 		m.input.SetWidth(msg.Width - 4)
