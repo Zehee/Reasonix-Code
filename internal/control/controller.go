@@ -23,11 +23,13 @@ import (
 	"reasonix/internal/command"
 	"reasonix/internal/config"
 	"reasonix/internal/event"
+	"reasonix/internal/hook"
 	"reasonix/internal/jobs"
 	"reasonix/internal/memory"
 	"reasonix/internal/permission"
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
+	"reasonix/internal/skill"
 	"reasonix/internal/tool"
 )
 
@@ -44,6 +46,8 @@ type Controller struct {
 	sessionDir   string
 	host         *plugin.Host
 	commands     []command.Command
+	skills       []skill.Skill
+	hooks        *hook.Runner // session hook runner; nil-safe (no hooks configured)
 	mem          *memory.Set
 	cleanup      func()
 
@@ -82,6 +86,8 @@ type Controller struct {
 	asks        map[string]chan []event.AskAnswer
 	granted     map[string]bool
 	nextID      int
+	// turn counts model turns this session, passed to hooks in their payload.
+	turn int
 	// autoApprove auto-allows writer tool calls without prompting. Set only while
 	// executing a just-approved plan: approving the plan is the go-ahead, so the
 	// model shouldn't re-prompt for every write of the work it just got cleared to
@@ -123,6 +129,8 @@ type Options struct {
 	SessionPath  string
 	Host         *plugin.Host
 	Commands     []command.Command
+	Skills       []skill.Skill
+	Hooks        *hook.Runner
 	Memory       *memory.Set
 	Cleanup      func()
 	// BalanceURL/BalanceKey wire the active provider's optional wallet-balance
@@ -158,6 +166,8 @@ func New(opts Options) *Controller {
 		sessionPath:  opts.SessionPath,
 		host:         opts.Host,
 		commands:     opts.Commands,
+		skills:       opts.Skills,
+		hooks:        opts.Hooks,
 		mem:          opts.Memory,
 		cleanup:      opts.Cleanup,
 		balanceURL:   opts.BalanceURL,
@@ -224,6 +234,19 @@ const planApprovedMessage = "Plan approved — plan mode is off; you're cleared 
 // next turn can revise. Plan mode is only ever set interactively, so the headless
 // `Run` path (which doesn't call this) never blocks on a prompt.
 func (c *Controller) runTurn(ctx context.Context, input string) error {
+	// UserPromptSubmit / Stop hooks bracket the whole turn (incl. the plan
+	// research + approved-execution sub-turns below): a gating UserPromptSubmit
+	// aborts before any model call; Stop fires once when the turn returns.
+	if c.hooks.Enabled() {
+		c.mu.Lock()
+		c.turn++
+		turn := c.turn
+		c.mu.Unlock()
+		if block, _ := c.hooks.PromptSubmit(ctx, input, turn); block {
+			return nil // the hook's notify callback already surfaced the reason
+		}
+		defer func() { c.hooks.Stop(ctx, lastAssistantText(c.History()), turn) }()
+	}
 	if err := c.runner.Run(ctx, input); err != nil {
 		return err
 	}
@@ -328,9 +351,17 @@ func (c *Controller) Submit(input string) {
 			return c.runner.Run(ctx, c.Compose(sent))
 		})
 	case strings.HasPrefix(trimmed, "/"):
+		// A custom command wins over a skill of the same name; both resolve to a
+		// turn. (Built-in slash verbs like /compact are handled above.)
 		if sent, ok := c.CustomCommand(trimmed); ok {
 			c.runGuarded(func(ctx context.Context) error {
-				return c.runner.Run(ctx, c.Compose(sent))
+				return c.runTurn(ctx, c.Compose(sent))
+			})
+			return
+		}
+		if sent, ok := c.RunSkill(trimmed); ok {
+			c.runGuarded(func(ctx context.Context) error {
+				return c.runTurn(ctx, c.Compose(sent))
 			})
 			return
 		}
@@ -359,6 +390,13 @@ func (c *Controller) notice(text string) {
 // headless `reasonix run` path, where the Sink renders to stdout and the caller
 // just needs the exit status — no TurnDone event, no cancel bookkeeping.
 func (c *Controller) Run(ctx context.Context, input string) error {
+	if c.hooks.Enabled() {
+		c.turn++
+		if block, _ := c.hooks.PromptSubmit(ctx, input, c.turn); block {
+			return nil
+		}
+		defer func() { c.hooks.Stop(ctx, lastAssistantText(c.History()), c.turn) }()
+	}
 	return c.runner.Run(ctx, input)
 }
 
@@ -573,6 +611,13 @@ func (c *Controller) Host() *plugin.Host { return c.host }
 
 // Commands returns the loaded custom slash commands.
 func (c *Controller) Commands() []command.Command { return c.commands }
+
+// Skills returns the discoverable skills (for the slash menu and `/skill`).
+func (c *Controller) Skills() []skill.Skill { return c.skills }
+
+// HookRunner returns the session's hook runner (nil-safe; may hold zero hooks),
+// so a frontend can list the active hooks via `/hooks`.
+func (c *Controller) HookRunner() *hook.Runner { return c.hooks }
 
 // AddMCPServer connects an MCP server live and persists it to the config file. Its
 // tools are registered immediately and become available on the next turn (the

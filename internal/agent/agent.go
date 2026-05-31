@@ -79,6 +79,16 @@ type Gate interface {
 	Check(ctx context.Context, toolName string, args json.RawMessage, readOnly bool) (allow bool, reason string, err error)
 }
 
+// ToolHooks fires user-configured shell hooks around each tool call. PreToolUse
+// runs before the call and may block it (block=true; message is the reason fed
+// back to the model); PostToolUse runs after and only surfaces output to the
+// user (it can't block). It is interface-shaped so the agent stays independent
+// of the hook package — a nil hooks field disables hook firing entirely.
+type ToolHooks interface {
+	PreToolUse(ctx context.Context, name string, args json.RawMessage) (block bool, message string)
+	PostToolUse(ctx context.Context, name string, args json.RawMessage, result string)
+}
+
 // Agent drives a single task: a Provider, a tool Registry, and a Session wired
 // into the main loop.
 type Agent struct {
@@ -110,6 +120,10 @@ type Agent struct {
 	// gate, when non-nil, is the per-call permission gate consulted after the
 	// plan-mode check. nil disables gating entirely.
 	gate Gate
+
+	// hooks, when non-nil, fires PreToolUse / PostToolUse shell hooks around each
+	// tool call. nil disables hook firing.
+	hooks ToolHooks
 
 	// asker, when non-nil, lets the `ask` tool put questions to the user. nil in
 	// headless runs (no interactive user). Set via SetAsker.
@@ -179,6 +193,10 @@ type Options struct {
 	// Gate is the per-call permission gate. nil disables gating.
 	Gate Gate
 
+	// Hooks fires PreToolUse / PostToolUse shell hooks around tool calls. nil
+	// disables hook firing.
+	Hooks ToolHooks
+
 	// Jobs is the session's background-job manager (nil disables background tools).
 	Jobs *jobs.Manager
 
@@ -213,6 +231,7 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 		pricing:       opts.Pricing,
 		sink:          sink,
 		gate:          opts.Gate,
+		hooks:         opts.Hooks,
 		jobs:          opts.Jobs,
 		contextWindow: opts.ContextWindow,
 		compactRatio:  opts.CompactRatio,
@@ -444,11 +463,30 @@ func (a *Agent) executeOne(ctx context.Context, call provider.ToolCall) toolOutc
 			}
 		}
 	}
+	// PreToolUse hooks run after permission is granted but before the call: a
+	// gating hook (exit 2) refuses it, surfaced to the model like a gate denial.
+	if a.hooks != nil {
+		if block, msg := a.hooks.PreToolUse(ctx, call.Name, json.RawMessage(call.Arguments)); block {
+			if msg == "" {
+				msg = "blocked by a PreToolUse hook"
+			}
+			return toolOutcome{
+				output:  "blocked: " + msg,
+				blocked: true,
+				errMsg:  "blocked by PreToolUse hook",
+			}
+		}
+	}
 	cctx := withCallContext(ctx, call.ID, a.sink, a.asker)
 	if a.jobs != nil {
 		cctx = jobs.WithManager(cctx, a.jobs)
 	}
 	result, err := t.Execute(cctx, json.RawMessage(call.Arguments))
+	// PostToolUse hooks observe the result (they can't block); fired whether the
+	// call succeeded or errored, since the tool did run.
+	if a.hooks != nil {
+		a.hooks.PostToolUse(ctx, call.Name, json.RawMessage(call.Arguments), result)
+	}
 	if err != nil {
 		body, truncMsg := truncateToolOutput(fmt.Sprintf("error: %v\n%s", err, result))
 		return toolOutcome{output: body, errMsg: firstLine(err.Error()), truncated: truncMsg != "", truncMsg: truncMsg}

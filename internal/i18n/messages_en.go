@@ -17,10 +17,12 @@ var English = Messages{
 	GetStarted:      "Get started",
 	StepScaffold:    "scaffold reasonix.toml",
 	StepSetKey:      "set API key",
-	StepSetKeyHint:  "export DEEPSEEK_API_KEY=… or add to .env",
-	StepChatDesc:    "interactive session",
-	StepRunDesc:     "one-shot task",
-	HelpFooter:      "reasonix help · all commands",
+
+	InitHint:       "Project memory (AGENTS.md) is generated in-session: run `reasonix chat`, then `/init` — the model analyzes the codebase and writes it. For configuration, use `reasonix setup`.",
+	StepSetKeyHint: "export DEEPSEEK_API_KEY=… or add to .env",
+	StepChatDesc:   "interactive session",
+	StepRunDesc:    "one-shot task",
+	HelpFooter:     "reasonix help · all commands",
 
 	ChatTip:           "Context is kept across turns. Type 'exit' or Ctrl-D to quit.",
 	TurnCancelled:     "cancelled — back to prompt",
@@ -79,7 +81,7 @@ Usage:
   reasonix chat [--model NAME]                          interactive session (multi-turn)
   reasonix run  [--model NAME] [--max-steps N] <task>   run one task and exit
   reasonix serve [--model NAME] [--addr HOST:PORT]      serve the session over HTTP+SSE (browser client at /)
-  reasonix init [path]                                  interactive setup; writes reasonix.toml (+ .env)
+  reasonix setup [path]                                 interactive config wizard; writes reasonix.toml (+ .env)
   reasonix mcp <add|remove|list>                        manage MCP servers in reasonix.toml
   reasonix version
   reasonix help
@@ -93,6 +95,6 @@ Examples:
 Configuration:
   Resolution: flag > ./reasonix.toml > ~/.config/reasonix/config.toml > built-in defaults
   Secrets come from the environment via api_key_env (e.g. DEEPSEEK_API_KEY).
-  Run 'reasonix init' to scaffold a config; see docs/SPEC.md.
+  Run 'reasonix setup' to scaffold a config; see docs/SPEC.md.
 `,
 }

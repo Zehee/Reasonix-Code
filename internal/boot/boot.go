@@ -19,12 +19,14 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
+	"reasonix/internal/hook"
 	"reasonix/internal/jobs"
 	"reasonix/internal/memory"
 	"reasonix/internal/permission"
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
 	"reasonix/internal/sandbox"
+	"reasonix/internal/skill"
 	"reasonix/internal/tool"
 	"reasonix/internal/tool/builtin"
 )
@@ -90,6 +92,15 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	mem := memory.Load(memory.Options{CWD: ".", UserDir: config.MemoryUserDir()})
 	sysPrompt = memory.Compose(sysPrompt, mem)
 
+	// Skills: discover playbooks (built-in + project/custom/global) and fold their
+	// one-liner index into the same cache-stable prefix — names + descriptions
+	// only; bodies load on demand via run_skill or "/<name>". Bodies never enter
+	// the prefix, so the index costs a fixed, small amount per turn.
+	cwd, _ := os.Getwd()
+	skillStore := skill.New(skill.Options{ProjectRoot: cwd, CustomPaths: cfg.SkillCustomPaths()})
+	skills := skillStore.List()
+	sysPrompt = skill.ApplyIndex(sysPrompt, skills)
+
 	reg := tool.NewRegistry()
 	bashSpec := sandbox.Spec{Mode: cfg.BashMode(), WriteRoots: cfg.WriteRoots(), Network: cfg.Sandbox.Network}
 	if bashSpec.Mode == "enforce" && !sandbox.Available() {
@@ -125,6 +136,22 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	policy := permission.New(cfg.Permissions.Mode, cfg.Permissions.Allow, cfg.Permissions.Ask, cfg.Permissions.Deny)
 	headlessGate := permission.NewGate(policy, nil)
 
+	// Hooks: load the global settings.json plus the project's (only when trusted —
+	// project hooks run arbitrary shell commands, so cloning a repo must not
+	// silently execute them). Non-blocking hook output is surfaced to the user as
+	// a Notice through the shared sink. The runner fires PreToolUse/PostToolUse in
+	// the agent loop and UserPromptSubmit/Stop at the controller's turn boundary.
+	hooksTrusted := hook.IsTrusted(cwd, "")
+	hookRunner := hook.NewRunner(
+		hook.Load(hook.LoadOptions{ProjectRoot: cwd, Trusted: hooksTrusted}),
+		cwd, nil,
+		func(msg string) { sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: msg}) },
+	)
+	if hook.ProjectDefinesHooks(cwd) && !hooksTrusted {
+		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo,
+			Text: "this project defines hooks but they are not trusted — run /hooks trust to enable them"})
+	}
+
 	// The `task` tool spawns sub-agents that reuse the parent's provider and
 	// tool registry. Wired here after the built-ins / plugins are loaded so
 	// sub-agents inherit the full tool set (minus `task` itself, to keep
@@ -143,12 +170,51 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	// has none, so ask resolves to "decide for yourself".
 	reg.Add(agent.NewAskTool())
 
+	// Skill tools: run_skill / install_skill plus the dedicated subagent wrappers
+	// (explore / research / review / security_review). A subagent skill reuses the
+	// sub-agent machinery via this runner — an isolated loop with the skill body
+	// as system prompt, a tool set scoped to the skill's allowed-tools (minus the
+	// task/skill meta-tools, to bar recursion), and an optional per-skill model.
+	// Its tool activity nests under the invoking call, like `task`.
+	skillRunner := func(sctx context.Context, sk skill.Skill, task string) (string, error) {
+		prov, price, ctxWin := execProv, entry.Price, entry.ContextWindow
+		if sk.Model != "" {
+			if me, ok := cfg.ResolveModel(sk.Model); ok {
+				if p, err := NewProvider(me); err == nil {
+					prov, price, ctxWin = p, me.Price, me.ContextWindow
+				}
+			}
+		}
+		subReg := agent.FilterRegistry(reg, sk.AllowedTools,
+			"task", "run_skill", "install_skill", "explore", "research", "review", "security_review")
+		steps := maxSteps
+		if steps > 0 {
+			if steps /= 2; steps < 5 {
+				steps = 5
+			}
+		}
+		return agent.RunSubAgent(sctx, prov, subReg, sk.Body, task, agent.Options{
+			MaxSteps:      steps,
+			Temperature:   cfg.Agent.Temperature,
+			Pricing:       price,
+			Gate:          headlessGate,
+			ContextWindow: ctxWin,
+			ArchiveDir:    config.ArchiveDir(),
+		}, agent.NestedSink(sctx, event.Discard))
+	}
+	reg.Add(skill.NewRunSkillTool(skillStore, skillRunner))
+	reg.Add(skill.NewInstallSkillTool(skillStore, nil))
+	for _, t := range skill.BuiltinSubagentTools(skillStore, skillRunner) {
+		reg.Add(t)
+	}
+
 	execSess := agent.NewSession(sysPrompt)
 	executor := agent.New(execProv, reg, execSess, agent.Options{
 		MaxSteps:      maxSteps,
 		Temperature:   cfg.Agent.Temperature,
 		Pricing:       entry.Price,
 		Gate:          headlessGate,
+		Hooks:         hookRunner,
 		Jobs:          jm,
 		ContextWindow: entry.ContextWindow,
 		ArchiveDir:    config.ArchiveDir(),
@@ -189,6 +255,8 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		SessionDir:   config.SessionDir(),
 		Host:         pluginHost,
 		Commands:     cmds,
+		Skills:       skills,
+		Hooks:        hookRunner,
 		Memory:       mem,
 		Cleanup:      cleanup,
 		BalanceURL:   entry.BalanceURL,

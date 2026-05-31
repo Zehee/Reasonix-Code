@@ -22,6 +22,7 @@ import (
 	"reasonix/internal/memory"
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
+	"reasonix/internal/skill"
 )
 
 // chatTUI is a bubbletea Model that runs a chat session in the terminal's
@@ -115,6 +116,10 @@ type chatTUI struct {
 	// its template with the typed args and sends the result as a turn.
 	commands []command.Command
 
+	// skills are the discoverable skills (built-in + user/project); each is offered
+	// in the slash menu as "/<name>" and managed via /skill.
+	skills []skill.Skill
+
 	// completion is the live autocomplete menu (slash commands; @-refs later).
 	completion completion
 }
@@ -204,6 +209,7 @@ func newChatTUI(ctrl *control.Controller, missing string, eventCh chan event.Eve
 		history:       ctrl.History(),
 		host:          ctrl.Host(),
 		commands:      ctrl.Commands(),
+		skills:        ctrl.Skills(),
 	}
 }
 
@@ -1156,6 +1162,10 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 		m.notice(i18n.M.SlashTodoCleared)
 	case "/mcp":
 		m.runMCPSubcommand(input)
+	case "/skill", "/skills":
+		m.runSkillSubcommand(input)
+	case "/hooks":
+		m.runHooksSubcommand(input)
 	case "/help":
 		m.notice(i18n.M.SlashHelp)
 		if names := m.commandNames(); names != "" {
@@ -1164,7 +1174,11 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 	case "/memory":
 		m.showMemory()
 	default:
+		// A custom command wins over a skill of the same name; both resolve to a turn.
 		if sent, ok := m.ctrl.CustomCommand(input); ok {
+			return m.startTurn(m.ctrl.Compose(sent), input)
+		}
+		if sent, ok := m.ctrl.RunSkill(input); ok {
 			return m.startTurn(m.ctrl.Compose(sent), input)
 		}
 		m.notice(fmt.Sprintf("%s: %s", i18n.M.SlashUnknown, cmd))
@@ -1195,6 +1209,10 @@ func (m *chatTUI) runMCPSubcommand(input string) {
 		return
 	}
 	switch args[1] {
+	case "list", "ls":
+		// The completion menu offers "list"; treat it as the status view (same as
+		// a bare /mcp) rather than an unknown subcommand.
+		m.showMCPStatus()
 	case "add":
 		entry, err := parseMCPAdd(args[2:])
 		if err != nil {

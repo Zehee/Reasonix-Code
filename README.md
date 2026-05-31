@@ -66,8 +66,9 @@ make cross      # -> dist/ (darwin|linux|windows × amd64|arm64)
 ## Quick start
 
 ```sh
-reasonix init                       # scaffold ./reasonix.toml
+reasonix setup                      # config wizard → ./reasonix.toml
 export DEEPSEEK_API_KEY=sk-...  # or put it in .env (see .env.example)
+reasonix chat                       # then run /init to generate AGENTS.md (project memory)
 reasonix run "implement the TODOs in main.go"
 reasonix run --model mimo-pro "add unit tests for this function"
 echo "explain this code" | reasonix run
@@ -198,7 +199,7 @@ time, descend into folders) plus MCP resources.
 
 ### Two-model collaboration (optional)
 
-`reasonix init` keeps first-run minimal: pick provider → keys (every SKU of a
+`reasonix setup` keeps first-run minimal: pick provider → keys (every SKU of a
 chosen provider is enabled). Running two models together (executor + planner,
 separate cache-stable sessions) is a one-line edit afterwards — set
 `planner_model` to any other enabled provider:
@@ -226,7 +227,7 @@ Three tiers of extensibility, all behind registries the core resolves by name:
 Done: registry-based providers/tools, OpenAI-compatible streaming with tool
 calls (bounded retry on 429/5xx), built-in tools (read_file, write_file,
 edit_file, multi_edit, bash, ls, glob, grep, web_fetch, task, todo_write, ask),
-TOML config, an interactive `reasonix init` wizard, two-model collaboration
+TOML config, an interactive `reasonix setup` wizard, two-model collaboration
 (executor + planner in separate, cache-stable sessions), low-frequency context
 compaction, sub-agents (`task`), a bubbletea chat TUI (markdown, plan mode with
 controller-driven approval, live token/activity readout, pinned task list,

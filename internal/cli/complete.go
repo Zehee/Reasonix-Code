@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"reasonix/internal/i18n"
+	"reasonix/internal/skill"
 )
 
 // compKind distinguishes the two completion menus.
@@ -50,17 +51,27 @@ const (
 	maxCompItems = 200
 )
 
-// slashItems is the full set of slash commands offered for completion.
+// slashItems is the full set of slash commands offered for completion: the
+// built-in verbs, custom commands, skills (each as "/<name>"), and MCP prompts.
 func (m *chatTUI) slashItems() []compItem {
 	items := []compItem{
 		{label: "/compact", insert: "/compact ", hint: "compact context"},
 		{label: "/new", insert: "/new ", hint: "fork a fresh session"},
 		{label: "/mcp", insert: "/mcp ", hint: "MCP servers", descend: true},
+		{label: "/skill", insert: "/skill ", hint: "manage skills", descend: true},
+		{label: "/hooks", insert: "/hooks ", hint: "manage hooks", descend: true},
 		{label: "/help", insert: "/help ", hint: "list commands"},
 		{label: "/memory", insert: "/memory ", hint: "show memory files"},
 	}
 	for _, c := range m.commands {
 		items = append(items, compItem{label: "/" + c.Name, insert: "/" + c.Name + " ", hint: c.Description})
+	}
+	for _, s := range m.skills {
+		hint := s.Description
+		if s.RunAs == skill.RunSubagent {
+			hint = "🧬 " + hint
+		}
+		items = append(items, compItem{label: "/" + s.Name, insert: "/" + s.Name + " ", hint: hint})
 	}
 	for _, p := range m.prompts() {
 		items = append(items, compItem{label: "/" + p.Name, insert: "/" + p.Name + " ", hint: p.Description})
@@ -116,6 +127,46 @@ func (m *chatTUI) slashArgItems(val string) ([]compItem, int, bool) {
 	switch val[:cmdEnd] {
 	case "/mcp":
 		return m.mcpArgItems(val, cur, from)
+	case "/skill", "/skills":
+		return m.skillArgItems(val, cur, from)
+	case "/hooks":
+		return m.hooksArgItems(val, cur, from)
+	}
+	return nil, 0, false
+}
+
+// skillArgItems completes /skill arguments: the subcommand, then skill names for
+// "show".
+func (m *chatTUI) skillArgItems(val, cur string, from int) ([]compItem, int, bool) {
+	prior := strings.Fields(val[:from]) // committed tokens, including "/skill"
+	if len(prior) <= 1 {
+		subs := []compItem{
+			{label: "list", insert: "list", hint: "list skills"},
+			{label: "show", insert: "show ", hint: "show a skill's body", descend: true},
+			{label: "new", insert: "new ", hint: "scaffold a new skill"},
+			{label: "paths", insert: "paths", hint: "show discovery paths"},
+		}
+		return filterByPrefix(subs, cur), from, true
+	}
+	if (prior[1] == "show" || prior[1] == "cat") && len(prior) == 2 {
+		var items []compItem
+		for _, s := range m.skills {
+			items = append(items, compItem{label: s.Name, insert: s.Name, hint: string(s.Scope)})
+		}
+		return filterByPrefix(items, cur), from, true
+	}
+	return nil, 0, false
+}
+
+// hooksArgItems completes /hooks arguments: the subcommand.
+func (m *chatTUI) hooksArgItems(val, cur string, from int) ([]compItem, int, bool) {
+	prior := strings.Fields(val[:from])
+	if len(prior) <= 1 {
+		subs := []compItem{
+			{label: "list", insert: "list", hint: "list active hooks"},
+			{label: "trust", insert: "trust", hint: "trust this project's hooks"},
+		}
+		return filterByPrefix(subs, cur), from, true
 	}
 	return nil, 0, false
 }

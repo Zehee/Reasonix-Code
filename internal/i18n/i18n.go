@@ -37,12 +37,15 @@ type Messages struct {
 	NoKey           string // status dot — no API key set
 	Ready           string // status dot — provider ready
 	GetStarted      string // section title above numbered steps
-	StepScaffold    string // step 1 desc — reasonix init
+	StepScaffold    string // step 1 desc — reasonix setup
 	StepSetKey      string // step 2 command label
-	StepSetKeyHint  string // step 2 desc — env var hint
-	StepChatDesc    string // reasonix chat step desc
-	StepRunDesc     string // reasonix run step desc
-	HelpFooter      string // dim footer linking to reasonix help
+
+	// `reasonix init` — points to the in-session /init skill + setup
+	InitHint       string
+	StepSetKeyHint string // step 2 desc — env var hint
+	StepChatDesc   string // reasonix chat step desc
+	StepRunDesc    string // reasonix run step desc
+	HelpFooter     string // dim footer linking to reasonix help
 
 	// chat REPL
 	ChatTip           string // tip line under the chat banner

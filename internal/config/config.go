@@ -25,6 +25,28 @@ type Config struct {
 	Permissions  PermissionsConfig `toml:"permissions"`
 	Sandbox      SandboxConfig     `toml:"sandbox"`
 	Plugins      []PluginEntry     `toml:"plugins"`
+	Skills       SkillsConfig      `toml:"skills"`
+}
+
+// SkillsConfig configures skill discovery. Paths adds extra "custom"-scope skill
+// roots — each a directory of SKILL.md / <name>.md playbooks — scanned between
+// the project roots (.reasonix/.agents/.claude under the workspace) and the
+// global roots (the same three under the home dir). ~ and relative paths and
+// ${VAR} expansion are supported.
+type SkillsConfig struct {
+	Paths []string `toml:"paths"`
+}
+
+// SkillCustomPaths returns the configured custom skill roots with ${VAR}
+// expanded; empty entries are dropped.
+func (c *Config) SkillCustomPaths() []string {
+	var out []string
+	for _, p := range c.Skills.Paths {
+		if p = ExpandVars(p); strings.TrimSpace(p) != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // SandboxConfig bounds the blast radius of tool calls (Phase 0: file-writer
@@ -247,7 +269,7 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-// LoadForEdit returns a config to seed the `reasonix init` wizard when reconfiguring:
+// LoadForEdit returns a config to seed the `reasonix setup` wizard when reconfiguring:
 // the built-in defaults with the file at path (if present) decoded on top, so a
 // reconfigure preserves the user's existing providers and agent settings instead
 // of resetting to defaults. .env is loaded so api_key_env resolution works while
@@ -311,15 +333,42 @@ func MemoryUserDir() string {
 	return filepath.Join(dir, "reasonix")
 }
 
+// ConventionDirs are the parent directories scanned for agent assets (skills,
+// commands), in canonical-first order. .reasonix is ours; .agents / .agent /
+// .claude let users drop in assets authored for other agent tools without moving
+// files. Shared so skills (internal/skill) and commands (CommandDirs) discover
+// the same set. Note: hooks are NOT scanned across these — a .claude/settings.json
+// uses a different hook schema that can't be parsed as ours, so hooks stay in
+// .reasonix/settings.json (see internal/hook).
+var ConventionDirs = []string{".reasonix", ".agents", ".agent", ".claude"}
+
+// conventionSubdirsAsc joins sub under each ConventionDir of base, in ascending
+// priority (reverse of ConventionDirs) so the canonical .reasonix ends up the
+// highest-priority entry — command.Load lets a later directory win on a clash.
+func conventionSubdirsAsc(base, sub string) []string {
+	out := make([]string, 0, len(ConventionDirs))
+	for i := len(ConventionDirs) - 1; i >= 0; i-- {
+		out = append(out, filepath.Join(base, ConventionDirs[i], sub))
+	}
+	return out
+}
+
 // CommandDirs returns the directories scanned for custom slash commands, lowest
-// priority first: the user dir (~/.config/reasonix/commands) then the project dir
-// (.reasonix/commands), so a project command overrides a user one with the same name.
+// priority first, so a later (more specific) directory overrides an earlier one
+// on a name clash. Order: home-dir convention dirs (~/.claude/commands … ~/.reasonix/commands),
+// the legacy XDG user dir (~/.config/reasonix/commands), then the project's
+// convention dirs (.claude/commands … .reasonix/commands). Scanning the .claude /
+// .agents / .agent dirs lets commands authored for other agent tools (same .md +
+// frontmatter format) work here unchanged.
 func CommandDirs() []string {
 	var dirs []string
-	if dir, err := os.UserConfigDir(); err == nil {
-		dirs = append(dirs, filepath.Join(dir, "reasonix", "commands"))
+	if home, err := os.UserHomeDir(); err == nil {
+		dirs = append(dirs, conventionSubdirsAsc(home, "commands")...)
 	}
-	dirs = append(dirs, filepath.Join(".reasonix", "commands"))
+	if dir, err := os.UserConfigDir(); err == nil {
+		dirs = append(dirs, filepath.Join(dir, "reasonix", "commands")) // legacy XDG user dir
+	}
+	dirs = append(dirs, conventionSubdirsAsc(".", "commands")...)
 	return dirs
 }
 

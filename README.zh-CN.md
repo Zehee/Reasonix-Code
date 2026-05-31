@@ -63,8 +63,9 @@ make cross      # -> dist/（darwin|linux|windows × amd64|arm64）
 ## 快速开始
 
 ```sh
-reasonix init                       # 生成 ./reasonix.toml
+reasonix setup                      # 配置向导 → ./reasonix.toml
 export DEEPSEEK_API_KEY=sk-...  # 或写入 .env（见 .env.example）
+reasonix chat                       # 然后在会话里运行 /init 生成 AGENTS.md（项目记忆）
 reasonix run "把 main.go 里的 TODO 实现掉"
 reasonix run --model mimo-pro "给这个函数补单元测试"
 echo "解释这段代码" | reasonix run
@@ -182,7 +183,7 @@ Review the staged diff. Focus on $ARGUMENTS, list bugs with file:line.
 
 ### 双模型协同（可选）
 
-`reasonix init` 刻意保持首次体验极简：选 provider → 输入 key（所选 provider 的所有
+`reasonix setup` 刻意保持首次体验极简：选 provider → 输入 key（所选 provider 的所有
 SKU 都会启用）。若要让两个模型协同（执行器 + 规划器，各自独立、缓存稳定的
 session），向导后手动在 `reasonix.toml` 加一行即可：
 
@@ -206,7 +207,7 @@ planner_model = "deepseek-pro"   # 作为低频规划器
 
 已完成：基于 registry 的 provider/tool、OpenAI 兼容流式 + 工具调用（429/5xx 有界重
 试）、九个内置工具（read_file、write_file、edit_file、multi_edit、bash、ls、glob、
-grep、web_fetch）、TOML 配置、交互式 `reasonix init` 向导、双模型协同（执行器 + 规划器，
+grep、web_fetch）、TOML 配置、交互式 `reasonix setup` 向导、双模型协同（执行器 + 规划器，
 各自独立、缓存稳定的 session）、低频上下文压缩、子 agent（`task`）、bubbletea 聊天
 TUI（markdown、plan mode、上下文仪表盘、`/compact` `/new`）、会话持久化 + 恢复、
 逐次调用**权限**（allow/ask/deny 规则；chat 在 writer 前询问，deny 在各模式硬阻断）、

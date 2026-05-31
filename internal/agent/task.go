@@ -149,28 +149,39 @@ func (t *TaskTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 // buildSubReg returns the sub-agent's tool set: the named whitelist (minus
 // `task`, to bar recursive nesting), or every parent tool except `task`.
 func (t *TaskTool) buildSubReg(names []string) *tool.Registry {
-	subReg := tool.NewRegistry()
+	return FilterRegistry(t.parentReg, names, t.Name())
+}
+
+// FilterRegistry builds a sub-registry from parent: the named whitelist (empty =
+// every parent tool), minus any excluded names. Used to scope what a spawned
+// sub-agent — a `task` sub-agent or a subagent skill — may call, e.g. excluding
+// `task` to bar recursive nesting, or restricting to a skill's allowed-tools.
+func FilterRegistry(parent *tool.Registry, names []string, exclude ...string) *tool.Registry {
+	ex := make(map[string]bool, len(exclude))
+	for _, e := range exclude {
+		ex[e] = true
+	}
+	sub := tool.NewRegistry()
 	src := names
 	if len(src) == 0 {
-		src = t.parentReg.Names()
+		src = parent.Names()
 	}
 	for _, name := range src {
-		if name == t.Name() {
-			continue // no recursive nesting
+		if ex[name] {
+			continue
 		}
-		if tl, ok := t.parentReg.Get(name); ok {
-			subReg.Add(tl)
+		if tl, ok := parent.Get(name); ok {
+			sub.Add(tl)
 		}
 	}
-	return subReg
+	return sub
 }
 
 // runSub builds a sub-agent over subReg, runs prompt to completion emitting to
 // sink, and returns its final assistant answer. Shared by the foreground and
 // background paths.
 func (t *TaskTool) runSub(ctx context.Context, prompt string, subReg *tool.Registry, sink event.Sink, maxSteps int) (string, error) {
-	subSession := NewSession(t.sysPrompt)
-	subAgent := New(t.prov, subReg, subSession, Options{
+	return RunSubAgent(ctx, t.prov, subReg, t.sysPrompt, prompt, Options{
 		MaxSteps:      maxSteps,
 		Temperature:   t.temperature,
 		Pricing:       t.pricing,
@@ -178,21 +189,41 @@ func (t *TaskTool) runSub(ctx context.Context, prompt string, subReg *tool.Regis
 		ContextWindow: t.contextWindow,
 		ArchiveDir:    t.archiveDir,
 	}, sink)
+}
 
-	if err := subAgent.Run(ctx, prompt); err != nil {
+// RunSubAgent runs prompt to completion in a fresh sub-agent session over reg,
+// emitting tool activity to sink, and returns the sub-agent's final assistant
+// answer. It is the shared core behind the `task` tool and subagent skills: a
+// caller supplies the system prompt (the task persona or the skill body), the
+// tool registry (already filtered), and the run Options (model budget, gate).
+func RunSubAgent(ctx context.Context, prov provider.Provider, reg *tool.Registry, sysPrompt, prompt string, opts Options, sink event.Sink) (string, error) {
+	sess := NewSession(sysPrompt)
+	sub := New(prov, reg, sess, opts, sink)
+	if err := sub.Run(ctx, prompt); err != nil {
 		return "", fmt.Errorf("sub-agent: %w", err)
 	}
-
 	// Walk the session backwards for the last assistant message with content —
-	// that's the sub-agent's final answer. Intermediate assistant messages
-	// with tool_calls but no text don't count.
-	for i := len(subSession.Messages) - 1; i >= 0; i-- {
-		m := subSession.Messages[i]
+	// that's the sub-agent's final answer. Intermediate assistant messages with
+	// tool_calls but no text don't count.
+	for i := len(sess.Messages) - 1; i >= 0; i-- {
+		m := sess.Messages[i]
 		if m.Role == provider.RoleAssistant && strings.TrimSpace(m.Content) != "" {
 			return m.Content, nil
 		}
 	}
 	return "", fmt.Errorf("sub-agent finished without producing a final answer")
+}
+
+// NestedSink returns a sink that forwards a sub-agent's tool activity to the
+// parent stream, nested under the tool call carried by ctx, so a frontend shows
+// it beneath that call (the same nesting `task` uses). Falls back to the given
+// sink when ctx carries no call context. Used by subagent skills.
+func NestedSink(ctx context.Context, fallback event.Sink) event.Sink {
+	parentID, parent, _, ok := CallContext(ctx)
+	if !ok || parent == nil {
+		return fallback
+	}
+	return subSinkFor(parentID, parent)
 }
 
 // subSink forwards a sub-agent's tool dispatch/result events to the parent's

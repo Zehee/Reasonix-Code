@@ -3,6 +3,8 @@ package control
 import (
 	"context"
 	"strings"
+
+	"reasonix/internal/skill"
 )
 
 // PlanModeMarker is prepended to every user turn while plan mode is on. It rides
@@ -61,6 +63,26 @@ func (c *Controller) CustomCommand(input string) (sent string, found bool) {
 	for _, cmd := range c.commands {
 		if cmd.Name == name {
 			return cmd.Render(fields[1:]), true
+		}
+	}
+	return "", false
+}
+
+// RunSkill resolves a "/<name> args…" line against the loaded skills, returning
+// the skill's rendered body to send as a turn (found=false when no skill
+// matches). Invoking a skill by slash always inlines its body — the model reads
+// and follows the playbook in the main loop; a subagent skill's isolation is
+// only engaged when the model calls it via run_skill / the dedicated tool. The
+// caller applies Compose for plan-mode/memory framing.
+func (c *Controller) RunSkill(input string) (sent string, found bool) {
+	fields := strings.Fields(input)
+	if len(fields) == 0 {
+		return "", false
+	}
+	name := strings.TrimPrefix(fields[0], "/")
+	for _, sk := range c.skills {
+		if sk.Name == name {
+			return skill.Render(sk, strings.Join(fields[1:], " ")), true
 		}
 	}
 	return "", false
