@@ -2,6 +2,11 @@
   <img src="docs/logo.svg" alt="Reasonix" width="640"/>
 </p>
 
+> [!WARNING]
+> **これはレガシーの TypeScript 系列(Reasonix 0.x)で、メンテナンスのみです。**
+> 開発は **Go 版の書き直し** に移行しました —— 新しいデフォルトの [`main-v2`](https://github.com/esengine/DeepSeek-Reasonix/tree/main-v2) ブランチと[移行ガイド](https://github.com/esengine/DeepSeek-Reasonix/blob/main-v2/docs/MIGRATING.md)を参照してください。ここではバグ修正のみ反映されます。
+
+
 <p align="center">
   <a href="./README.md">English</a>
   &nbsp;·&nbsp;

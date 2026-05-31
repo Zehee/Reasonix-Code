@@ -2,6 +2,11 @@
   <img src="docs/logo.svg" alt="Reasonix" width="640"/>
 </p>
 
+> [!WARNING]
+> **这是 legacy TypeScript 线(Reasonix 0.x),仅维护。**
+> 开发已转移到 **Go 重写版** —— 见 [`main-v2`](https://github.com/esengine/DeepSeek-Reasonix/tree/main-v2) 分支(新的默认分支)与[迁移指南](https://github.com/esengine/DeepSeek-Reasonix/blob/main-v2/docs/MIGRATING.md)。此处仅修复 bug。
+
+
 <p align="center">
   <a href="./README.md">English</a>
   &nbsp;·&nbsp;

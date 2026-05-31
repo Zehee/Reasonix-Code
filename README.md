@@ -2,6 +2,11 @@
   <img src="docs/logo.svg" alt="Reasonix" width="640"/>
 </p>
 
+> [!WARNING]
+> **This is the legacy TypeScript line (Reasonix 0.x), in maintenance mode.**
+> Active development moved to the **Go rewrite** — see the [`main-v2`](https://github.com/esengine/DeepSeek-Reasonix/tree/main-v2) branch (the new default) and the [migration guide](https://github.com/esengine/DeepSeek-Reasonix/blob/main-v2/docs/MIGRATING.md). Only bug fixes land here.
+
+
 <p align="center">
   <strong>English</strong>
   &nbsp;·&nbsp;
