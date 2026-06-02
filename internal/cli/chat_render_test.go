@@ -22,8 +22,10 @@ func newTestChatTUI() chatTUI {
 		reasoningLineIdx: -1,
 		reasoningTextIdx: -1,
 		answerIdx:        -1,
+		toolStreamIdx:    -1,
 		reasoning:        &strings.Builder{},
 		pending:          &strings.Builder{},
+		toolStream:       &strings.Builder{},
 		pendingCommit:    &commit,
 		renderer:         newMarkdownRenderer(80),
 	}
@@ -154,5 +156,49 @@ func TestFlushableMarkdownPrefixKeepsOpenFence(t *testing.T) {
 
 	if got := flushableMarkdownPrefix("no boundary yet"); got != "" {
 		t.Errorf("no blank line should flush nothing, got %q", got)
+	}
+}
+
+// TestToolProgressStreamsThenCollapses proves a running tool's output streams
+// live under its card via the ⎿ connector, then collapses to a line-count
+// summary when the result lands.
+func TestToolProgressStreamsThenCollapses(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "b1", Name: "bash", Args: `{"command":"go test ./..."}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "b1", Output: "ok pkg/a\n"}})
+	m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "b1", Output: "ok pkg/b\n"}})
+
+	joined := strings.Join(m.transcript, "\n")
+	if !strings.Contains(joined, "ok pkg/a") || !strings.Contains(joined, "ok pkg/b") {
+		t.Fatalf("live output should be visible while running:\n%s", joined)
+	}
+	if !strings.Contains(joined, "⎿") {
+		t.Fatalf("live output should use the ⎿ connector:\n%s", joined)
+	}
+
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "b1", Name: "bash", Output: "ok pkg/a\nok pkg/b\n"}})
+	joined = strings.Join(m.transcript, "\n")
+	if strings.Contains(joined, "ok pkg/a") {
+		t.Fatalf("output should collapse after completion:\n%s", joined)
+	}
+	if !strings.Contains(joined, "2 lines") {
+		t.Fatalf("collapsed block should summarize the line count:\n%s", joined)
+	}
+}
+
+// TestToolProgressTailCap proves the live block only keeps the last
+// toolStreamTailLines lines so a chatty build doesn't flood scrollback.
+func TestToolProgressTailCap(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "b1", Name: "bash", Args: `{"command":"x"}`}})
+	for i := 0; i < toolStreamTailLines+5; i++ {
+		m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "b1", Output: "line" + string(rune('A'+i)) + "\n"}})
+	}
+	block := m.transcript[m.toolStreamIdx]
+	if got := strings.Count(block, "\n") + 1; got > toolStreamTailLines {
+		t.Fatalf("live block kept %d lines, want <= %d:\n%s", got, toolStreamTailLines, block)
+	}
+	if strings.Contains(block, "lineA") {
+		t.Fatalf("oldest line should have scrolled out of the tail:\n%s", block)
 	}
 }

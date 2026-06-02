@@ -113,8 +113,15 @@ type chatTUI struct {
 	// place as completed paragraphs arrive); -1 when none is open. answerFlushed is
 	// how many bytes of pending have already been rendered into it, so a Text packet
 	// that doesn't close a new paragraph re-renders nothing.
-	answerIdx       int
-	answerFlushed   int
+	answerIdx     int
+	answerFlushed int
+	// toolStreamIdx is the transcript index of a running tool's live-output block
+	// (streamed via ToolProgress under the tool card); -1 when none. toolStreamID
+	// is the call ID it belongs to; toolStream accumulates the output so the block
+	// can re-render its tail and report a line count when it collapses.
+	toolStreamIdx   int
+	toolStreamID    string
+	toolStream      *strings.Builder
 	transcriptDirty bool
 	eventCh         chan event.Event
 	started         bool // banner + resumed history committed once
@@ -364,8 +371,10 @@ func newChatTUI(ctrl *control.Controller, missing string, eventCh chan event.Eve
 		reasoningLineIdx: -1,
 		reasoningTextIdx: -1,
 		answerIdx:        -1,
+		toolStreamIdx:    -1,
 		reasoning:        &strings.Builder{},
 		pending:          &strings.Builder{},
+		toolStream:       &strings.Builder{},
 		pendingCommit:    &commitBuf,
 		renderer:         newMarkdownRenderer(termW),
 		eventCh:          eventCh,
@@ -977,6 +986,55 @@ func reasoningBlock(raw string, width int) string {
 		}
 	}
 	return connectorBlock(lines)
+}
+
+// toolStreamTailLines caps how many trailing output lines a running tool shows;
+// the live block scrolls within this window so a chatty build doesn't flood.
+const toolStreamTailLines = 8
+
+// streamToolOutput appends a chunk of a running tool's output and re-renders its
+// live block (the last toolStreamTailLines lines) under the tool card, opening
+// the block on the first chunk. Mirrors streamReasoning.
+func (m *chatTUI) streamToolOutput(id, chunk string) {
+	if id == "" {
+		return
+	}
+	if m.toolStreamID != id {
+		m.collapseToolOutput(m.toolStreamID)
+		m.toolStreamID = id
+		m.toolStream.Reset()
+		m.toolStreamIdx = len(m.transcript)
+		m.commitLine("")
+	}
+	m.toolStream.WriteString(chunk)
+	all := strings.Split(strings.TrimRight(m.toolStream.String(), "\n"), "\n")
+	if len(all) > toolStreamTailLines {
+		all = all[len(all)-toolStreamTailLines:]
+	}
+	lines := make([]string, len(all))
+	for i, ln := range all {
+		lines[i] = dim(clampPlain(ln, m.width-len([]rune(connector))))
+	}
+	m.transcript[m.toolStreamIdx] = connectorBlock(lines)
+	m.transcriptDirty = true
+}
+
+// collapseToolOutput replaces a finished tool's live block with a dim
+// "⎿ N lines" summary, so the scrollback keeps a marker of the run without the
+// full output (which the model already received). No-op when id isn't streaming.
+func (m *chatTUI) collapseToolOutput(id string) {
+	if m.toolStreamIdx < 0 || id == "" || m.toolStreamID != id {
+		return
+	}
+	n := len(strings.Split(strings.TrimRight(m.toolStream.String(), "\n"), "\n"))
+	if strings.TrimSpace(m.toolStream.String()) == "" {
+		n = 0
+	}
+	m.transcript[m.toolStreamIdx] = connectorBlock([]string{dim(fmt.Sprintf("%d lines", n))})
+	m.transcriptDirty = true
+	m.toolStreamIdx = -1
+	m.toolStreamID = ""
+	m.toolStream.Reset()
 }
 
 // commitReasoning closes the live thinking block: the "▎ thinking…" marker is
@@ -1958,9 +2016,14 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 			m.commitLine(toolCard(e.Tool.Name, e.Tool.Args, m.width))
 		}
 
+	case event.ToolProgress:
+		m.streamToolOutput(e.Tool.ID, e.Tool.Output)
+
 	case event.ToolResult:
 		// A successful result is silent (it only feeds the model); a blocked/failed
-		// call surfaces a red "⏺ Verb ⊘ <reason>" card.
+		// call surfaces a red "⏺ Verb ⊘ <reason>" card. A live-output block (bash)
+		// collapses to a one-line "⎿ N lines" summary first.
+		m.collapseToolOutput(e.Tool.ID)
 		if e.Tool.Err != "" {
 			m.finalizeStreamed()
 			m.commitLine("  " + red("●") + " " + bold(toolDisplayName(e.Tool.Name)) + " " + red("⊘ "+e.Tool.Err))
@@ -2040,6 +2103,7 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 // finalizeStreamed freezes any in-progress reasoning + answer into scrollback so
 // a following event line lands after them, preserving chronological order.
 func (m *chatTUI) finalizeStreamed() {
+	m.collapseToolOutput(m.toolStreamID)
 	m.commitReasoning()
 	m.commitPending()
 }

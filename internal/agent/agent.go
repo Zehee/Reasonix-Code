@@ -762,6 +762,10 @@ func (a *Agent) executeOne(ctx context.Context, call provider.ToolCall) toolOutc
 	if a.memQueue != nil {
 		cctx = memory.WithQueue(cctx, a.memQueue)
 	}
+	callID := call.ID
+	cctx = tool.WithProgress(cctx, func(chunk string) {
+		a.sink.Emit(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: callID, Output: chunk}})
+	})
 	result, err := t.Execute(cctx, json.RawMessage(call.Arguments))
 	if a.evidence != nil {
 		if call.Name == "complete_step" {

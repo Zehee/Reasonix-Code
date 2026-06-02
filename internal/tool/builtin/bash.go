@@ -103,6 +103,8 @@ func (b bash) Execute(ctx context.Context, args json.RawMessage) (string, error)
 		job := jm.Start("bash", commandPreview(p.Command), func(jobCtx context.Context, out io.Writer) (string, error) {
 			cmd := exec.CommandContext(jobCtx, argv[0], argv[1:]...)
 			cmd.Dir = workDir
+			setKillTree(cmd)
+			cmd.WaitDelay = 5 * time.Second
 			cmd.Stdout = out
 			cmd.Stderr = out
 			return "", cmd.Run()
@@ -115,9 +117,15 @@ func (b bash) Execute(ctx context.Context, args json.RawMessage) (string, error)
 
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Dir = b.workDir // "" lets exec use the process working directory
+	setKillTree(cmd)
+	cmd.WaitDelay = 5 * time.Second
 	var buf bytes.Buffer
-	cmd.Stdout = &buf
-	cmd.Stderr = &buf
+	w := io.Writer(&buf)
+	if emit, ok := tool.ProgressFrom(ctx); ok {
+		w = io.MultiWriter(&buf, newProgressWriter(emit))
+	}
+	cmd.Stdout = w
+	cmd.Stderr = w
 	err := cmd.Run()
 	out := buf.String()
 
@@ -129,6 +137,17 @@ func (b bash) Execute(ctx context.Context, args json.RawMessage) (string, error)
 		return out, fmt.Errorf("command exited: %w", err)
 	}
 	return out, nil
+}
+
+// progressWriter forwards each chunk the command writes to a tool.ProgressFunc,
+// so foreground bash output streams to the frontend as it is produced.
+type progressWriter struct{ emit tool.ProgressFunc }
+
+func newProgressWriter(emit tool.ProgressFunc) *progressWriter { return &progressWriter{emit: emit} }
+
+func (w *progressWriter) Write(p []byte) (int, error) {
+	w.emit(string(p))
+	return len(p), nil
 }
 
 // hasUnquotedSeq reports whether seq appears in s outside any single- or

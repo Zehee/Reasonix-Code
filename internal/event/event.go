@@ -63,6 +63,11 @@ const (
 	// Summary so the placeholder still resolves. Replaces the older plain Notice
 	// so a sink can render a distinct, expandable card.
 	CompactionDone
+	// ToolProgress streams a chunk of a still-running tool's combined output
+	// (Tool: ID + Output = the new chunk). Emitted between ToolDispatch and
+	// ToolResult for long tools like bash so a frontend can show live progress.
+	// Appended last to keep the Kind values before it wire-stable.
+	ToolProgress
 )
 
 // Level classifies a Notice so sinks can style or filter it.
