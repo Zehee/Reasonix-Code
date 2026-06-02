@@ -18,6 +18,8 @@ import (
 	"reasonix/internal/i18n"
 )
 
+const tabWidth = 4
+
 const (
 	diffScrollbackMaxLines = 40
 
@@ -74,12 +76,12 @@ func diffBody(d event.FileDiff, path string, width, maxLines int) []string {
 	if d.Diff == "" {
 		return nil
 	}
-	var src []string
-	for _, ln := range strings.Split(strings.TrimRight(d.Diff, "\n"), "\n") {
-		if strings.HasPrefix(ln, "--- ") || strings.HasPrefix(ln, "+++ ") {
-			continue
-		}
-		src = append(src, ln)
+	src := strings.Split(strings.TrimRight(d.Diff, "\n"), "\n")
+	// Drop the "--- a/… / +++ b/…" header pair positionally — matching the prefix
+	// on every line would eat real content (a deleted SQL "-- x" renders "--- x",
+	// an added "++ y" renders "+++ y").
+	if len(src) >= 2 && strings.HasPrefix(src[0], "--- ") && strings.HasPrefix(src[1], "+++ ") {
+		src = src[2:]
 	}
 	gw := gutterWidth(src)
 
@@ -202,7 +204,32 @@ func clampPlain(s string, w int) string {
 	if w < 1 {
 		w = 1
 	}
-	return ansi.Truncate(s, w, "")
+	return ansi.Truncate(expandTabs(s), w, "")
+}
+
+// expandTabs replaces tabs with spaces to the next tabWidth stop. A literal tab
+// has zero StringWidth but the terminal advances it to a tab stop, so leaving
+// tabs in a background-bar row overflows the bar — expand them so the measured
+// width matches what's drawn.
+func expandTabs(s string) string {
+	if !strings.ContainsRune(s, '\t') {
+		return s
+	}
+	var b strings.Builder
+	col := 0
+	for _, r := range s {
+		if r == '\t' {
+			n := tabWidth - col%tabWidth
+			for i := 0; i < n; i++ {
+				b.WriteByte(' ')
+			}
+			col += n
+			continue
+		}
+		b.WriteRune(r)
+		col++
+	}
+	return b.String()
 }
 
 func reapplyBG(s, bg string) string {

@@ -1032,7 +1032,7 @@ func reasoningBlock(raw string, width, maxLines int) string {
 	}
 	var lines []string
 	for _, ln := range strings.Split(strings.TrimRight(raw, "\n"), "\n") {
-		for _, wl := range strings.Split(ansi.Wrap(ln, w, ""), "\n") {
+		for _, wl := range strings.Split(ansi.Wrap(expandTabs(ln), w, ""), "\n") {
 			lines = append(lines, dim(wl))
 		}
 	}
