@@ -28,7 +28,6 @@ import { TodoPanel } from "./components/TodoPanel";
 import { ApprovalModal } from "./components/ApprovalModal";
 import { AskCard } from "./components/AskCard";
 import { StatusBar } from "./components/StatusBar";
-import { MemoryPanel } from "./components/MemoryPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { UpdateBanner } from "./components/UpdateBanner";
@@ -42,7 +41,7 @@ import { ProjectTree } from "./components/ProjectTree";
 import { CopyButton } from "./components/CopyButton";
 import { parseTodos } from "./lib/tools";
 import { shouldShowTodoPanel } from "./lib/todoVisibility";
-import type { ComposerInsertRequest, MemoryView, Meta, Mode, SessionMeta, TabMeta } from "./lib/types";
+import type { ComposerInsertRequest, Meta, Mode, SessionMeta, SettingsTab, TabMeta } from "./lib/types";
 import { loadLayoutSize, saveLayoutSize } from "./lib/layoutPreferences";
 import {
   applyTheme,
@@ -364,10 +363,6 @@ export default function App() {
     rewind,
     setModel,
     setEffort,
-    fetchMemory,
-    remember,
-    forget,
-    saveDoc,
     switchTab,
     openProjectTab,
     openGlobalTab,
@@ -385,7 +380,7 @@ export default function App() {
   // null until the mount probe resolves; true shows the overlay. Probed once —
   // clearing the key mid-session is the Settings panel's job, not the gate's.
   const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
-  const [memView, setMemView] = useState<MemoryView | null>(null);
+  const [settingsTarget, setSettingsTarget] = useState<SettingsTab | null>(null);
   const [histView, setHistView] = useState<HistoryViewState | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebarCollapsed);
   const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth);
@@ -400,7 +395,6 @@ export default function App() {
   const [dockRefreshKey, setDockRefreshKey] = useState(0);
   const [projectRevision, setProjectRevision] = useState(0);
   const [composerInsertRequest, setComposerInsertRequest] = useState<ComposerInsertRequest | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [desktopPlatform, setDesktopPlatform] = useState<DesktopPlatform>(detectBrowserPlatform);
   const [renamingTopicId, setRenamingTopicId] = useState<string | null>(null);
   const [topicTitleDraft, setTopicTitleDraft] = useState("");
@@ -461,7 +455,7 @@ export default function App() {
   useEffect(() => {
     if (typeof window === "undefined" || !window.runtime) return;
     return window.runtime.EventsOn("app:open-settings", () => {
-      setSettingsOpen(true);
+      setSettingsTarget("general");
     });
   }, []);
   const [pendingPlanRevision, setPendingPlanRevision] = useState<string | null>(null);
@@ -694,17 +688,9 @@ export default function App() {
     send(text);
   }, [pendingPlanRevision, send, state.running]);
 
-  // Memory drawer: opening fetches a fresh snapshot; writes re-fetch so the
-  // panel reflects what landed on disk.
-  const openMemory = useCallback(async () => {
-    setMemView(await fetchMemory());
-  }, [fetchMemory]);
-
-  const closeMemory = useCallback(() => setMemView(null), []);
-
   // handleSend intercepts the slash commands that need a desktop-native action
   // before they reach the backend: "/model <ref>" rebuilds on that model, and
-  // "/memory" opens the memory drawer. Everything else — skills (/init, …),
+  // "/memory" opens the Memory tab in the settings centre. Everything else — skills (/init, …),
   // custom commands, bare /model and the other read-only management verbs
   // (/skill, /hooks, /mcp) — goes straight to Submit, which the controller
   // resolves (a turn, or a listing Notice).
@@ -727,7 +713,7 @@ export default function App() {
         return;
       }
       if (trimmed === "/memory") {
-        void openMemory();
+        setSettingsTarget("memory");
         return;
       }
       const theme = /^\/theme(?:\s+(\S+))?$/.exec(trimmed);
@@ -759,7 +745,7 @@ export default function App() {
       await syncModeToController(mode);
       send(trimmed, submitText.trim());
     },
-    [switchModel, openMemory, syncModeToController, mode, send, runShell, notice, t],
+    [switchModel, syncModeToController, mode, send, runShell, notice, t],
   );
 
   const refreshTabMetas = useCallback(async (): Promise<TabMeta[]> => {
@@ -1277,30 +1263,6 @@ export default function App() {
     }
   }, [renameTopic, renamingTopicId, topicTitleDraft]);
 
-  const onRemember = useCallback(
-    async (scope: string, note: string) => {
-      await remember(scope, note);
-      setMemView(await fetchMemory());
-    },
-    [remember, fetchMemory],
-  );
-
-  const onForget = useCallback(
-    async (name: string) => {
-      await forget(name);
-      setMemView(await fetchMemory());
-    },
-    [forget, fetchMemory],
-  );
-
-  const onSaveDoc = useCallback(
-    async (path: string, body: string) => {
-      await saveDoc(path, body);
-      setMemView(await fetchMemory());
-    },
-    [saveDoc, fetchMemory],
-  );
-
   const sidebarExpandBlocked = false;
   const sidebarToggleTitle = sidebarCollapsed
       ? t("sidebar.expand")
@@ -1407,7 +1369,7 @@ export default function App() {
             <Tooltip label={t("topbar.settings")} fill side="right" disabled={sidebarNavTooltipDisabled}>
               <button
                 className="sidebar__navitem"
-                onClick={() => setSettingsOpen(true)}
+                onClick={() => setSettingsTarget("general")}
               >
                 <SettingsIcon size={15} />
                 <span>{t("topbar.settings")}</span>
@@ -1728,16 +1690,6 @@ export default function App() {
         )}
       </div>
 
-      {memView !== null && (
-        <MemoryPanel
-          view={memView}
-          onClose={closeMemory}
-          onRemember={onRemember}
-          onForget={onForget}
-          onSaveDoc={onSaveDoc}
-        />
-      )}
-
       {histView !== null && (
         <HistoryPanel
           kind={histView.kind}
@@ -1754,9 +1706,10 @@ export default function App() {
         />
       )}
 
-      {settingsOpen && (
+      {settingsTarget !== null && (
         <SettingsPanel
-          onClose={() => setSettingsOpen(false)}
+          initialTab={settingsTarget}
+          onClose={() => setSettingsTarget(null)}
           onChanged={() => void refreshMeta()}
         />
       )}
