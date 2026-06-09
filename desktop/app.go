@@ -3469,14 +3469,24 @@ func (a *App) currentProviderEntryForTab(tabID string) (*config.ProviderEntry, e
 }
 
 func (a *App) withActiveWorkspace(fn func() (string, error)) (string, error) {
+	var result string
+	err := a.withActiveWorkspaceDo(func() error {
+		var err error
+		result, err = fn()
+		return err
+	})
+	return result, err
+}
+
+func (a *App) withActiveWorkspaceDo(fn func() error) error {
 	root := a.activeWorkspaceRoot()
 	if root != "" && root != "." {
 		prev, err := os.Getwd()
 		if err != nil {
-			return "", err
+			return err
 		}
 		if err := os.Chdir(root); err != nil {
-			return "", err
+			return err
 		}
 		defer func() { _ = os.Chdir(prev) }()
 	}
@@ -3508,7 +3518,9 @@ func (a *App) SavePastedFile(name, dataURL string) (string, error) {
 
 // AttachmentDataURL returns a safe data URL for a stored image attachment.
 func (a *App) AttachmentDataURL(path string) (string, error) {
-	return control.ImageDataURL(path)
+	return a.withActiveWorkspace(func() (string, error) {
+		return control.ImageDataURL(path)
+	})
 }
 
 // DroppedItem is one OS-dropped file resolved into a composer context entry: an
@@ -3526,27 +3538,37 @@ type DroppedItem struct {
 // thumbnail; other in-workspace files are referenced relatively (no copy); files
 // outside the workspace are copied into .reasonix/attachments.
 func (a *App) AttachDropped(path string) (DroppedItem, error) {
-	info, err := os.Lstat(path)
-	if err != nil {
-		return DroppedItem{}, err
-	}
-	if isImageExt(path) {
-		if rel, err := control.SaveImageFile(path); err == nil {
-			preview, _ := control.ImageDataURL(rel)
-			return DroppedItem{Kind: "attachment", Path: rel, PreviewURL: preview}, nil
+	var item DroppedItem
+	err := a.withActiveWorkspaceDo(func() error {
+		info, err := os.Lstat(path)
+		if err != nil {
+			return err
 		}
-	}
-	if rel, ok := workspaceRelative(path); ok {
-		return DroppedItem{Kind: "workspace", Path: rel, IsDir: info.IsDir()}, nil
-	}
-	if info.IsDir() {
-		return DroppedItem{}, fmt.Errorf("can only attach files from outside the workspace")
-	}
-	rel, err := control.SaveAttachmentFile(path)
+		if isImageExt(path) {
+			if rel, err := control.SaveImageFile(path); err == nil {
+				preview, _ := control.ImageDataURL(rel)
+				item = DroppedItem{Kind: "attachment", Path: rel, PreviewURL: preview}
+				return nil
+			}
+		}
+		if rel, ok := workspaceRelative(path); ok {
+			item = DroppedItem{Kind: "workspace", Path: rel, IsDir: info.IsDir()}
+			return nil
+		}
+		if info.IsDir() {
+			return fmt.Errorf("can only attach files from outside the workspace")
+		}
+		rel, err := control.SaveAttachmentFile(path)
+		if err != nil {
+			return err
+		}
+		item = DroppedItem{Kind: "attachment", Path: rel}
+		return nil
+	})
 	if err != nil {
 		return DroppedItem{}, err
 	}
-	return DroppedItem{Kind: "attachment", Path: rel}, nil
+	return item, nil
 }
 
 func isImageExt(path string) bool {
