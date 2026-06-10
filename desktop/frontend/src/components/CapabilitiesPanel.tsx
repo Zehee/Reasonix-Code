@@ -175,7 +175,7 @@ export function CapabilitiesPanel({
 
             {tab === "servers" ? (
               <section className="mem-section">
-                <div className="mem-section__actions">
+                <div className="cap-mcp-toolbar cap-mcp-toolbar--drawer">
                   {!adding && (
                     <button className="btn btn--small" disabled={busy} onClick={() => setAdding(true)}>
                       {t("caps.addServer")}
@@ -198,29 +198,34 @@ export function CapabilitiesPanel({
                 {view.servers.length === 0 && !adding && (
                   <div className="mem-empty">{t("caps.noServers")}</div>
                 )}
-                <ServerGroup
-                  busy={busy}
-                  servers={serverGroups.active}
-                  expanded={expandedServers}
-                  expandedTools={expandedServerTools}
-                  editing={editing}
-                  onConfirm={(name) => void mutate(() => app.RemoveMCPServer(name))}
-                  onEdit={(name) => {
-                    setEditing(name);
-                  }}
-                  onCancelEdit={() => setEditing(null)}
-                  onRetry={(name) => void mutate(() => app.ReconnectMCPServer(name))}
-                  onReconnect={(name) => void mutate(() => app.ReconnectMCPServer(name))}
-                  onConfirmClearAuth={(name) => void mutate(() => app.ClearMCPServerAuthentication(name))}
-                  onToggle={(name, on) => void mutate(() => app.SetMCPServerEnabled(name, on))}
-                  onUpdate={(name, input) =>
-                    void mutate(() => app.UpdateMCPServer(name, input)).then((ok) => {
-                      if (ok) setEditing(null);
-                    })
-                  }
-                  onToggleDetails={toggleServer}
-                  onToggleTools={toggleServerTools}
-                />
+                {serverGroups.active.length > 0 && (
+                  <div className="cap-server-section">
+                    <div className="cap-server-section__title">{t("caps.availableServers")}</div>
+                    <ServerGroup
+                      busy={busy}
+                      servers={serverGroups.active}
+                      expanded={expandedServers}
+                      expandedTools={expandedServerTools}
+                      editing={editing}
+                      onConfirm={(name) => void mutate(() => app.RemoveMCPServer(name))}
+                      onEdit={(name) => {
+                        setEditing(name);
+                      }}
+                      onCancelEdit={() => setEditing(null)}
+                      onRetry={(name) => void mutate(() => app.ReconnectMCPServer(name))}
+                      onReconnect={(name) => void mutate(() => app.ReconnectMCPServer(name))}
+                      onConfirmClearAuth={(name) => void mutate(() => app.ClearMCPServerAuthentication(name))}
+                      onToggle={(name, on) => void mutate(() => app.SetMCPServerEnabled(name, on))}
+                      onUpdate={(name, input) =>
+                        void mutate(() => app.UpdateMCPServer(name, input)).then((ok) => {
+                          if (ok) setEditing(null);
+                        })
+                      }
+                      onToggleDetails={toggleServer}
+                      onToggleTools={toggleServerTools}
+                    />
+                  </div>
+                )}
                 {adding ? (
                   <AddServerForm busy={busy} onCancel={() => setAdding(false)} onAdd={async (input) => (await mutate(() => app.AddMCPServer(input))) && setAdding(false)} />
                 ) : null}
@@ -683,6 +688,7 @@ function FailedServersNotice({
 }) {
   const t = useT();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const groups = useMemo(() => failureGroups(servers, t), [servers, t]);
   const removableFailures = useMemo(() => servers.filter(canBulkRemoveFailure), [servers]);
   const retryNames = useMemo(() => servers.map((s) => s.name), [servers]);
@@ -701,23 +707,31 @@ function FailedServersNotice({
             {t("caps.retryAll")}
           </button>
           {removableFailures.length > 0 && (
-            <InlineConfirmButton
-              label={t("caps.removeInvalid", { count: removableFailures.length })}
-              confirmLabel={t("caps.confirmRemoveInvalid", { count: removableFailures.length })}
-              cancelLabel={t("common.cancel")}
-              disabled={busy}
-              danger
-              onConfirm={() => onConfirmMany(removableFailures.map((s) => s.name))}
-            />
+            <button className="btn btn--small" disabled={busy} type="button" onClick={() => setBulkOpen((v) => !v)} aria-expanded={bulkOpen}>
+              {t("caps.bulkActions")}
+            </button>
           )}
         </div>
       </div>
-      <div className="cap-failures__chips" aria-label={t("caps.failureGroups")}>
-        {groups.map((group) => (
-          <span className="cap-failure-chip" key={group.kind}>{group.label}</span>
-        ))}
+      <div className="cap-failures__meta">
+        <div className="cap-failures__chips" aria-label={t("caps.failureGroups")}>
+          {groups.map((group) => (
+            <span className="cap-failure-chip" key={group.kind}>{group.label}</span>
+          ))}
+        </div>
       </div>
-      {!detailsOpen && <div className="cap-failures__collapsed">{t("caps.failureCollapsed", { count: servers.length })}</div>}
+      {bulkOpen && removableFailures.length > 0 && (
+        <div className="cap-failures__bulk">
+          <InlineConfirmButton
+            label={t("caps.removeInvalid", { count: removableFailures.length })}
+            confirmLabel={t("caps.confirmRemoveInvalid", { count: removableFailures.length })}
+            cancelLabel={t("common.cancel")}
+            disabled={busy}
+            danger
+            onConfirm={() => onConfirmMany(removableFailures.map((s) => s.name))}
+          />
+        </div>
+      )}
       {detailsOpen && <div className="cap-failures__list">
         {servers.map((s) => {
           const open = expanded.has(s.name);
@@ -1484,16 +1498,16 @@ export function MCPServersSettingsPage() {
 
 	return (
 		<section className="mem-section">
-			{err && <div className="banner banner--error">{err}</div>}
-			{view.servers.length > 0 && (
-				<div className="drawer__summary" style={{ marginBottom: 12 }}>{summary}</div>
-			)}
-			<div className="mem-section__actions">
-				{!adding && (
-					<button className="btn btn--small" disabled={busy} onClick={() => setAdding(true)}>
-						{t("caps.addServer")}
-					</button>
-				)}
+			{err && serverGroups.failed.length === 0 && <div className="banner banner--error">{err}</div>}
+			<div className="cap-mcp-toolbar">
+				{view.servers.length > 0 ? <div className="drawer__summary">{summary}</div> : <span />}
+				<div className="cap-mcp-toolbar__actions">
+					{!adding && (
+						<button className="btn btn--small" disabled={busy} onClick={() => setAdding(true)}>
+							{t("caps.addServer")}
+						</button>
+					)}
+				</div>
 			</div>
 			{serverGroups.failed.length > 0 && (
 				<FailedServersNotice
@@ -1511,27 +1525,32 @@ export function MCPServersSettingsPage() {
 			{view.servers.length === 0 && !adding && (
 				<div className="mem-empty">{t("caps.noServers")}</div>
 			)}
-			<ServerGroup
-				busy={busy}
-				servers={serverGroups.active}
-				expanded={expandedServers}
-				expandedTools={expandedServerTools}
-				editing={editing}
-				onConfirm={(name) => void mutate(() => app.RemoveMCPServer(name))}
-				onEdit={(name) => { setEditing(name); }}
-				onCancelEdit={() => setEditing(null)}
-				onRetry={(name) => void mutate(() => app.ReconnectMCPServer(name))}
-				onReconnect={(name) => void mutate(() => app.ReconnectMCPServer(name))}
-				onConfirmClearAuth={(name) => void mutate(() => app.ClearMCPServerAuthentication(name))}
-				onToggle={(name, on) => void mutate(() => app.SetMCPServerEnabled(name, on))}
-				onUpdate={(name, input) =>
-					void mutate(() => app.UpdateMCPServer(name, input)).then((ok) => {
-						if (ok) setEditing(null);
-					})
-				}
-				onToggleDetails={toggleServer}
-				onToggleTools={toggleServerTools}
-			/>
+			{serverGroups.active.length > 0 && (
+				<div className="cap-server-section">
+					<div className="cap-server-section__title">{t("caps.availableServers")}</div>
+					<ServerGroup
+						busy={busy}
+						servers={serverGroups.active}
+						expanded={expandedServers}
+						expandedTools={expandedServerTools}
+						editing={editing}
+						onConfirm={(name) => void mutate(() => app.RemoveMCPServer(name))}
+						onEdit={(name) => { setEditing(name); }}
+						onCancelEdit={() => setEditing(null)}
+						onRetry={(name) => void mutate(() => app.ReconnectMCPServer(name))}
+						onReconnect={(name) => void mutate(() => app.ReconnectMCPServer(name))}
+						onConfirmClearAuth={(name) => void mutate(() => app.ClearMCPServerAuthentication(name))}
+						onToggle={(name, on) => void mutate(() => app.SetMCPServerEnabled(name, on))}
+						onUpdate={(name, input) =>
+							void mutate(() => app.UpdateMCPServer(name, input)).then((ok) => {
+								if (ok) setEditing(null);
+							})
+						}
+						onToggleDetails={toggleServer}
+						onToggleTools={toggleServerTools}
+					/>
+				</div>
+			)}
 			{adding ? (
 				<AddServerForm busy={busy} onCancel={() => setAdding(false)} onAdd={async (input) => (await mutate(() => app.AddMCPServer(input))) && setAdding(false)} />
 			) : null}
