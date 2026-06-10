@@ -1,6 +1,6 @@
 // Run: tsx src/__tests__/provider-model-refresh.test.ts
 
-import { mergedFetchedProviderModels, providerDefaultModel } from "../lib/providerModels";
+import { mergedFetchedProviderModels, providerDefaultModel, providerModelCandidates } from "../lib/providerModels";
 
 let passed = 0;
 let failed = 0;
@@ -39,6 +39,12 @@ eq(
   mergedFetchedProviderModels(["mimo-v2.5-pro"], ["mimo-v2-flash", "mimo-v2-omni", "mimo-v2.5-pro"], { preserveCurated: true }),
   ["mimo-v2.5-pro"],
   "manual access refresh preserves selected MiMo model instead of importing provider catalog",
+);
+
+eq(
+  providerModelCandidates(["mimo-v2.5-pro"], ["mimo-v2-flash", "mimo-v2-omni", "mimo-v2.5-pro"]),
+  ["mimo-v2.5-pro", "mimo-v2-flash", "mimo-v2-omni"],
+  "manual access refresh can show provider catalog as unsaved candidates",
 );
 
 eq(

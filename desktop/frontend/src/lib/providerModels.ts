@@ -4,6 +4,10 @@ export function mergedFetchedProviderModels(current: string[], fetched: string[]
   return uniqueStrings([...saved, ...fetched]);
 }
 
+export function providerModelCandidates(current: string[], fetched: string[]): string[] {
+  return uniqueStrings([...current, ...fetched]);
+}
+
 export function providerDefaultModel(currentDefault: string, models: string[]): string {
   return currentDefault && models.includes(currentDefault) ? currentDefault : models[0] ?? "";
 }
