@@ -147,6 +147,7 @@ type SettingsView struct {
 	DesktopTheme      string          `json:"desktopTheme"`
 	DesktopThemeStyle string          `json:"desktopThemeStyle"`
 	CloseBehavior     string          `json:"closeBehavior"`
+	DisplayMode       string          `json:"displayMode"`
 	CheckUpdates      bool            `json:"checkUpdates"`
 	Telemetry         bool            `json:"telemetry"`
 	ExpandThinking    bool            `json:"expandThinking"`
@@ -326,6 +327,7 @@ func (a *App) Settings() SettingsView {
 			DesktopTheme:      "light",
 			DesktopThemeStyle: "graphite",
 			CloseBehavior:     "background",
+			DisplayMode:       "minimal",
 			CheckUpdates:      true,
 			Telemetry:         true,
 			ExpandThinking:    false,
@@ -372,6 +374,7 @@ func (a *App) Settings() SettingsView {
 		DesktopTheme:      cfg.DesktopTheme(),
 		DesktopThemeStyle: cfg.DesktopThemeStyle(),
 		CloseBehavior:     cfg.DesktopCloseBehavior(),
+		DisplayMode:       cfg.DesktopDisplayMode(),
 		CheckUpdates:      cfg.DesktopCheckUpdates(),
 		Telemetry:         cfg.DesktopTelemetry(),
 		ExpandThinking:    cfg.Desktop.ExpandThinking,
@@ -1270,6 +1273,11 @@ func (a *App) ClearBotSecret(envName string) error {
 // the active controller. It must stay out of provider-visible prompt/request data.
 func (a *App) SetCloseBehavior(mode string) error {
 	return a.applyConfigOnly(func(c *config.Config) error { return c.SetDesktopCloseBehavior(mode) })
+}
+
+// SetDisplayMode updates the transcript display mode. UI-only, no rebuild needed.
+func (a *App) SetDisplayMode(mode string) error {
+	return a.applyConfigOnly(func(c *config.Config) error { return c.SetDesktopDisplayMode(mode) })
 }
 
 // SetDesktopLanguage updates only the desktop UI language. It deliberately does
