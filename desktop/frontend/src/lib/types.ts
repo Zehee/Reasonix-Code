@@ -17,7 +17,8 @@ export type EventKind =
   | "turn_done"
   | "compaction_started"
   | "compaction_done"
-  | "retrying";
+  | "retrying"
+  | "steer";
 
 export interface WireCompaction {
   trigger?: string; // "auto" | "manual"
@@ -169,6 +170,7 @@ export interface ContextPanelInfo {
   windowTokens: number;
   promptTokens: number;
   completionTokens: number;
+  totalTokens: number;
   reasoningTokens: number;
   cacheHitTokens: number;
   cacheMissTokens: number;
@@ -271,6 +273,7 @@ export interface WorkspaceView {
 export interface ContextInfo {
   used: number;
   window: number;
+  sessionTokens: number;
   compactRatio?: number;
 }
 
@@ -723,6 +726,8 @@ export interface SettingsView {
   desktopTheme: string; // "auto" | "dark" | "light"
   desktopThemeStyle: string;
   closeBehavior: string; // "background" | "quit"
+  checkUpdates: boolean; // check for new versions on startup
+  expandThinking: boolean; // show reasoning text expanded by default
   configPath: string;
   providerKinds: string[]; // provider implementations the kernel registered (for the kind picker)
   autoApproveTools: boolean;

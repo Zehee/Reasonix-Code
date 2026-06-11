@@ -18,6 +18,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"reasonix/internal/agent"
 	"reasonix/internal/boot"
@@ -230,7 +231,7 @@ func runAgent(args []string) int {
 		return 2
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 
 	// Live run: render the agent's event stream to stdout. Markdown post-stream
@@ -345,7 +346,7 @@ func runServe(args []string) int {
 
 	fmt.Printf("reasonix serve — %s on http://%s\n", ctrl.Label(), *addr)
 	// Use graceful shutdown so SIGINT/SIGTERM drain active connections.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := serve.New(ctrl, bc).RunGraceful(ctx, *addr); err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
@@ -364,7 +365,7 @@ func chatREPL(args []string) int {
 	cont := fs.Bool("continue", false, "resume the most recent saved session")
 	fs.BoolVar(cont, "c", false, "shorthand for --continue")
 	resume := fs.Bool("resume", false, "list saved sessions and pick one to resume")
-	yolo := fs.Bool("dangerously-skip-permissions", false, "YOLO: auto-approve approval-gated tool calls this session (deny rules still apply; ask questions and plan approvals still wait for you)")
+	yolo := fs.Bool("dangerously-skip-permissions", false, "YOLO: auto-approve approval-gated tool calls this session; same runtime mode as Ctrl+Y")
 	fs.BoolVar(yolo, "yolo", false, "alias for --dangerously-skip-permissions")
 	dir := fs.String("dir", "", "change to this directory first (project root); config, sandbox and file tools resolve from here")
 	if err := fs.Parse(args); err != nil {
@@ -475,6 +476,7 @@ func chatREPL(args []string) int {
 	if cfg, err := config.Load(); err == nil {
 		m.outputStyle = cfg.Agent.OutputStyle    // shown as the active entry in /output-style
 		m.statuslineCmd = cfg.Statusline.Command // custom status-line command, "" = built-in row
+		m.showReasoning = cfg.UI.ShowReasoning   // /verbose persistence: start with config default
 		m.cfg = cfg
 	}
 
@@ -520,7 +522,19 @@ func chatREPL(args []string) int {
 	// in the normal buffer so native touch scrollback and soft-keyboard focus
 	// keep working; finalized transcript lines are emitted via tea.Println.
 	p := tea.NewProgram(m)
+	// SSH drop (SIGHUP) or service stop (SIGTERM): persist the conversation
+	// before the terminal goes away, then unwind through the normal close path
+	// so resume picks up the interrupted session (#3772).
+	hangup := make(chan os.Signal, 1)
+	signal.Notify(hangup, syscall.SIGHUP, syscall.SIGTERM)
+	go func() {
+		for range hangup {
+			_ = ctrl.Snapshot()
+			p.Quit()
+		}
+	}()
 	final, runErr := p.Run()
+	signal.Stop(hangup)
 	// Close the active controller plus any retired ones from /model switches.
 	// Retired controllers were stashed rather than closed at switch time
 	// because Controller.Close() runs SessionEnd hooks and kills plugin
@@ -1397,13 +1411,24 @@ func promptMissingKeys(cfg *config.Config) int {
 	return 0
 }
 
-// providersWithMissingKeys returns the subset of cfg.Providers whose api_key_env
-// is declared but not currently set in the environment. configureKeys dedupes
-// shared envs, so duplicates are fine to leave in.
+// providersWithMissingKeys returns the providers the active configuration
+// actually references (default/planner/subagent models) whose api_key_env is
+// declared but not set. Merely-available presets stay silent — a DeepSeek-only
+// user must not be prompted for MIMO_API_KEY (#3939); the chat banner still
+// warns if they later switch to a model whose key is missing. configureKeys
+// dedupes shared envs, so duplicates are fine to leave in.
 func providersWithMissingKeys(cfg *config.Config) []config.ProviderEntry {
+	referenced := map[string]bool{
+		cfg.DefaultModel:        true,
+		cfg.Agent.PlannerModel:  true,
+		cfg.Agent.SubagentModel: true,
+	}
+	for _, m := range cfg.Agent.SubagentModels {
+		referenced[m] = true
+	}
 	var out []config.ProviderEntry
 	for _, p := range cfg.Providers {
-		if p.APIKeyEnv != "" && os.Getenv(p.APIKeyEnv) == "" {
+		if referenced[p.Name] && p.APIKeyEnv != "" && os.Getenv(p.APIKeyEnv) == "" {
 			out = append(out, p)
 		}
 	}
