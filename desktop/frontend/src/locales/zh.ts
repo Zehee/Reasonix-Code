@@ -1014,6 +1014,8 @@ export const zh: Record<DictKey, string> = {
 
   // 软件更新
   "updater.title": "软件更新",
+  "updater.autoCheckLabel": "启动时检测新版本",
+  "updater.autoCheckHint": "关闭后，Reasonix 打开时不会自动检查更新；你仍可在此页手动检查。",
   "updater.currentVersion": "当前版本：{v}",
   "updater.checkButton": "检查更新",
   "updater.checking": "正在检查更新…",

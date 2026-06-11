@@ -1012,6 +1012,8 @@ export const en = {
 
   // software update
   "updater.title": "Software update",
+  "updater.autoCheckLabel": "Check for updates on startup",
+  "updater.autoCheckHint": "When off, Reasonix won't check automatically when it opens. You can still check manually here.",
   "updater.currentVersion": "Current version: {v}",
   "updater.checkButton": "Check for updates",
   "updater.checking": "Checking for updates…",

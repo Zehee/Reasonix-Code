@@ -1939,8 +1939,24 @@ a[href] {
   color: var(--fg);
   border-bottom: 1px solid var(--border-soft);
 }
+.banner--update.banner--error {
+  background: var(--del-bg);
+  color: var(--err);
+  border-bottom-color: color-mix(in srgb, var(--err) 24%, var(--border-soft));
+}
+.banner--actionable {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .banner__msg {
+  min-width: 0;
   font-weight: 500;
+}
+.banner--actionable .banner__msg {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .banner__hint {
   color: var(--fg-dim);
@@ -1948,6 +1964,9 @@ a[href] {
 }
 .banner__spacer {
   flex: 1 1 auto;
+}
+.banner--actionable .btn {
+  flex: 0 0 auto;
 }
 .banner__progress {
   width: 180px;
@@ -8542,6 +8561,10 @@ a[href] {
   align-items: start;
 }
 
+.settings-field--wide-copy {
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+
 .settings-field__copy {
   min-width: 0;
 }
@@ -8558,6 +8581,18 @@ a[href] {
   color: var(--fg-dim);
   font-size: var(--text-2xs);
   line-height: 1.45;
+}
+
+.settings-field__hint-tooltip {
+  max-width: 100%;
+}
+
+.settings-field__hint-line {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-field__control {
@@ -15736,6 +15771,11 @@ a[href] {
   animation: graphite-drop-in var(--dur-slow) var(--ease-out) both;
 }
 
+:root[data-theme-style="graphite"] .banner--update.banner--error {
+  border-color: color-mix(in srgb, var(--err) 28%, var(--app-graphite-hairline-strong));
+  background: linear-gradient(120deg, color-mix(in srgb, var(--err) 10%, var(--chat-bg)), color-mix(in srgb, var(--chat-bg) 94%, var(--bg-elev)));
+}
+
 :root[data-theme-style="graphite"] .banner--update .btn--primary {
   border: 0;
   border-radius: 7px;
@@ -15745,9 +15785,17 @@ a[href] {
 }
 
 :root[data-theme-style="graphite"] .banner--update .btn:not(.btn--primary) {
-  border: 0;
+  border: 1px solid color-mix(in srgb, var(--fg-faint) 28%, var(--border));
+  border-radius: 7px;
   color: var(--fg-dim);
-  background: transparent;
+  background: color-mix(in srgb, var(--bg-elev) 74%, transparent);
+}
+
+:root[data-theme-style="graphite"] .banner--update .btn:not(.btn--primary):hover:not(:disabled),
+:root[data-theme-style="graphite"] .banner--update .btn:not(.btn--primary):focus-visible:not(:disabled) {
+  color: var(--fg);
+  border-color: color-mix(in srgb, var(--fg-faint) 40%, var(--border));
+  background: var(--bg-elev-2);
 }
 
 :root[data-theme-style="graphite"] .transcript {
