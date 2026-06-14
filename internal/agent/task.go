@@ -61,8 +61,10 @@ type TaskTool struct {
 	softCompactRatio  float64
 	compactRatio      float64
 	compactForceRatio float64
+	recentKeep        int
 	temperature       float64
 	archiveDir        string
+	keepPolicy        KeepPolicy
 	sysPrompt         string
 	gate              Gate
 	subagentModel     string
@@ -82,8 +84,8 @@ type TaskTool struct {
 // deny rules still bite while autonomous sub-agents are never blocked on an
 // interactive prompt (there is no UI to answer one).
 func NewTaskTool(prov provider.Provider, pricing *provider.Pricing, parentReg *tool.Registry,
-	maxSteps, contextWindow int, softCompactRatio, compactRatio, compactForceRatio, temperature float64, archiveDir, sysPrompt string, gate Gate,
-	subagentModel, subagentEffort string, resolveProvider func(string, string) (provider.Provider, *provider.Pricing, int, error)) *TaskTool {
+	maxSteps, contextWindow, recentKeep int, softCompactRatio, compactRatio, compactForceRatio, temperature float64, archiveDir, sysPrompt string, gate Gate,
+	keepPolicy KeepPolicy, subagentModel, subagentEffort string, resolveProvider func(string, string) (provider.Provider, *provider.Pricing, int, error)) *TaskTool {
 	if sysPrompt == "" {
 		sysPrompt = DefaultTaskSystemPrompt
 	}
@@ -93,11 +95,13 @@ func NewTaskTool(prov provider.Provider, pricing *provider.Pricing, parentReg *t
 		parentReg:         parentReg,
 		maxSteps:          maxSteps,
 		contextWindow:     contextWindow,
+		recentKeep:        recentKeep,
 		softCompactRatio:  softCompactRatio,
 		compactRatio:      compactRatio,
 		compactForceRatio: compactForceRatio,
 		temperature:       temperature,
 		archiveDir:        archiveDir,
+		keepPolicy:        keepPolicy,
 		sysPrompt:         sysPrompt,
 		gate:              gate,
 		subagentModel:     subagentModel,
@@ -445,10 +449,12 @@ func (t *TaskTool) runSubSession(ctx context.Context, prompt string, subReg *too
 		UsageSource:       event.UsageSourceSubagent,
 		Gate:              t.gate,
 		ContextWindow:     ctxWin,
+		RecentKeep:        t.recentKeep,
 		SoftCompactRatio:  t.softCompactRatio,
 		CompactRatio:      t.compactRatio,
 		CompactForceRatio: t.compactForceRatio,
 		ArchiveDir:        t.archiveDir,
+		KeepPolicy:        t.keepPolicy,
 		ReasoningLanguage: ReasoningLanguageFromContext(ctx),
 	}, sink)
 }
