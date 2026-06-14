@@ -2569,6 +2569,7 @@ export default function App() {
                 checkpoints={state.checkpoints}
                 actionPending={state.messageAction != null}
                 rewindDisabled={state.running || state.messageAction != null || state.approval != null || state.ask != null || clearContextPending}
+                running={state.running}
                 rewindSignal={rewindSignal}
               />
             )}

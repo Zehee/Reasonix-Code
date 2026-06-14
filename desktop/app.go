@@ -1040,6 +1040,23 @@ func (a *App) CheckpointsForTab(tabID string) []CheckpointMeta {
 	return out
 }
 
+// ToolResultForTab returns the full arguments and output for one tool call that
+// were elided from the frontend's in-memory items[] for memory efficiency. The
+// caller (frontend ToolCard) loads this on demand when the user expands a
+// collapsed tool card. Returns nil when the tool ID is not found.
+func (a *App) ToolResultForTab(tabID, toolID string) *control.ToolResultData {
+	a.mu.RLock()
+	var ctrl *control.Controller
+	if tab := a.tabByIDLocked(tabID); tab != nil {
+		ctrl = tab.Ctrl
+	}
+	a.mu.RUnlock()
+	if ctrl == nil {
+		return nil
+	}
+	return ctrl.ToolResult(toolID)
+}
+
 // Rewind restores the session to the start of turn. scope is "code",
 // "conversation", or "both" (anything else is treated as "both"). The frontend
 // re-reads History after this resolves.
