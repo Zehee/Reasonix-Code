@@ -395,7 +395,14 @@ function applyEvent(s: State, e: WireEvent): State {
       }
       if (idx >= 0) {
         const it = next[idx];
-        if (it.kind === "tool") next[idx] = { ...it, status: t.err ? "error" : "done", output: t.output, error: t.err, truncated: t.truncated, durationMs: t.durationMs };
+        if (it.kind === "tool") {
+          // Archive immediately: collapsed cards only show tool name + command
+          // subject (from args). Drop output entirely; full data is loaded on
+          // demand via app.ToolResultForTab when the card is expanded.
+          const existing = it;
+          const shortArgs = existing.args && existing.args.length > 200 ? existing.args.slice(0, 200) + "…" : existing.args;
+          next[idx] = { ...existing, status: t.err ? "error" : "done", args: shortArgs, output: undefined, error: t.err, truncated: t.truncated, durationMs: t.durationMs, dataArchived: true };
+        }
       }
       return { ...s, items: next };
     }
@@ -452,23 +459,6 @@ function applyEvent(s: State, e: WireEvent): State {
         return it;
       });
       let items: Item[] = e.err ? [...finalized, { kind: "notice", id: `e${s.seq}`, level: "warn", text: e.err }] : finalized;
-      // Archive completed tool items: collapsed cards only show tool name
-      // and command (from args). Drop the output entirely and trim args to a
-      // short preview. Full data is loaded on demand via app.ToolResultForTab
-      // when the card is expanded.
-      const RETENTION_TOOL_COUNT = 100;
-      const toolItems = items.filter((it) => it.kind === "tool");
-      if (toolItems.length > RETENTION_TOOL_COUNT) {
-        const cutoff = toolItems.length - RETENTION_TOOL_COUNT;
-        const archiveIDs = new Set(toolItems.slice(0, cutoff).map((t) => t.id));
-        items = items.map((it) => {
-          if (it.kind !== "tool" || !archiveIDs.has(it.id)) return it;
-          const t = it;
-          const shortArgs = t.args && t.args.length > 200 ? t.args.slice(0, 200) + "…" : t.args;
-          if (shortArgs === t.args && t.output === undefined) return it;
-          return { ...t, args: shortArgs, output: undefined, dataArchived: true };
-        });
-      }
       return { ...s, items, live: undefined, running: false, turnActive: false, currentAssistant: undefined, approval: undefined, ask: undefined, seq: s.seq + 1 };
     }
     default: return s;
