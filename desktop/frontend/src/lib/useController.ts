@@ -1008,6 +1008,19 @@ export function useController() {
     void refreshCheckpoints(targetTabId);
   }, [activeTabId, dispatchTo, refreshCheckpoints, waitForTabReady]);
 
+  const openChannelSession = useCallback(async (path: string, tabId: string) => {
+    if (!tabId) return;
+    await waitForTabReady(tabId);
+    const messages = asArray(
+      await app.OpenChannelSessionForTab(tabId, path).catch(() => [] as HistoryMessage[]),
+    );
+    if (messages.length === 0) return;
+    dispatchTo(tabId, { type: "reset" });
+    dispatchTo(tabId, { type: "history", messages });
+    app.ContextUsageForTab(tabId).then((context) => dispatchTo(tabId, { type: "context", context })).catch(() => {});
+    void refreshCheckpoints(tabId);
+  }, [dispatchTo, refreshCheckpoints, waitForTabReady]);
+
   const previewSession = useCallback(async (path: string): Promise<HistoryMessage[]> => asArray<HistoryMessage>(await app.PreviewSession(path).catch(() => [])), []);
   const deleteSession = useCallback((path: string) => app.DeleteSession(path).catch(() => {}).finally(() => invalidateCache()), []);
   const restoreSession = useCallback((path: string) => app.RestoreSession(path).catch(() => {}).finally(() => invalidateCache()), []);
@@ -1183,7 +1196,7 @@ export function useController() {
     state: activeState,
     activeTabId,
     send, runShell, steer, notice, cancel, approve, answerQuestion, setControllerMode, setCollaborationMode, setToolApprovalMode, setGoal, clearGoal,
-    newSession, clearSession, listSessions, listTrashedSessions, resumeSession, previewSession, deleteSession, restoreSession, purgeTrashedSession, renameSession,
+    newSession, clearSession, listSessions, listTrashedSessions, resumeSession, openChannelSession, previewSession, deleteSession, restoreSession, purgeTrashedSession, renameSession,
     refreshMeta, pickWorkspace, switchWorkspace, compact, rewind, setModel, setEffort, setTokenMode,
     fetchMemory, remember, forget, saveDoc,
     switchTab, openProjectTab, openGlobalTab, openTopicSession, ensureBlankTab, closeTab, reorderTabs,

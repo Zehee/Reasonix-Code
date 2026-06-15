@@ -128,6 +128,7 @@ export interface TabMeta {
   topicId: string;
   topicTitle: string;
   sessionPath?: string;
+  readOnly?: boolean;
   filePath?: string;
   projectColor?: string;
   label: string;
@@ -285,6 +286,14 @@ export interface SessionMeta {
   workspaceRoot?: string;
   topicId?: string;
   topicTitle?: string;
+  kind?: "session" | "channel" | string;
+  channel?: string;
+  channelLabel?: string;
+  remoteId?: string;
+  chatType?: string;
+  userId?: string;
+  threadId?: string;
+  sessionSource?: string;
 }
 
 // SessionReference is a session selected via @ past:chats for context injection.

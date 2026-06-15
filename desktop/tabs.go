@@ -39,6 +39,7 @@ type WorkspaceTab struct {
 	TopicID       string              // topic within the project
 	TopicTitle    string              // display title
 	SessionPath   string              // exact .jsonl file this tab continues
+	ReadOnly      bool                // true for external channel transcripts opened for browsing
 	Ctrl          *control.Controller // nil while booting / on error
 	Label         string              // model label (for the tab badge)
 	Ready         bool                // true once boot.Build completes
@@ -825,6 +826,7 @@ type TabMeta struct {
 	TopicID           string `json:"topicId"`
 	TopicTitle        string `json:"topicTitle"`
 	SessionPath       string `json:"sessionPath,omitempty"`
+	ReadOnly          bool   `json:"readOnly,omitempty"`
 	ProjectColor      string `json:"projectColor,omitempty"`
 	Label             string `json:"label"`
 	Ready             bool   `json:"ready"`
@@ -849,6 +851,7 @@ func (a *App) tabMeta(tab *WorkspaceTab, active bool) TabMeta {
 		TopicID:           tab.TopicID,
 		TopicTitle:        tab.TopicTitle,
 		SessionPath:       tab.currentSessionPath(),
+		ReadOnly:          tab.ReadOnly,
 		Label:             tab.Label,
 		Ready:             tab.Ready,
 		Mode:              currentTabMode(tab),
@@ -1808,6 +1811,7 @@ type desktopTabEntry struct {
 	WorkspaceRoot    string  `json:"workspaceRoot"`
 	TopicID          string  `json:"topicId"`
 	SessionPath      string  `json:"sessionPath,omitempty"`
+	ReadOnly         bool    `json:"readOnly,omitempty"`
 	Model            string  `json:"model,omitempty"`
 	Effort           *string `json:"effort,omitempty"`
 	TokenMode        string  `json:"tokenMode,omitempty"`
@@ -1850,6 +1854,7 @@ func (a *App) saveTabsCollectLocked() (string, []desktopTabEntry, string, uint64
 				WorkspaceRoot:    tab.WorkspaceRoot,
 				TopicID:          tab.TopicID,
 				SessionPath:      tab.currentSessionPath(),
+				ReadOnly:         tab.ReadOnly,
 				Model:            tab.model,
 				Effort:           cloneStringPtr(tab.effort),
 				TokenMode:        persistedTabTokenMode(currentTabTokenMode(tab)),

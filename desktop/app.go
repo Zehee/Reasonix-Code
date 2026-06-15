@@ -461,6 +461,7 @@ func (a *App) restoreOrBuildTabs() {
 				tab.toolApprovalMode = control.ToolApprovalYolo
 			}
 			tab.SessionPath = strings.TrimSpace(entry.SessionPath)
+			tab.ReadOnly = entry.ReadOnly
 			tab.sink = &tabEventSink{tabID: tab.ID, app: a, ctx: ctx}
 			a.mu.Lock()
 			a.tabs[tab.ID] = tab
@@ -601,6 +602,9 @@ func (a *App) Submit(input string) {
 }
 
 func (a *App) SubmitToTab(tabID, input string) {
+	if a.tabReadOnly(tabID) {
+		return
+	}
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "/effort" || strings.HasPrefix(trimmed, "/effort ") {
 		a.runEffortCommandForTab(tabID, trimmed)
@@ -618,6 +622,9 @@ func (a *App) RunShell(command string) {
 }
 
 func (a *App) RunShellForTab(tabID, command string) {
+	if a.tabReadOnly(tabID) {
+		return
+	}
 	if ctrl := a.ctrlByTabID(tabID); ctrl != nil {
 		ctrl.RunShell(command)
 	}
@@ -630,6 +637,9 @@ func (a *App) SubmitDisplay(display, input string) {
 }
 
 func (a *App) SubmitDisplayToTab(tabID, display, input string) {
+	if a.tabReadOnly(tabID) {
+		return
+	}
 	ctrl := a.ctrlByTabID(tabID)
 	if ctrl == nil {
 		return
@@ -668,9 +678,17 @@ func (a *App) Steer(text string) {
 
 // SteerForTab sends mid-turn guidance to a specific tab's agent.
 func (a *App) SteerForTab(tabID, text string) {
+	if a.tabReadOnly(tabID) {
+		return
+	}
 	if ctrl := a.ctrlByTabID(tabID); ctrl != nil {
 		ctrl.Steer(text)
 	}
+}
+
+func (a *App) tabReadOnly(tabID string) bool {
+	tab := a.tabByID(tabID)
+	return tab != nil && tab.ReadOnly
 }
 
 // Approve answers a pending approval_request by ID: allow runs the call, session
@@ -1232,6 +1250,24 @@ type SessionMeta struct {
 	WorkspaceRoot  string `json:"workspaceRoot,omitempty"`
 	TopicID        string `json:"topicId,omitempty"`
 	TopicTitle     string `json:"topicTitle,omitempty"`
+	Kind           string `json:"kind,omitempty"` // "channel" for external IM transcripts
+	Channel        string `json:"channel,omitempty"`
+	ChannelLabel   string `json:"channelLabel,omitempty"`
+	RemoteID       string `json:"remoteId,omitempty"`
+	ChatType       string `json:"chatType,omitempty"`
+	UserID         string `json:"userId,omitempty"`
+	ThreadID       string `json:"threadId,omitempty"`
+	SessionSource  string `json:"sessionSource,omitempty"`
+}
+
+type channelSessionRoute struct {
+	channel       string
+	channelLabel  string
+	remoteID      string
+	chatType      string
+	userID        string
+	threadID      string
+	sessionSource string
 }
 
 type WorkspaceMeta struct {
@@ -1281,12 +1317,17 @@ func (a *App) ListSessions() []SessionMeta {
 		return []SessionMeta{}
 	}
 	titles := loadSessionTitles(dir)
+	channelRoutes := channelSessionRoutesForDir(dir)
 	open := a.openSessionPaths(dir)
 	active := a.activeSessionPath(dir)
 	out := make([]SessionMeta, 0, len(infos))
 	for _, s := range infos {
 		_, isOpen := open[s.Path]
-		out = append(out, sessionMetaFromInfo(s, titles[filepath.Base(s.Path)], s.Path == active, isOpen, 0))
+		meta := sessionMetaFromInfo(s, titles[filepath.Base(s.Path)], s.Path == active, isOpen, 0)
+		if route, ok := channelRoutes[sessionRuntimeKey(s.Path)]; ok {
+			applyChannelSessionRoute(&meta, route)
+		}
+		out = append(out, meta)
 	}
 	return out
 }
@@ -1354,6 +1395,101 @@ func sessionMetaFromInfo(s agent.SessionInfo, title string, current, open bool, 
 		WorkspaceRoot:  s.WorkspaceRoot,
 		TopicID:        s.TopicID,
 		TopicTitle:     s.TopicTitle,
+	}
+}
+
+func applyChannelSessionRoute(meta *SessionMeta, route channelSessionRoute) {
+	if meta == nil {
+		return
+	}
+	meta.Kind = "channel"
+	meta.Channel = route.channel
+	meta.ChannelLabel = route.channelLabel
+	meta.RemoteID = route.remoteID
+	meta.ChatType = route.chatType
+	meta.UserID = route.userID
+	meta.ThreadID = route.threadID
+	meta.SessionSource = route.sessionSource
+}
+
+func channelSessionRoutesForDir(dir string) map[string]channelSessionRoute {
+	userPath := config.UserConfigPath()
+	if strings.TrimSpace(userPath) == "" {
+		return nil
+	}
+	cfg := config.LoadForEdit(userPath)
+	out := map[string]channelSessionRoute{}
+	for _, conn := range cfg.Bot.Connections {
+		channel := strings.TrimSpace(conn.Provider)
+		if channel == "" {
+			continue
+		}
+		channelLabel := strings.TrimSpace(conn.Label)
+		if channelLabel == "" {
+			channelLabel = channelDisplayName(channel, conn.Domain)
+		}
+		for _, mapping := range conn.SessionMappings {
+			if strings.TrimSpace(mapping.SessionSource) != "auto" {
+				continue
+			}
+			sessionPath := botSessionPathTarget(mapping.SessionID)
+			if sessionPath == "" {
+				continue
+			}
+			validPath, _, err := validateSessionPath(dir, sessionPath)
+			if err != nil {
+				continue
+			}
+			key := sessionRuntimeKey(validPath)
+			if key == "" {
+				continue
+			}
+			out[key] = channelSessionRoute{
+				channel:       channel,
+				channelLabel:  channelLabel,
+				remoteID:      strings.TrimSpace(mapping.RemoteID),
+				chatType:      strings.TrimSpace(mapping.ChatType),
+				userID:        strings.TrimSpace(mapping.UserID),
+				threadID:      strings.TrimSpace(mapping.ThreadID),
+				sessionSource: strings.TrimSpace(mapping.SessionSource),
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func botSessionPathTarget(sessionID string) string {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return ""
+	}
+	if strings.HasPrefix(strings.ToLower(sessionID), "path:") {
+		return strings.TrimSpace(sessionID[5:])
+	}
+	if strings.HasSuffix(sessionID, ".jsonl") || strings.Contains(sessionID, "/") || strings.Contains(sessionID, `\`) || strings.HasPrefix(sessionID, "~") {
+		return sessionID
+	}
+	return ""
+}
+
+func channelDisplayName(provider, domain string) string {
+	provider = strings.TrimSpace(provider)
+	domain = strings.TrimSpace(domain)
+	switch provider {
+	case "feishu":
+		if strings.EqualFold(domain, "lark") {
+			return "Lark"
+		}
+		return "Feishu"
+	case "weixin":
+		return "WeChat"
+	case "qq":
+		return "QQ"
+	default:
+		return provider
 	}
 }
 
@@ -1743,13 +1879,46 @@ func (a *App) ResumeSessionForTab(tabID, path string) ([]HistoryMessage, error) 
 		return nil, err
 	}
 	if sessionRuntimeKey(tab.currentSessionPath()) == sessionRuntimeKey(sessionPath) {
+		a.setTabReadOnly(tab.ID, false)
 		return a.HistoryForTab(tabID), nil
 	}
 
 	if err := a.rebindTabToSessionPath(tab, sessionPath); err != nil {
 		return nil, err
 	}
+	a.setTabReadOnly(tab.ID, false)
 	return a.HistoryForTab(tab.ID), nil
+}
+
+func (a *App) OpenChannelSessionForTab(tabID, path string) ([]HistoryMessage, error) {
+	tab := a.tabByID(tabID)
+	if tab == nil || tab.Ctrl == nil {
+		return []HistoryMessage{}, fmt.Errorf("tab is not ready")
+	}
+	ctrl := tab.Ctrl
+	sessionPath, _, err := validateSessionPath(controllerSessionDir(ctrl), path)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := agent.LoadSession(sessionPath); err != nil {
+		return nil, err
+	}
+	if sessionRuntimeKey(tab.currentSessionPath()) != sessionRuntimeKey(sessionPath) {
+		if err := a.rebindTabToSessionPath(tab, sessionPath); err != nil {
+			return nil, err
+		}
+	}
+	a.setTabReadOnly(tab.ID, true)
+	return a.HistoryForTab(tab.ID), nil
+}
+
+func (a *App) setTabReadOnly(tabID string, readOnly bool) {
+	a.mu.Lock()
+	if tab := a.tabs[tabID]; tab != nil && tab.ReadOnly != readOnly {
+		tab.ReadOnly = readOnly
+		a.saveTabsLocked()
+	}
+	a.mu.Unlock()
 }
 
 func (a *App) rebindTabToSessionPath(tab *WorkspaceTab, sessionPath string) error {
