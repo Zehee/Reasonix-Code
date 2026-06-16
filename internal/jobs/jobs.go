@@ -62,17 +62,18 @@ type Job struct {
 	Label     string
 	SessionID string
 
-	mu         sync.Mutex
-	buf        bytes.Buffer
-	readOffset int
-	status     Status
-	result     string
-	resultRead bool // result already surfaced by Output (task jobs stream nothing to buf)
-	startedAt  int64
-	activityAt int64
-	cancel     context.CancelFunc
-	done       chan struct{}
-	stalled    bool
+	mu          sync.Mutex
+	buf         bytes.Buffer
+	readOffset  int
+	status      Status
+	result      string
+	resultRead  bool // result already surfaced by Output (task jobs stream nothing to buf)
+	startedAt   int64
+	activityAt  int64
+	runReturned bool
+	cancel      context.CancelFunc
+	done        chan struct{}
+	stalled     bool
 }
 
 // Manager is the session's background-job table. It is safe for concurrent use.
@@ -172,6 +173,9 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 	go func() {
 		defer m.wg.Done()
 		result, err := runRecovered(ctx, jobWriter{j}, run)
+		j.mu.Lock()
+		j.runReturned = true
+		j.mu.Unlock()
 
 		var st Status
 		switch {
@@ -223,7 +227,7 @@ func (m *Manager) monitorStalled(parentSession string, j *Job) {
 			return
 		case <-timer.C:
 			j.mu.Lock()
-			if j.status != Running {
+			if j.runReturned || j.status != Running {
 				j.mu.Unlock()
 				return
 			}

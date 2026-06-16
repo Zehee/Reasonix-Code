@@ -32,6 +32,24 @@ func (s *recordingSink) texts() []string {
 	return out
 }
 
+type blockingFinishedSink struct {
+	mu       sync.Mutex
+	events   []event.Event
+	entered  chan struct{}
+	released chan struct{}
+	once     sync.Once
+}
+
+func (s *blockingFinishedSink) Emit(ev event.Event) {
+	if strings.Contains(ev.Text, "background bash finished") {
+		s.once.Do(func() { close(s.entered) })
+		<-s.released
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.events = append(s.events, ev)
+}
+
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
@@ -42,6 +60,33 @@ func waitFor(t *testing.T, cond func() bool) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatal("condition not met within deadline")
+}
+
+func TestStalledWarningIgnoresReturnedJobBeforeTerminalStatusPublished(t *testing.T) {
+	sink := &blockingFinishedSink{entered: make(chan struct{}), released: make(chan struct{})}
+	m := NewManager(sink, WithStalledWarningAfter(20*time.Millisecond))
+	defer func() {
+		close(sink.released)
+		m.Close()
+	}()
+
+	j := m.Start("bash", "", func(context.Context, io.Writer) (string, error) {
+		return "", nil
+	})
+	select {
+	case <-sink.entered:
+	case <-time.After(time.Second):
+		t.Fatal("completion notice did not start")
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	note := m.DrainCompletedNote()
+	if strings.Contains(note, "may be stalled") {
+		t.Fatalf("got false stalled warning for already-returned job %s: %q", j.ID, note)
+	}
+	if !strings.Contains(note, j.ID) || !strings.Contains(note, string(Done)) {
+		t.Fatalf("completion note = %q, want done update for %s", note, j.ID)
+	}
 }
 
 // A job runs to completion: Wait reports Done with its output, and the completion
