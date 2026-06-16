@@ -160,15 +160,20 @@ func TestReasonixHomeDirOverridesGlobalReasonixSkills(t *testing.T) {
 	home := t.TempDir()
 	reasonixHome := filepath.Join(t.TempDir(), "rx-home")
 	writeSkill(t, home, ".reasonix/skills/old.md", "---\ndescription: old\n---\nold")
-	writeSkill(t, reasonixHome, "skills/current.md", "---\ndescription: current\n---\ncurrent")
+	writeSkill(t, home, ".reasonix/skills/current.md", "---\ndescription: old current\n---\nold current")
+	currentPath := writeSkill(t, reasonixHome, "skills/current.md", "---\ndescription: current\n---\ncurrent")
 
 	st := New(Options{HomeDir: home, ReasonixHomeDir: reasonixHome, DisableBuiltins: true})
 	list := st.List()
-	if _, ok := find(list, "current"); !ok {
+	current, ok := find(list, "current")
+	if !ok {
 		t.Fatal("Reasonix home skill should be discovered")
 	}
-	if _, ok := find(list, "old"); ok {
-		t.Fatal("global ~/.reasonix skill should not shadow explicit Reasonix home")
+	if current.Path != currentPath {
+		t.Fatalf("current skill path = %q, want Reasonix home path %q", current.Path, currentPath)
+	}
+	if _, ok := find(list, "old"); !ok {
+		t.Fatal("legacy ~/.reasonix skill should remain discoverable")
 	}
 
 	path, err := st.Create("created", ScopeGlobal)

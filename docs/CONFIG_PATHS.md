@@ -81,10 +81,10 @@ Legacy config sources include:
 ~/.reasonix/config.json
 ```
 
-Legacy credentials and sessions are also imported into the configured credential
-store / Reasonix home when the new destination does not already exist. If the
-new global config already exists, it wins and legacy config files are only kept
-as compatibility fallbacks.
+Legacy credentials, memory files, and sessions are also imported into the
+configured credential store / Reasonix home when the new destination does not
+already exist. If the new global config already exists, it wins and legacy
+config files are only kept as compatibility fallbacks.
 
 ## Manual Migration Rescue
 
@@ -100,15 +100,17 @@ In the CLI TUI, type `/migrate` into the chat input. In the desktop app, type th
 same command into the composer. The command prints progress notices while it:
 
 1. checks legacy config and credentials,
-2. scans known legacy session directories,
-3. imports any sessions that were not previously imported, and
-4. prints a final summary.
+2. scans known legacy memory locations,
+3. scans known legacy session directories,
+4. imports memory files and sessions that were not previously imported, and
+5. prints a final summary.
 
 The rescue command is intentionally non-destructive. It does not overwrite an
 existing `<Reasonix home>/config.toml`; if the new config already exists, copy
-any missing legacy settings across by hand. It also respects session import
-markers, so sessions that were already imported and later deleted by the user
-will not be restored on a later `/migrate` run.
+any missing legacy settings across by hand. It copies legacy memory files only
+when the destination file is absent. It also respects session import markers, so
+sessions that were already imported and later deleted by the user will not be
+restored on a later `/migrate` run.
 
 Version limits:
 

@@ -243,6 +243,7 @@ func TestManagementMigrateEmitsProgress(t *testing.T) {
 	joined := strings.Join(notices, "\n")
 	for _, want := range []string{
 		"migration rescue: checking legacy config and credentials",
+		"migration rescue: scanning legacy memory",
 		"migration rescue: scanning legacy sessions",
 		"migration rescue complete:",
 	} {

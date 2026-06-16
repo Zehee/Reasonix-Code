@@ -665,12 +665,10 @@ func (c *Config) IsSkillDisabled(name string) bool {
 // SandboxConfig bounds the blast radius of tool calls (Phase 0: file-writer
 // confinement). WorkspaceRoot is the directory the built-in file writers
 // (write_file / edit_file / multi_edit / move_file) may modify; empty means the
-// current working directory, so writes stay inside the project by default. The
-// Reasonix user config directory is also writable by default so the CLI/TUI
-// agent can update its own global config. AllowWrite lists extra directories
-// writers may also touch (e.g. a sibling repo or a temp dir). Both support
-// ${VAR} / ${VAR:-default} expansion. Reads are unrestricted; confining `bash`
-// is Phase 1 (OS-level sandbox).
+// current working directory, so writes stay inside the project by default.
+// AllowWrite lists extra directories writers may also touch (e.g. a sibling repo
+// or a temp dir). Both support ${VAR} / ${VAR:-default} expansion. Reads are
+// unrestricted; confining `bash` is Phase 1 (OS-level sandbox).
 type SandboxConfig struct {
 	WorkspaceRoot string   `toml:"workspace_root"`
 	AllowWrite    []string `toml:"allow_write"`
@@ -684,11 +682,10 @@ type SandboxConfig struct {
 }
 
 // WriteRoots returns the directories file-writer tools may modify: the
-// workspace root (defaulting to the current working directory when unset), the
-// Reasonix user config directory, plus any AllowWrite extras, with ${VAR}
-// expanded. The roots are returned as given (relative or absolute); the confiner
-// resolves them to absolute, symlink-free paths. The result is always
-// non-empty, so confinement is on by default.
+// workspace root (defaulting to the current working directory when unset), plus
+// any AllowWrite extras, with ${VAR} expanded. The roots are returned as given
+// (relative or absolute); the confiner resolves them to absolute, symlink-free
+// paths. The result is always non-empty, so confinement is on by default.
 func (c *Config) WriteRoots() []string {
 	return c.WriteRootsForRoot(".")
 }
@@ -709,12 +706,6 @@ func (c *Config) WriteRootsForRoot(fallbackRoot string) []string {
 		}
 	}
 	roots := []string{root}
-	if uc := userConfigDir(); uc != "" {
-		// OS sandboxes can only bind/allow paths that exist; create the app-owned
-		// config root so bash can create config.toml on a fresh install.
-		_ = os.MkdirAll(uc, 0o755)
-		roots = append(roots, uc)
-	}
 	for _, d := range c.Sandbox.AllowWrite {
 		if d = ExpandVars(d); d != "" {
 			roots = append(roots, d)

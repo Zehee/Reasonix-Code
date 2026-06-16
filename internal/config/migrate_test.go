@@ -487,6 +487,51 @@ func TestMigrateImportsLegacyCredentialsEvenWhenPrimaryConfigExists(t *testing.T
 	}
 }
 
+func TestMigrateSkipsLegacyCredentialsAlreadyInCurrentAutoStore(t *testing.T) {
+	_, dest, _ := legacyHome(t)
+	t.Setenv("REASONIX_CREDENTIALS_STORE", "")
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dest, []byte(`default_model = "deepseek-flash/deepseek-chat"`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	currentCred := UserCredentialsPath()
+	if err := os.MkdirAll(filepath.Dir(currentCred), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(currentCred, []byte("DEEPSEEK_API_KEY=sk-current\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	legacyPaths := legacyCredentialsPaths()
+	if len(legacyPaths) == 0 {
+		t.Skip("no legacy credentials path on this platform")
+	}
+	legacyCred := legacyPaths[0]
+	if err := os.MkdirAll(filepath.Dir(legacyCred), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacyCred, []byte("DEEPSEEK_API_KEY=sk-stale\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := MigrateLegacyIfNeeded()
+	if err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if res != nil {
+		t.Fatalf("primary config exists, config migration should be skipped, got %+v", res)
+	}
+	data, err := os.ReadFile(currentCred)
+	if err != nil {
+		t.Fatalf("read current credentials: %v", err)
+	}
+	if string(data) != "DEEPSEEK_API_KEY=sk-current\n" {
+		t.Fatalf("current credentials were overwritten: %q", data)
+	}
+}
+
 func TestMigrateNoLegacyIsNoop(t *testing.T) {
 	legacyHome(t)
 	res, err := MigrateLegacyIfNeeded()

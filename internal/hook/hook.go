@@ -163,6 +163,12 @@ func Load(opts LoadOptions) []ResolvedHook {
 	g := GlobalSettingsPath(opts.HomeDir)
 	if s := readSettings(g); s != nil {
 		appendResolved(&out, s, ScopeGlobal, g)
+	} else if !pathExists(g) {
+		if legacy := legacyGlobalSettingsPath(opts.HomeDir); legacy != "" {
+			if s := readSettings(legacy); s != nil {
+				appendResolved(&out, s, ScopeGlobal, legacy)
+			}
+		}
 	}
 	return out
 }
@@ -195,6 +201,14 @@ func readSettings(path string) *Settings {
 		return nil // malformed → treat as no hooks, don't crash
 	}
 	return &s
+}
+
+func pathExists(path string) bool {
+	if strings.TrimSpace(path) == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err == nil || !os.IsNotExist(err)
 }
 
 func appendResolved(out *[]ResolvedHook, s *Settings, scope Scope, source string) {
@@ -460,4 +474,48 @@ func reasonixHome(override string) string {
 		return filepath.Join(h, SettingsDirname)
 	}
 	return ""
+}
+
+func legacyGlobalSettingsPath(homeDir string) string {
+	dir := legacyReasonixHome(homeDir)
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, SettingsFilename)
+}
+
+func legacyTrustPath(homeDir string) string {
+	dir := legacyReasonixHome(homeDir)
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, TrustFilename)
+}
+
+func legacyReasonixHome(override string) string {
+	if override != "" {
+		return ""
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return ""
+	}
+	legacy := filepath.Join(home, SettingsDirname)
+	if sameCleanPath(legacy, reasonixHome("")) {
+		return ""
+	}
+	return legacy
+}
+
+func sameCleanPath(a, b string) bool {
+	if strings.TrimSpace(a) == "" || strings.TrimSpace(b) == "" {
+		return false
+	}
+	if aa, err := filepath.Abs(a); err == nil {
+		a = aa
+	}
+	if bb, err := filepath.Abs(b); err == nil {
+		b = bb
+	}
+	return filepath.Clean(a) == filepath.Clean(b)
 }

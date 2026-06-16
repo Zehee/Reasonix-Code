@@ -153,15 +153,7 @@ func MigrateLegacyIfNeeded() (*MigrationResult, error) {
 }
 
 func migrateLegacyCredentialsIfNeeded() error {
-	if credentialsStoreMode() == CredentialsStoreFile {
-		dest := UserCredentialsPath()
-		if dest == "" {
-			return nil
-		}
-		if _, err := os.Stat(dest); err == nil {
-			return nil
-		}
-	}
+	missing := map[string]string{}
 	for _, src := range legacyCredentialsPaths() {
 		if src == "" {
 			continue
@@ -170,10 +162,31 @@ func migrateLegacyCredentialsIfNeeded() error {
 		if err != nil {
 			continue
 		}
-		_, err = StoreCredentialLines(strings.Split(string(data), "\n"))
-		return err
+		assignments := parseCredentialLines(strings.Split(string(data), "\n"))
+		for key, value := range assignments {
+			if _, exists := missing[key]; !exists && !credentialCurrentStoreHasKey(key) {
+				missing[key] = value
+			}
+		}
 	}
-	return nil
+	if len(missing) == 0 {
+		return nil
+	}
+	_, err := StoreCredentialLines(credentialLines(missing))
+	return err
+}
+
+func credentialLines(assignments map[string]string) []string {
+	keys := make([]string, 0, len(assignments))
+	for key := range assignments {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	lines := make([]string, 0, len(keys))
+	for _, key := range keys {
+		lines = append(lines, key+"="+assignments[key])
+	}
+	return lines
 }
 
 func migrateLegacyQQConfig(cfg *Config, legacy legacyQQConfig) {

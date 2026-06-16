@@ -77,7 +77,7 @@ deny  = ["Bash(rm -rf*)", "Bash(git push*)"] # hard-blocked in every mode
 allow = ["Bash(go test:*)"]                  # never prompted
 
 [sandbox]
-# workspace_root = ""          # file-writers confined here + user config dir; empty = current dir
+# workspace_root = ""          # file-writers confined here; empty = current dir
 # allow_write    = ["/tmp"]    # extra dirs write_file/edit_file/multi_edit/move_file may touch
 
 [[plugins]]

@@ -206,6 +206,23 @@ func CredentialStored(key string) bool {
 	return false
 }
 
+func credentialCurrentStoreHasKey(key string) bool {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return false
+	}
+	mode := credentialsStoreMode()
+	if mode == CredentialsStoreAuto || mode == CredentialsStoreKeyring {
+		if value, err := keyring.Get(credentialsKeyringService, key); err == nil && value != "" {
+			return true
+		}
+	}
+	if mode == CredentialsStoreAuto || mode == CredentialsStoreFile {
+		return envFileHasKey(UserCredentialsPath(), key)
+	}
+	return false
+}
+
 func CredentialsTargetDescription() string {
 	switch credentialsStoreMode() {
 	case CredentialsStoreKeyring:

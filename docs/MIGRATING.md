@@ -75,12 +75,12 @@ If the automatic pass missed data because you opened a v1.8.1+ CLI/desktop build
 before the old paths were available, run `/migrate` from an interactive session.
 The command is available only in Go-based Reasonix builds that include it; if you
 see `unknown command`, upgrade first. It prints progress while it checks legacy
-config and credentials, scans legacy session directories, imports sessions that
-were not previously imported, and summarizes the result. `/migrate` keeps the
-same safety rules as startup migration: it does not overwrite an existing
-`config.toml`, it respects session import markers, and it is not available in
-the legacy 0.x TypeScript line. See [Configuration paths](./CONFIG_PATHS.md) for
-the full path list and limitations.
+config and credentials, scans legacy memory and session directories, imports
+memory files and sessions that were not previously imported, and summarizes the
+result. `/migrate` keeps the same safety rules as startup migration: it does not
+overwrite an existing `config.toml` or memory file, it respects session import
+markers, and it is not available in the legacy 0.x TypeScript line. See
+[Configuration paths](./CONFIG_PATHS.md) for the full path list and limitations.
 
 ## What's the same
 

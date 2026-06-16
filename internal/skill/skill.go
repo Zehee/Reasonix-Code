@@ -202,10 +202,11 @@ func (s *Store) roots() []discoveryRoot {
 		dirs = append(dirs, de{filepath.Join(s.reasonixHomeDir, SkillsDirname), ScopeGlobal, false})
 	}
 	for _, c := range config.ConventionDirs {
-		if c == ".reasonix" {
+		dir := filepath.Join(s.homeDir, c, SkillsDirname)
+		if s.reasonixHomeDir != "" && config.CanonicalSkillPath(filepath.Dir(dir)) == config.CanonicalSkillPath(s.reasonixHomeDir) {
 			continue
 		}
-		dirs = append(dirs, de{filepath.Join(s.homeDir, c, SkillsDirname), ScopeGlobal, c == ".claude"})
+		dirs = append(dirs, de{dir, ScopeGlobal, c == ".claude"})
 	}
 	out := make([]discoveryRoot, 0, len(dirs))
 	for _, d := range dirs {

@@ -68,6 +68,59 @@ func TestRunLegacyRescueImportsSessionsAndEmitsProgress(t *testing.T) {
 	}
 }
 
+func TestRunLegacyRescueImportsMemory(t *testing.T) {
+	home := isolateMigrationHome(t)
+	legacyRoot := filepath.Join(home, ".reasonix")
+	if err := os.MkdirAll(filepath.Join(legacyRoot, "memory", "global"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyRoot, "REASONIX.md"), []byte("legacy user memory\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyRoot, "memory", "global", "user.md"), []byte("---\nname: user\n---\nlegacy fact\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	projectMemory := filepath.Join(legacyRoot, "projects", "proj-slug", "memory")
+	if err := os.MkdirAll(projectMemory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projectMemory, "project.md"), []byte("---\nname: project\n---\nproject fact\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var notices []string
+	res := RunLegacyRescue(event.FuncSink(func(e event.Event) {
+		if e.Kind == event.Notice {
+			notices = append(notices, e.Text)
+		}
+	}))
+	if len(res.MemoryErrs) != 0 {
+		t.Fatalf("memory migration errors: %v", res.MemoryErrs)
+	}
+	if got := totalMemoryImported(res.MemoryImports); got != 3 {
+		t.Fatalf("imported memory files = %d, want 3; imports=%+v", got, res.MemoryImports)
+	}
+	for _, path := range []string{
+		filepath.Join(config.MemoryUserDir(), "REASONIX.md"),
+		filepath.Join(config.MemoryUserDir(), "memory", "global", "user.md"),
+		filepath.Join(config.MemoryUserDir(), "projects", "proj-slug", "memory", "project.md"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("migrated memory missing at %s: %v", path, err)
+		}
+	}
+	joined := strings.Join(notices, "\n")
+	for _, want := range []string{
+		"migration rescue: scanning legacy memory",
+		"imported 3 memory file(s)",
+		"migration rescue complete: imported 3 memory file(s)",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing notice %q in:\n%s", want, joined)
+		}
+	}
+}
+
 func TestRunLegacyRescueNoopStillShowsProgress(t *testing.T) {
 	isolateMigrationHome(t)
 
@@ -92,7 +145,45 @@ func TestRunLegacyRescueNoopStillShowsProgress(t *testing.T) {
 	}
 }
 
+func TestMigrateLegacySessionSourcesSkipsCurrentProjectTree(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("AppData", filepath.Join(home, "AppData"))
+	t.Setenv("REASONIX_HOME", "")
+	t.Setenv("REASONIX_STATE_HOME", "")
+	if !samePath(config.MemoryUserDir(), filepath.Join(home, ".reasonix")) {
+		t.Skip("current Reasonix home is not ~/.reasonix on this platform")
+	}
+
+	projectSessions := filepath.Join(config.MemoryUserDir(), "projects", "current-project", "sessions")
+	subagents := filepath.Join(projectSessions, "subagents")
+	if err := os.MkdirAll(subagents, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(subagents, "worker.jsonl"), []byte(legacyMessageLog), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	imports := MigrateLegacySessionSources(event.FuncSink(func(event.Event) {}))
+	if got := totalImported(imports); got != 0 {
+		t.Fatalf("imported sessions = %d, want 0; imports=%+v", got, imports)
+	}
+	if _, err := os.Stat(filepath.Join(projectSessions, "worker.jsonl")); !os.IsNotExist(err) {
+		t.Fatalf("subagent transcript must not be copied into parent history, stat err=%v", err)
+	}
+}
+
 func totalImported(imports []SessionImport) int {
+	total := 0
+	for _, imp := range imports {
+		total += imp.Count
+	}
+	return total
+}
+
+func totalMemoryImported(imports []MemoryImport) int {
 	total := 0
 	for _, imp := range imports {
 		total += imp.Count

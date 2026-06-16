@@ -71,7 +71,7 @@ Windows:     %APPDATA%\reasonix\config.toml
 ~/.reasonix/config.json
 ```
 
-旧 credentials 和 sessions 也会在新目标不存在时导入到配置的 credential store / Reasonix home。若新的全局配置已经存在，则新配置优先；旧配置只作为兼容 fallback 保留。
+旧 credentials、memory 文件和 sessions 也会在新目标不存在时导入到配置的 credential store / Reasonix home。若新的全局配置已经存在，则新配置优先；旧配置只作为兼容 fallback 保留。
 
 ## 手动补救迁移
 
@@ -84,12 +84,13 @@ Windows:     %APPDATA%\reasonix\config.toml
 在 CLI TUI 中，把 `/migrate` 输入到聊天输入框。在桌面端中，把同一个命令输入到 composer。命令会显示进度提示：
 
 1. 检查旧配置和 credentials；
-2. 扫描已知旧 sessions 目录；
-3. 导入尚未迁移过的 sessions；
-4. 输出最终汇总。
+2. 扫描已知旧 memory 位置；
+3. 扫描已知旧 sessions 目录；
+4. 导入尚未迁移过的 memory 文件和 sessions；
+5. 输出最终汇总。
 
 该补救命令仍然是非破坏性的。它不会覆盖已有的
-`<Reasonix home>/config.toml`；如果新配置已经存在，需要手动把旧配置里缺失的设置复制过去。它也会尊重 session 导入 marker，因此已经迁移过、之后又被用户删除的会话，不会在后续 `/migrate` 中被重新恢复。
+`<Reasonix home>/config.toml`；如果新配置已经存在，需要手动把旧配置里缺失的设置复制过去。旧 memory 文件只会在目标文件不存在时复制。它也会尊重 session 导入 marker，因此已经迁移过、之后又被用户删除的会话，不会在后续 `/migrate` 中被重新恢复。
 
 版本限制：
 

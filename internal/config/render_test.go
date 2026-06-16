@@ -71,7 +71,7 @@ func TestRenderTOMLHeaderShowsResolvedConfigPath(t *testing.T) {
 	}
 }
 
-func TestWriteRootsForRootIncludesUserConfigDir(t *testing.T) {
+func TestWriteRootsForRootExcludesUserConfigDirByDefault(t *testing.T) {
 	isolateUserConfigHome(t)
 	project := t.TempDir()
 	cfg := Default()
@@ -80,13 +80,12 @@ func TestWriteRootsForRootIncludesUserConfigDir(t *testing.T) {
 	want := filepath.Clean(filepath.Dir(UserConfigPath()))
 	for _, root := range roots {
 		if filepath.Clean(root) == want {
-			if info, err := os.Stat(want); err != nil || !info.IsDir() {
-				t.Fatalf("user config write root should be created, stat=%v err=%v", info, err)
-			}
-			return
+			t.Fatalf("WriteRootsForRoot() = %v, must not include user config dir %q by default", roots, want)
 		}
 	}
-	t.Fatalf("WriteRootsForRoot() = %v, want user config dir %q", roots, want)
+	if got := filepath.Clean(roots[0]); got != filepath.Clean(project) {
+		t.Fatalf("first write root = %q, want project %q", got, project)
+	}
 }
 
 // TestRenderTOMLRoundTrips ensures the annotated TOML we emit parses back into

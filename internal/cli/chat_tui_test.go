@@ -1569,6 +1569,7 @@ func TestSlashMigrateShowsProgress(t *testing.T) {
 	for _, want := range []string{
 		"/migrate",
 		"migration rescue: checking legacy config and credentials",
+		"migration rescue: scanning legacy memory",
 		"migration rescue: scanning legacy sessions",
 		"migration rescue complete:",
 	} {

@@ -98,7 +98,7 @@ func TestWriteFileConfinement(t *testing.T) {
 	}
 }
 
-func TestWriteFileDefaultRootsAllowUserConfig(t *testing.T) {
+func TestWriteFileDefaultRootsDenyUserConfigUnlessAllowed(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
@@ -117,23 +117,20 @@ func TestWriteFileDefaultRootsAllowUserConfig(t *testing.T) {
 		"path":    userConfig,
 		"content": "default_model = \"deepseek\"\n",
 	})
-	if _, err := w.Execute(context.Background(), args); err != nil {
-		t.Fatalf("write user config should be allowed: %v", err)
+	if _, err := w.Execute(context.Background(), args); err == nil {
+		t.Fatalf("write user config should be denied by default")
 	}
-	if _, err := os.Stat(userConfig); err != nil {
-		t.Fatalf("user config was not created: %v", err)
+	if _, err := os.Stat(userConfig); !os.IsNotExist(err) {
+		t.Fatalf("user config must not be created by default, stat err=%v", err)
 	}
 
-	outside := filepath.Join(filepath.Dir(filepath.Dir(userConfig)), "outside.toml")
-	args, _ = json.Marshal(map[string]string{
-		"path":    outside,
-		"content": "nope\n",
-	})
-	if _, err := w.Execute(context.Background(), args); err == nil {
-		t.Fatalf("write outside project and user config dir should be denied")
+	cfg.Sandbox.AllowWrite = []string{filepath.Dir(userConfig)}
+	w = writeFile{roots: realRoots(cfg.WriteRootsForRoot(project))}
+	if _, err := w.Execute(context.Background(), args); err != nil {
+		t.Fatalf("write user config should be allowed with allow_write: %v", err)
 	}
-	if _, err := os.Stat(outside); !os.IsNotExist(err) {
-		t.Fatalf("outside file must not be created, stat err=%v", err)
+	if _, err := os.Stat(userConfig); err != nil {
+		t.Fatalf("user config was not created with allow_write: %v", err)
 	}
 }
 
