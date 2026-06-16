@@ -2856,7 +2856,11 @@ export default function App() {
                   className="topicbar__action-btn topicbar__action-btn--icon topicbar__action-btn--utility"
                   type="button"
                   aria-label={t("shortcuts.cheatsheetTitle")}
-                  onClick={() => setShortcutsOpen(true)}
+                  onClick={() => {
+                    closeTransientOverlays();
+                    setSettingsFocus(null);
+                    setSettingsTarget("shortcuts");
+                  }}
                 >
                   <CircleHelp size={14} />
                 </button>

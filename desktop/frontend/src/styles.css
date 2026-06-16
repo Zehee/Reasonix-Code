@@ -7686,6 +7686,36 @@ a[href] {
   border-bottom: 1px solid var(--border-soft);
 }
 
+.shortcut-combo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.shortcut-combo__part,
+.shortcut-combo__separator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 0.72em;
+  line-height: 1;
+}
+
+.shortcut-combo__separator {
+  min-width: auto;
+  color: var(--fg-dim);
+}
+
 .shortcuts-cheatsheet__row kbd {
   justify-self: start;
   max-width: 100%;
@@ -10381,6 +10411,9 @@ a[href] {
 
 .shortcuts-settings__key {
   --wails-draggable: no-drag;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 104px;
   height: 30px;
   padding: 0 10px;
@@ -10389,6 +10422,7 @@ a[href] {
   background: var(--bg);
   color: var(--fg);
   font: 650 12px/1 var(--mono);
+  overflow: hidden;
   white-space: nowrap;
   cursor: pointer;
 }
