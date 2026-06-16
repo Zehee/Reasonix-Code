@@ -753,6 +753,8 @@ function normalizeProviderView(p: ProviderView): ProviderView {
     modelsUrl: p.modelsUrl ?? "",
     reasoningProtocol: normalizeReasoningProtocol(p.reasoningProtocol),
     supportedEfforts: asArray(p.supportedEfforts),
+    keySource: p.keySource ?? "",
+    keySourcePath: p.keySourcePath ?? "",
   };
 }
 
@@ -3589,6 +3591,8 @@ type ProviderAccessGroup = {
   providers: ProviderView[];
   apiKeyEnv: string;
   keySet: boolean;
+  keySource?: string;
+  keySourcePath?: string;
   baseUrl: string;
   kind: string;
   models: string[];
@@ -3845,6 +3849,7 @@ function ProviderAccessCard({
         <span>{group.kind}</span>
         <span>{group.baseUrl}</span>
         <span>{group.apiKeyEnv || t("common.none")}</span>
+        {group.keySource && <span title={group.keySourcePath || undefined}>{t("settings.keySource", { source: group.keySource })}</span>}
       </div>
 
       <div className="provider-card-block">
@@ -4028,6 +4033,8 @@ function providerAccessGroups(providers: ProviderView[], t: ReturnType<typeof us
     if (existing) {
       existing.providers.push(p);
       existing.keySet = existing.keySet || p.keySet;
+      if (!existing.keySource && p.keySource) existing.keySource = p.keySource;
+      if (!existing.keySourcePath && p.keySourcePath) existing.keySourcePath = p.keySourcePath;
       existing.models = uniqueStrings([...existing.models, ...p.models]);
       continue;
     }
@@ -4039,6 +4046,8 @@ function providerAccessGroups(providers: ProviderView[], t: ReturnType<typeof us
       providers: [p],
       apiKeyEnv: p.apiKeyEnv,
       keySet: p.keySet,
+      keySource: p.keySource,
+      keySourcePath: p.keySourcePath,
       baseUrl: p.baseUrl,
       kind: p.kind,
       models: uniqueStrings(p.models),
@@ -4302,7 +4311,10 @@ function ProviderEditor({
         {initial && onSaveKey && keyEnv && (
           <>
             <div className="provider-key-status provider-key-status--managed provider-key-status--compact">
-              <span>{initial.keySet ? t("settings.configuredKey", { env: keyEnv }) : t("settings.notConfiguredKey", { env: keyEnv })}</span>
+              <span title={initial.keySourcePath || undefined}>
+                {initial.keySet ? t("settings.configuredKey", { env: keyEnv }) : t("settings.notConfiguredKey", { env: keyEnv })}
+                {initial.keySource ? ` · ${t("settings.keySource", { source: initial.keySource })}` : ""}
+              </span>
               {initial.keySet && onClearKey && (
                 <InlineConfirmButton
                   label={t("settings.clearKey")}
@@ -4487,6 +4499,11 @@ function ProviderEditor({
       {initial && onSaveKey && apiKeyEnv.trim() && (
         <>
           <label className="set-label">{t("settings.providerKey")}</label>
+          {initial.keySource && (
+            <div className="mem-hint" title={initial.keySourcePath || undefined}>
+              {t("settings.keySource", { source: initial.keySource })}
+            </div>
+          )}
           <KeyField
             apiKeyEnv={apiKeyEnv.trim()}
             busy={busy || fetchingModels}

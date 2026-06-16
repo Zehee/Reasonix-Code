@@ -5850,7 +5850,8 @@ func (a *App) ConnectKey(apiKey string) error {
 	if _, err := billing.FetchWithClient(ctx, nil, onboardingBalanceURL, apiKey); err != nil {
 		return fmt.Errorf("validate: %w", err)
 	}
-	if err := upsertDotEnv(onboardingKeyEnv, apiKey); err != nil {
+	warning, err := a.saveProviderCredential(onboardingKeyEnv, apiKey)
+	if err != nil {
 		return fmt.Errorf("save: %w", err)
 	}
 	if err := a.rebuild(); err != nil {
@@ -5860,6 +5861,9 @@ func (a *App) ConnectKey(apiKey string) error {
 			tab.StartupErr = err.Error()
 		}
 		a.mu.Unlock()
+	}
+	if warning != "" {
+		return fmt.Errorf("%s", warning)
 	}
 	return nil
 }
