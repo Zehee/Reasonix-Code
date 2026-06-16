@@ -93,7 +93,7 @@ export function ShortcutsCheatsheet({
                     />
                     <div>
                       <strong>{t(definition.labelKey)}</strong>
-                      <span>{t(definition.descriptionKey)}</span>
+                      <span className="shortcuts-cheatsheet__desc">{t(definition.descriptionKey)}</span>
                     </div>
                   </div>
                 ))}
