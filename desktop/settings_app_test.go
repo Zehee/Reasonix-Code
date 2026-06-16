@@ -121,12 +121,31 @@ func TestSaveProviderFiltersNonChatModels(t *testing.T) {
 	if !ok {
 		t.Fatal("saved provider not found")
 	}
-	want := []string{"mimo-v2.5-pro", "mimo-v2.5", "mimo-v2-omni"}
+	want := []string{"mimo-v2.5-pro"}
 	if !reflect.DeepEqual(got.ModelList(), want) {
 		t.Errorf("saved provider models = %v, want %v", got.ModelList(), want)
 	}
 	if got.DefaultModel() != "mimo-v2.5-pro" {
 		t.Errorf("saved provider default = %q, want mimo-v2.5-pro", got.DefaultModel())
+	}
+	raw, err := os.ReadFile(config.UserConfigPath())
+	if err != nil {
+		t.Fatalf("read saved config: %v", err)
+	}
+	saved := string(raw)
+	blockStart := strings.Index(saved, "\n[[providers]]\nname        = \"mimo-api\"")
+	if blockStart < 0 {
+		t.Fatalf("saved config missing mimo-api provider block:\n%s", raw)
+	}
+	block := saved[blockStart:]
+	if next := strings.Index(block[len("\n[[providers]]"):], "\n[[providers]]"); next >= 0 {
+		block = block[:len("\n[[providers]]")+next]
+	}
+	if !strings.Contains(block, `models      = ["mimo-v2.5-pro"]`) {
+		t.Fatalf("saved provider block did not persist single selection as models array:\n%s", block)
+	}
+	if strings.Contains(block, `model       = "mimo-v2.5-pro"`) {
+		t.Fatalf("saved provider block should not persist explicit single selection as legacy model:\n%s", block)
 	}
 }
 

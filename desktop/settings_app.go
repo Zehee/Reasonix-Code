@@ -959,8 +959,9 @@ func providerDefaultForModels(currentDefault string, models []string) string {
 	return ""
 }
 
-// SaveProvider adds or updates a provider. A single model fills `model`; several
-// fill `models` (with `default`). The shared key/endpoint live on the entry.
+// SaveProvider adds or updates a provider. Enabled models are persisted through
+// `models` even when only one model is selected, while `model` remains populated
+// in-memory for validation/back-compat. The shared key/endpoint live on the entry.
 func (a *App) SaveProvider(p ProviderView) error {
 	return a.applyConfigChange(func(c *config.Config) error {
 		e := config.ProviderEntry{Name: p.Name}
@@ -986,8 +987,8 @@ func (a *App) SaveProvider(p ProviderView) error {
 		models := chatProviderModels(p.Models)
 		if len(models) > 0 {
 			e.Model = models[0] // also satisfies validateProvider's model requirement
+			e.Models = models
 			if len(models) > 1 {
-				e.Models = models
 				e.Default = providerDefaultForModels(p.Default, models)
 			}
 		}
