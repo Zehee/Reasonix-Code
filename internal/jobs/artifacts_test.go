@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -92,5 +93,73 @@ func TestFinishDestroySessionPurgesOwnedJobs(t *testing.T) {
 
 	if _, _, ok := m.OutputForSession("session", j.ID); ok {
 		t.Fatalf("destroyed session job %s should be purged", j.ID)
+	}
+}
+
+func TestSetActiveSessionPathMigratesRunningJobArtifacts(t *testing.T) {
+	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
+	m := NewManager(event.Discard)
+	defer m.Close()
+
+	wroteBefore := make(chan struct{})
+	release := make(chan struct{})
+	j := m.StartForSession("session", "bash", "migrate", func(_ context.Context, out io.Writer) (string, error) {
+		_, _ = io.WriteString(out, "before\n")
+		close(wroteBefore)
+		<-release
+		_, _ = io.WriteString(out, "after\n")
+		return "", nil
+	})
+	<-wroteBefore
+
+	m.SetActiveSessionPath("session", sessionPath)
+	j.mu.Lock()
+	gotPath := j.artifactPath
+	j.mu.Unlock()
+	if !strings.HasPrefix(gotPath, ArtifactDir(sessionPath)+string(filepath.Separator)) {
+		t.Fatalf("artifact path = %q, want under %q", gotPath, ArtifactDir(sessionPath))
+	}
+
+	close(release)
+	<-j.done
+	res := m.WaitForSession(context.Background(), "session", []string{j.ID}, 1)
+	if len(res) != 1 || !strings.Contains(res[0].Output, "before\n") || !strings.Contains(res[0].Output, "after\n") {
+		t.Fatalf("wait after migration = %+v, want before and after output", res)
+	}
+}
+
+func TestSetActiveSessionPathReportsMigrationFailure(t *testing.T) {
+	dir := t.TempDir()
+	sessionPath := filepath.Join(dir, "session.jsonl")
+	if err := os.WriteFile(ArtifactDir(sessionPath), []byte("not a dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var notices []string
+	m := NewManager(event.FuncSink(func(e event.Event) {
+		if e.Kind == event.Notice {
+			notices = append(notices, e.Text)
+		}
+	}))
+	defer m.Close()
+
+	j := m.StartForSession("session", "task", "migrate fail", func(context.Context, io.Writer) (string, error) {
+		return "answer", nil
+	})
+	m.SetActiveSessionPath("session", sessionPath)
+	<-j.done
+
+	res := m.WaitForSession(context.Background(), "session", []string{j.ID}, 1)
+	if len(res) != 1 || !strings.Contains(res[0].Output, "job artifact incomplete: migration:") {
+		t.Fatalf("wait after migration failure = %+v, want artifact error", res)
+	}
+	found := false
+	for _, notice := range notices {
+		if strings.Contains(notice, "job artifact migration failed") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("migration failure notice not emitted, got %q", notices)
 	}
 }

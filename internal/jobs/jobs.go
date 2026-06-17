@@ -492,6 +492,9 @@ func (m *Manager) OutputForSession(parentSession, id string) (text string, statu
 		text = j.result
 		j.resultRead = true
 	}
+	if text == "" && j.artifactErr != "" {
+		text = "job artifact incomplete: " + j.artifactErr
+	}
 	return text, j.status, true
 }
 
@@ -731,10 +734,53 @@ func (m *Manager) SetActiveSessionPath(parentSession, sessionPath string) {
 	m.mu.Unlock()
 
 	if oldDir != "" && newDir != "" && oldDir != newDir {
-		_ = migrateArtifactDir(oldDir, newDir)
+		if err := migrateArtifactDir(oldDir, newDir); err != nil {
+			m.recordArtifactMigrationError(parentSession, err)
+		} else {
+			m.mu.Lock()
+			m.rebaseSessionArtifactsLocked(parentSession, newDir)
+			m.mu.Unlock()
+		}
 	}
 	if !loaded {
 		m.loadSessionArtifacts(parentSession, newDir)
+	}
+}
+
+func (m *Manager) rebaseSessionArtifactsLocked(parentSession, dir string) {
+	for _, j := range m.jobs {
+		if j == nil || !sessionMatches(parentSession, j.SessionID) {
+			continue
+		}
+		j.mu.Lock()
+		if j.artifactPath != "" {
+			j.artifactPath = filepath.Join(dir, filepath.Base(j.artifactPath))
+		}
+		if j.artifactMetaPath != "" {
+			j.artifactMetaPath = filepath.Join(dir, filepath.Base(j.artifactMetaPath))
+		}
+		j.mu.Unlock()
+	}
+}
+
+func (m *Manager) recordArtifactMigrationError(parentSession string, err error) {
+	text := "job artifact migration failed: " + err.Error()
+	m.mu.Lock()
+	for _, j := range m.jobs {
+		if j == nil || !sessionMatches(parentSession, j.SessionID) {
+			continue
+		}
+		j.mu.Lock()
+		if j.artifactErr == "" {
+			j.artifactErr = "migration: " + err.Error()
+			j.artifactComplete = false
+		}
+		j.mu.Unlock()
+	}
+	active := m.active
+	m.mu.Unlock()
+	if active == "" || active == parentSession {
+		m.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: text})
 	}
 }
 
