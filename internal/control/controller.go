@@ -1575,6 +1575,9 @@ func removeSessionArtifacts(path string) error {
 	if path == "" {
 		return nil
 	}
+	if err := jobs.RemoveArtifacts(path); err != nil {
+		return err
+	}
 	for _, p := range []string{path, agent.BranchMetaPath(path)} {
 		if p == "" {
 			continue
@@ -2140,7 +2143,7 @@ func (c *Controller) IsDestroyingSession(sessionPath string) bool {
 
 func (c *Controller) setActiveJobSession(sessionPath string) {
 	if c.jobs != nil {
-		c.jobs.SetActiveSession(agent.BranchID(sessionPath))
+		c.jobs.SetActiveSessionPath(agent.BranchID(sessionPath), sessionPath)
 	}
 }
 

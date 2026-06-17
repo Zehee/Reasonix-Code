@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,6 +81,32 @@ func (fakeControlTool) Execute(context.Context, json.RawMessage) (string, error)
 }
 func (fakeControlTool) ReadOnly() bool { return true }
 
+type startBackgroundJobTool struct {
+	started chan string
+	release chan struct{}
+}
+
+func (t startBackgroundJobTool) Name() string        { return "start_background_job" }
+func (t startBackgroundJobTool) Description() string { return "start background job" }
+func (t startBackgroundJobTool) Schema() json.RawMessage {
+	return json.RawMessage(`{"type":"object"}`)
+}
+func (t startBackgroundJobTool) ReadOnly() bool { return false }
+func (t startBackgroundJobTool) Execute(ctx context.Context, _ json.RawMessage) (string, error) {
+	jm, ok := jobs.FromContext(ctx)
+	if !ok {
+		return "", nil
+	}
+	j := jm.StartForSession(jobs.SessionFromContext(ctx), "bash", "controller", func(_ context.Context, out io.Writer) (string, error) {
+		_, _ = io.WriteString(out, "before\n")
+		<-t.release
+		_, _ = io.WriteString(out, "after\n")
+		return "", nil
+	})
+	t.started <- j.ID
+	return "started " + j.ID, nil
+}
+
 func TestNewTreatsTypedNilSinkAsDiscard(t *testing.T) {
 	var sink *typedNilControllerSink
 	c := New(Options{Sink: sink})
@@ -131,6 +158,39 @@ func TestRunInjectsParentSessionForJobs(t *testing.T) {
 	}
 	if runner.jobSession != want {
 		t.Fatalf("jobs session = %q, want %q", runner.jobSession, want)
+	}
+}
+
+func TestSetSessionPathAdoptsTemporaryBackgroundJobs(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "session.jsonl")
+	started := make(chan string, 1)
+	release := make(chan struct{})
+	jm := jobs.NewManager(event.Discard)
+	reg := tool.NewRegistry()
+	reg.Add(startBackgroundJobTool{started: started, release: release})
+	prov := &scriptedTurns{turns: [][]provider.Chunk{
+		toolCallTurn("call-1", "start_background_job", `{}`),
+		textTurn("done"),
+	}}
+	ag := agent.New(prov, reg, agent.NewSession("sys"), agent.Options{Jobs: jm}, event.Discard)
+	c := New(Options{Runner: ag, Executor: ag, SessionDir: dir, Label: "test", Jobs: jm})
+	defer c.Close()
+
+	if err := c.Run(context.Background(), "start background job"); err != nil {
+		t.Fatal(err)
+	}
+	jobID := <-started
+	c.SetSessionPath(path)
+	close(release)
+
+	parentSession := agent.BranchID(path)
+	res := c.jobs.WaitForSession(context.Background(), parentSession, []string{jobID}, 1)
+	if len(res) != 1 || !strings.Contains(res[0].Output, "before\n") || !strings.Contains(res[0].Output, "after\n") {
+		t.Fatalf("adopted controller job = %+v, want before/after output", res)
+	}
+	if _, err := os.Stat(filepath.Join(jobs.ArtifactDir(path), jobID+".log")); err != nil {
+		t.Fatalf("controller job artifact should be under persistent sidecar: %v", err)
 	}
 }
 
