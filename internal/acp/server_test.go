@@ -933,6 +933,38 @@ func TestServeRejectsPathLikeSessionID(t *testing.T) {
 	}
 }
 
+func TestListACPMetasSkipsCleanupPending(t *testing.T) {
+	dir := t.TempDir()
+	visibleID := "visible"
+	pendingID := "pending"
+	for _, id := range []string{visibleID, pendingID} {
+		path := transcriptPath(dir, id)
+		if err := os.WriteFile(path, []byte(`{"role":"user","content":"hi"}`+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := saveACPMeta(path, acpSessionMeta{
+			SessionID: id,
+			Cwd:       t.TempDir(),
+			Title:     id,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := agent.MarkCleanupPending(transcriptPath(dir, pendingID), "delete"); err != nil {
+		t.Fatal(err)
+	}
+
+	metas, err := listACPMetas(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(metas) != 1 || metas[0].SessionID != visibleID {
+		t.Fatalf("listACPMetas = %+v, want only %q", metas, visibleID)
+	}
+}
+
 func TestDeleteSessionFilesDeletesOwnedSubagents(t *testing.T) {
 	dir := t.TempDir()
 	sessionPath := filepath.Join(dir, "session.jsonl")

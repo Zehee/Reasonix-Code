@@ -1302,6 +1302,9 @@ func listACPMetas(dir string) ([]acpSessionMeta, error) {
 		}
 		id := strings.TrimSuffix(e.Name(), ".acp.json")
 		sessionPath := transcriptPath(dir, id)
+		if agent.IsCleanupPending(sessionPath) {
+			continue
+		}
 		if !sessionFileExists(sessionPath) {
 			continue
 		}
