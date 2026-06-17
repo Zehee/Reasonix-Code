@@ -27,6 +27,8 @@ import (
 	"reasonix/internal/nilutil"
 )
 
+var renamePath = os.Rename
+
 // Status is a job's lifecycle state.
 type Status string
 
@@ -1007,11 +1009,48 @@ func migrateArtifactDir(src, dst string) error {
 		if entry.IsDir() {
 			continue
 		}
-		if err := os.Rename(filepath.Join(src, entry.Name()), filepath.Join(dst, entry.Name())); err != nil {
+		if err := moveArtifactFile(filepath.Join(src, entry.Name()), filepath.Join(dst, entry.Name())); err != nil {
 			return err
 		}
 	}
 	_ = os.Remove(src)
+	return nil
+}
+
+func moveArtifactFile(src, dst string) error {
+	if err := renamePath(src, dst); err == nil {
+		return nil
+	}
+	if err := copyArtifactFile(src, dst); err != nil {
+		return err
+	}
+	return os.Remove(src)
+}
+
+func copyArtifactFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	info, err := in.Stat()
+	if err != nil {
+		return err
+	}
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(out, in)
+	closeErr := out.Close()
+	if copyErr != nil {
+		_ = os.Remove(dst)
+		return copyErr
+	}
+	if closeErr != nil {
+		_ = os.Remove(dst)
+		return closeErr
+	}
 	return nil
 }
 

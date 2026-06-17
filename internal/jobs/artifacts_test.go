@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -128,6 +129,38 @@ func TestSetActiveSessionPathMigratesRunningJobArtifacts(t *testing.T) {
 	res := m.WaitForSession(context.Background(), "session", []string{j.ID}, 1)
 	if len(res) != 1 || !strings.Contains(res[0].Output, "before\n") || !strings.Contains(res[0].Output, "after\n") {
 		t.Fatalf("wait after migration = %+v, want before and after output", res)
+	}
+}
+
+func TestMigrateArtifactDirFallsBackToCopyWhenRenameFails(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "src")
+	dst := filepath.Join(root, "dst")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "bash-1.log"), []byte("persisted output"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldRename := renamePath
+	renamePath = func(_, _ string) error {
+		return errors.New("forced rename failure")
+	}
+	t.Cleanup(func() { renamePath = oldRename })
+
+	if err := migrateArtifactDir(src, dst); err != nil {
+		t.Fatalf("migrateArtifactDir: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dst, "bash-1.log"))
+	if err != nil {
+		t.Fatalf("read migrated artifact: %v", err)
+	}
+	if string(got) != "persisted output" {
+		t.Fatalf("migrated artifact = %q, want persisted output", got)
+	}
+	if _, err := os.Stat(filepath.Join(src, "bash-1.log")); !os.IsNotExist(err) {
+		t.Fatalf("source artifact should be removed after copy fallback, stat err = %v", err)
 	}
 }
 
