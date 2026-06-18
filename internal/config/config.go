@@ -152,6 +152,8 @@ func normalizeDesktopLayoutStyle(style string) string {
 		return "classic"
 	case "workbench", "workspace":
 		return "workbench"
+	case "creation":
+		return "creation"
 	default:
 		return "workbench"
 	}
