@@ -126,17 +126,18 @@ type Controller struct {
 
 	// mu guards the run state and approval bookkeeping; every critical section
 	// under it is short and non-blocking.
-	mu         sync.Mutex
-	cancel     context.CancelFunc
-	running    bool
-	canceling  bool
-	autosaveWG sync.WaitGroup
-	planMode   bool
-	goal       string
-	goalStatus string
-	goalTurns  int
-	goalBlocks int
-	goalBlock  string
+	mu               sync.Mutex
+	cancel           context.CancelFunc
+	running          bool
+	canceling        bool
+	autosaveWG       sync.WaitGroup
+	planMode         bool
+	goal             string
+	goalStatus       string
+	goalResearchMode GoalResearchMode
+	goalTurns        int
+	goalBlocks       int
+	goalBlock        string
 	// goalInterceptMsg, when non-empty, overrides the generic goalContinueTurn prompt
 	// for the next continuation turn. Used by advanceGoalAfterTurn to inject specific
 	// feedback such as incomplete-todo reminders.
@@ -1066,8 +1067,66 @@ func (c *Controller) submitCommandOrTurn(trimmed, input, display string, scopedR
 		}
 		c.notice("unknown command: " + trimmed)
 	default:
+		if c.maybeAutoStartResearchGoal(input, display) {
+			return
+		}
 		runRefTurn(input, display)
 	}
+}
+
+func (c *Controller) maybeAutoStartResearchGoal(input, display string) bool {
+	goal, ok := c.autoStartResearchGoalCandidate(input)
+	if !ok {
+		return false
+	}
+	if c.runner != nil {
+		displayText := display
+		if strings.TrimSpace(displayText) == "" {
+			displayText = goal
+		}
+		c.runGuarded(func(ctx context.Context) error {
+			c.SetGoalWithResearchMode(goal, GoalResearchOn)
+			c.notice(fmt.Sprintf(i18n.M.GoalSetFmt, ShortGoalForNotice(goal)))
+			block, errs := c.ResolveRefs(ctx, goal)
+			for _, e := range errs {
+				c.notice(e)
+			}
+			sent := "Start pursuing the active goal now."
+			if block != "" {
+				sent = "Referenced context:\n\n" + block + "\n\n" + sent
+			}
+			return c.runGoalLoopWithRawDisplay(ctx, sent, goal, displayText)
+		})
+	}
+	return true
+}
+
+// AutoStartResearchGoal upgrades a strong long-horizon ordinary prompt into a
+// Goal + AutoResearch run for frontends that already accepted an idle turn.
+func (c *Controller) AutoStartResearchGoal(input string) (string, bool) {
+	goal, ok := c.autoStartResearchGoalCandidate(input)
+	if !ok {
+		return "", false
+	}
+	c.SetGoalWithResearchMode(goal, GoalResearchOn)
+	c.notice(fmt.Sprintf(i18n.M.GoalSetFmt, ShortGoalForNotice(goal)))
+	return goal, true
+}
+
+func (c *Controller) autoStartResearchGoalCandidate(input string) (string, bool) {
+	goal := strings.TrimSpace(input)
+	if !shouldAutoStartResearchGoal(goal) {
+		return "", false
+	}
+	c.mu.Lock()
+	plan := c.planMode
+	running := c.running
+	activeGoal := strings.TrimSpace(c.goal) != "" && c.goalStatus == GoalStatusRunning
+	c.mu.Unlock()
+	if plan || running || activeGoal {
+		return "", false
+	}
+	return goal, true
 }
 
 func (c *Controller) rememberProjectNote(note string) {
@@ -1090,7 +1149,7 @@ func (c *Controller) applyGoalCommand(input, display string) bool {
 	switch cmd.Action {
 	case GoalCommandSet:
 		c.SetPlanMode(false)
-		c.SetGoal(cmd.Text)
+		c.SetGoalWithResearchMode(cmd.Text, cmd.ResearchMode)
 		c.GoalStrict(cmd.Strict)
 		c.notice(fmt.Sprintf(i18n.M.GoalSetFmt, ShortGoalForNotice(cmd.Text)))
 		if c.runner != nil {
@@ -1556,22 +1615,28 @@ func (c *Controller) GoalStrict(strict bool) {
 // user turns, not the system prompt or tool schema, so it does not disturb the
 // cache-stable prefix.
 func (c *Controller) SetGoal(goal string) {
+	c.SetGoalWithResearchMode(goal, GoalResearchAuto)
+}
+
+func (c *Controller) SetGoalWithResearchMode(goal string, researchMode GoalResearchMode) {
 	goal = strings.TrimSpace(goal)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if goal == "" {
 		c.goal = ""
 		c.goalStatus = GoalStatusStopped
+		c.goalResearchMode = GoalResearchAuto
 		c.goalTurns = 0
 		c.goalBlocks = 0
 		c.goalBlock = ""
 		return
 	}
-	if c.goal == goal && c.goalStatus == GoalStatusRunning {
+	if c.goal == goal && c.goalStatus == GoalStatusRunning && c.goalResearchMode == researchMode {
 		return
 	}
 	c.goal = goal
 	c.goalStatus = GoalStatusRunning
+	c.goalResearchMode = researchMode
 	c.goalTurns = 0
 	c.goalBlocks = 0
 	c.goalBlock = ""
