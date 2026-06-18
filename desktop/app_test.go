@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +28,44 @@ import (
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
 )
+
+func desktopMCPHTTPServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID     *int            `json:"id"`
+			Method string          `json:"method"`
+			Params json.RawMessage `json:"params"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "bad body", http.StatusBadRequest)
+			return
+		}
+		if req.ID == nil {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		var result any
+		switch req.Method {
+		case "initialize":
+			result = map[string]any{
+				"protocolVersion": "2024-11-05",
+				"serverInfo":      map[string]any{"name": "h", "version": "0"},
+			}
+		case "tools/list":
+			result = map[string]any{"tools": []map[string]any{{
+				"name":        "greet",
+				"description": "Greet someone.",
+				"inputSchema": map[string]any{"type": "object"},
+			}}}
+		default:
+			result = map[string]any{}
+		}
+		resp := map[string]any{"jsonrpc": "2.0", "id": *req.ID, "result": result}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+}
 
 // setTestCtrl creates a minimal workspace tab (if needed) and sets its
 // controller, so tests don't depend on the old App.ctrl field.
@@ -3058,6 +3098,91 @@ tier = "lazy"
 		}
 	}
 	t.Fatalf("time missing after disable: %+v", view.Servers)
+}
+
+func TestSetMCPServerEnabledSharedHostPreservesSiblingTabs(t *testing.T) {
+	isolateDesktopUserDirs(t)
+	dir := robustTempDir(t)
+	t.Chdir(dir)
+
+	srv := desktopMCPHTTPServer(t)
+	defer srv.Close()
+	if err := os.WriteFile(filepath.Join(dir, "reasonix.toml"), []byte(fmt.Sprintf(`
+[[plugins]]
+name = "h"
+type = "http"
+url = %q
+`, srv.URL)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	sharedHost := plugin.NewHost()
+	defer sharedHost.Close()
+	tools, err := sharedHost.Add(ctx, plugin.Spec{Name: "h", Type: "http", URL: srv.URL})
+	if err != nil {
+		t.Fatalf("sharedHost.Add: %v", err)
+	}
+
+	activeRegistry := tool.NewRegistry()
+	siblingRegistry := tool.NewRegistry()
+	for _, mt := range tools {
+		activeRegistry.Add(mt)
+		siblingRegistry.Add(mt)
+	}
+	activeCtrl := control.New(control.Options{Host: sharedHost, Registry: activeRegistry, PluginCtx: context.Background()})
+	siblingCtrl := control.New(control.Options{Host: sharedHost, Registry: siblingRegistry, PluginCtx: context.Background()})
+	app := NewApp()
+	app.tabs = map[string]*WorkspaceTab{
+		"active": {
+			ID:            "active",
+			Scope:         "global",
+			WorkspaceRoot: dir,
+			Ready:         true,
+			Ctrl:          activeCtrl,
+			SharedHostKey: dir,
+			disabledMCP:   map[string]ServerView{},
+		},
+		"sibling": {
+			ID:            "sibling",
+			Scope:         "global",
+			WorkspaceRoot: dir,
+			Ready:         true,
+			Ctrl:          siblingCtrl,
+			SharedHostKey: dir,
+			disabledMCP:   map[string]ServerView{},
+		},
+	}
+	app.activeTabID = "active"
+
+	if err := app.SetMCPServerEnabled("h", false); err != nil {
+		t.Fatalf("SetMCPServerEnabled(h,false): %v", err)
+	}
+	if _, found := activeRegistry.Get("mcp__h__greet"); found {
+		t.Fatal("active tab still has h tools after disabling the shared server")
+	}
+	if _, found := siblingRegistry.Get("mcp__h__greet"); !found {
+		t.Fatal("sibling tab lost h tools when active tab disabled the shared server")
+	}
+	if !sharedHost.HasClient("h") {
+		t.Fatal("shared host client was removed by a per-tab disable")
+	}
+	view := app.Capabilities()
+	if len(view.Servers) != 1 || view.Servers[0].Name != "h" || view.Servers[0].Status != "disabled" {
+		t.Fatalf("Capabilities after disable = %+v, want h disabled for the active tab", view.Servers)
+	}
+
+	if err := app.SetMCPServerEnabled("h", true); err != nil {
+		t.Fatalf("SetMCPServerEnabled(h,true): %v", err)
+	}
+	if _, found := activeRegistry.Get("mcp__h__greet"); !found {
+		t.Fatal("active tab did not re-register h tools from the existing shared client")
+	}
+	view = app.Capabilities()
+	if len(view.Servers) != 1 || view.Servers[0].Name != "h" || view.Servers[0].Status != "connected" {
+		t.Fatalf("Capabilities after re-enable = %+v, want h connected for the active tab", view.Servers)
+	}
 }
 
 func TestSetMCPServerEnabledRejectsBackgroundJobs(t *testing.T) {

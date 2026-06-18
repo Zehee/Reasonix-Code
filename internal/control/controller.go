@@ -2639,7 +2639,15 @@ func (c *Controller) connectMCPSpec(s plugin.Spec) (int, error) {
 	}
 	tools, err := c.host.Add(c.pluginCtx, s)
 	if err != nil {
-		return 0, err
+		if !plugin.IsServerAlreadyConnected(err) {
+			return 0, err
+		}
+		toolsCtx, cancel := context.WithTimeout(c.pluginCtx, 5*time.Second)
+		defer cancel()
+		tools, err = c.host.ToolsFor(toolsCtx, s.Name)
+		if err != nil {
+			return 0, err
+		}
 	}
 	if c.reg != nil {
 		c.reg.RemovePrefix(plugin.ToolPrefix(s.Name))
@@ -2796,6 +2804,17 @@ func (c *Controller) DisconnectMCPServer(name string) bool {
 		removedPlaceholder = c.reg.RemovePrefix(plugin.ToolPrefix(name))
 	}
 	return disconnected || removedPlaceholder > 0
+}
+
+// UnregisterMCPServerTools hides a shared MCP server from this controller only.
+// The desktop shared-host path uses this for per-tab connector toggles: the
+// shared client stays alive for sibling tabs, while this session's registry drops
+// the server's provider-visible tools before the next turn.
+func (c *Controller) UnregisterMCPServerTools(name string) bool {
+	if c.reg == nil {
+		return false
+	}
+	return c.reg.RemovePrefix(plugin.ToolPrefix(name)) > 0
 }
 
 // Label returns the human-readable model label, e.g. "deepseek-flash".

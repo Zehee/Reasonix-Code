@@ -97,6 +97,13 @@ type App struct {
 	// It is process-local by design: shutdown closes every detached controller.
 	detachedSessions map[string]*WorkspaceTab
 
+	// sharedHosts holds one *plugin.Host per workspace root, shared by all
+	// controllers/tabs in that root so MCP subprocesses (CodeGraph, etc.) are
+	// spawned once instead of N times. Lifecycle: first Acquire creates the
+	// host, last Release closes it.
+	sharedHosts   map[string]*sharedPluginHost
+	sharedHostsMu sync.Mutex
+
 	// tabsSaveMu serializes writes to desktop-tabs.json and its fixed .tmp path.
 	tabsSaveMu             sync.Mutex
 	tabsSaveVersion        uint64 // protected by mu; assigned when collecting a snapshot
@@ -426,6 +433,9 @@ func backgroundRestoreShouldMaximise(goos string, wasMaximised bool) bool {
 // default Global tab on first launch.
 func (a *App) restoreOrBuildTabs() {
 	defer a.recoverToPending("restoreOrBuildTabs")
+	// Reap any orphaned codegraph processes from a previous crash or older
+	// version that leaked them, so they don't accumulate across restarts.
+	a.reapOrphanCodeGraph()
 	ctx := a.ctx
 	ensureWorkspace()
 
@@ -544,6 +554,8 @@ func (a *App) shutdown(context.Context) {
 	// Save window geometry synchronously from Go so it's persisted even if the
 	// frontend's beforeunload promise hasn't resolved yet.
 	a.saveWindowStateSync()
+	// Close every shared plugin host on exit, even if a tab cleanup panics.
+	defer a.closeAllSharedHosts()
 
 	a.mu.RLock()
 	tabs := a.runtimeTabsLocked()
@@ -1032,6 +1044,7 @@ func (a *App) clearActiveSessionRuntime(tab *WorkspaceTab, oldCtrl *control.Cont
 	}
 
 	newSink := &tabEventSink{tabID: tab.ID, app: a, ctx: a.ctx}
+	sharedHost := a.lookupSharedHost(tab.SharedHostKey)
 	newCtrl, err := boot.Build(a.bootContext(), boot.Options{
 		Model:                    tab.model,
 		RequireKey:               false,
@@ -1040,6 +1053,7 @@ func (a *App) clearActiveSessionRuntime(tab *WorkspaceTab, oldCtrl *control.Cont
 		SessionDir:               tabSessionDir(tab),
 		EffortOverride:           cloneStringPtr(tab.effort),
 		TokenMode:                currentTabTokenMode(tab),
+		SharedHost:               sharedHost,
 		CleanupPendingReconciler: reconcileDesktopCleanupPending,
 	})
 	if err != nil {
@@ -1842,7 +1856,12 @@ func delayedDesktopSessionTrash(dir, sessionPath, key string, destroys []control
 
 func (a *App) closeRemovedSessionRuntimes(removed []removedSessionRuntime) {
 	seen := map[*control.Controller]bool{}
+	releasedTabs := map[*WorkspaceTab]bool{}
 	for _, item := range removed {
+		if item.tab != nil && !releasedTabs[item.tab] {
+			releasedTabs[item.tab] = true
+			a.releaseTabSharedHost(item.tab)
+		}
 		if item.ctrl == nil || seen[item.ctrl] {
 			continue
 		}
@@ -3899,6 +3918,18 @@ func (a *App) mcpServersView() []ServerView {
 	}
 	if h := ctrl.Host(); h != nil {
 		for _, s := range h.Servers() {
+			if disabledView, ok := disabled[s.Name]; ok {
+				disabledView.Status = "disabled"
+				disabledView.Error = ""
+				if p, ok := configured[s.Name]; ok {
+					disabledView = withPluginConfig(disabledView, p)
+				}
+				out = append(out, disabledView)
+				retainedDisabled[s.Name] = disabledView
+				seen[s.Name] = true
+				delete(disabled, s.Name)
+				continue
+			}
 			seen[s.Name] = true
 			connected[s.Name] = true
 			view := ServerView{
@@ -4524,7 +4555,11 @@ func (a *App) SetMCPServerEnabled(name string, enabled bool) error {
 		tab.mcpOrder = mergeServerOrder(tab.mcpOrder, []ServerView{s})
 		a.mu.Unlock()
 	}
-	tab.Ctrl.DisconnectMCPServer(name)
+	if tab.SharedHostKey != "" {
+		tab.Ctrl.UnregisterMCPServerTools(name)
+	} else {
+		tab.Ctrl.DisconnectMCPServer(name)
+	}
 	return nil
 }
 
@@ -4938,6 +4973,10 @@ func (a *App) SetModelForTab(tabID, name string) error {
 		tab.Ctrl.Close()
 	}
 
+	// Preserve the shared plugin host across controller rebuilds — the tab
+	// stays in the same workspace root, so MCP processes must not be restarted.
+	sharedHost := a.lookupSharedHost(tab.SharedHostKey)
+
 	newCtrl, err := boot.Build(a.bootContext(), boot.Options{
 		Model:                    name,
 		RequireKey:               false,
@@ -4946,6 +4985,7 @@ func (a *App) SetModelForTab(tabID, name string) error {
 		SessionDir:               tabSessionDir(tab),
 		EffortOverride:           cloneStringPtr(effortOverride),
 		TokenMode:                currentTabTokenMode(tab),
+		SharedHost:               sharedHost,
 		CleanupPendingReconciler: reconcileDesktopCleanupPending,
 	})
 	if err != nil {
@@ -5035,6 +5075,7 @@ func (a *App) SetEffortForTab(tabID, level string) error {
 		carried = tab.Ctrl.History()
 		tab.Ctrl.Close()
 	}
+	sharedHost := a.lookupSharedHost(tab.SharedHostKey)
 	newCtrl, err := boot.Build(a.bootContext(), boot.Options{
 		Model:                    modelRef,
 		RequireKey:               false,
@@ -5043,6 +5084,7 @@ func (a *App) SetEffortForTab(tabID, level string) error {
 		SessionDir:               tabSessionDir(tab),
 		EffortOverride:           &effort,
 		TokenMode:                currentTabTokenMode(tab),
+		SharedHost:               sharedHost,
 		CleanupPendingReconciler: reconcileDesktopCleanupPending,
 	})
 	if err != nil {
@@ -5108,6 +5150,7 @@ func (a *App) SetTokenModeForTab(tabID, mode string) error {
 		_ = a.snapshotTab(tab)
 		carried = oldCtrl.History()
 	}
+	sharedHost := a.lookupSharedHost(tab.SharedHostKey)
 	newCtrl, err := boot.Build(a.bootContext(), boot.Options{
 		Model:                    modelRef,
 		RequireKey:               false,
@@ -5116,6 +5159,7 @@ func (a *App) SetTokenModeForTab(tabID, mode string) error {
 		SessionDir:               tabSessionDir(tab),
 		EffortOverride:           cloneStringPtr(tab.effort),
 		TokenMode:                mode,
+		SharedHost:               sharedHost,
 		CleanupPendingReconciler: reconcileDesktopCleanupPending,
 	})
 	if err != nil {
