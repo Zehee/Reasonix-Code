@@ -1546,6 +1546,8 @@ func (a *App) buildTabControllerWithLoadedSession(tab *WorkspaceTab, loadedSessi
 		a.mu.Lock()
 		tab.StartupErr = err.Error()
 		tab.Ready = true
+		a.releaseSharedHost(rootKey)
+		tab.SharedHostKey = ""
 		a.mu.Unlock()
 		a.emitReady(wailsCtx)
 		return
@@ -1614,6 +1616,8 @@ func (a *App) buildTabControllerWithLoadedSession(tab *WorkspaceTab, loadedSessi
 			}
 			if a.attachExistingSessionRuntime(tab, path, wailsCtx) {
 				ctrl.Close()
+				a.releaseSharedHost(rootKey)
+				tab.SharedHostKey = ""
 				a.emitReady(wailsCtx)
 				return
 			}

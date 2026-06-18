@@ -67,25 +67,42 @@ func (a *App) reapOrphanCodeGraph() {
 	myPID := os.Getpid()
 
 	// Collect the PIDs of our direct children (the ones we own).
-	out, err := exec.Command("pgrep", "-P", strconv.Itoa(myPID)).Output()
-	if err != nil {
-		return // no children or pgrep unavailable
-	}
+	// pgrep -P exits non-zero when there are no children; treat that as an
+	// empty set and continue scanning for orphans rather than skipping the
+	// entire reaping step.
 	ours := map[int]bool{}
-	for _, f := range strings.Fields(string(out)) {
-		if pid, err := strconv.Atoi(f); err == nil {
-			ours[pid] = true
+	out, err := exec.Command("pgrep", "-P", strconv.Itoa(myPID)).Output()
+	if err == nil {
+		for _, f := range strings.Fields(string(out)) {
+			if pid, err := strconv.Atoi(f); err == nil {
+				ours[pid] = true
+			}
 		}
 	}
 
 	// Find every codegraph MCP process.
-	out, err = exec.Command("pgrep", "-f", "codegraph.js serve --mcp").Output()
+	out, err = exec.Command("pgrep", "-f", "codegraph\\.js serve --mcp").Output()
 	if err != nil {
 		return
 	}
 	for _, f := range strings.Fields(string(out)) {
 		pid, err := strconv.Atoi(f)
 		if err != nil || pid == myPID || ours[pid] {
+			continue
+		}
+		// Verify the process is truly orphaned before killing it:
+		// check its parent PID — if the parent is alive and isn't ours,
+		// this codegraph belongs to another active Reasonix session.
+		ppidOut, err := exec.Command("ps", "-o", "ppid=", "-p", strconv.Itoa(pid)).Output()
+		if err != nil {
+			continue
+		}
+		ppid, err := strconv.Atoi(strings.TrimSpace(string(ppidOut)))
+		if err != nil || ppid == 0 {
+			continue
+		}
+		// ppid==1 means the parent died and init reparented it — truly orphaned.
+		if ppid != 1 {
 			continue
 		}
 		if p, err := os.FindProcess(pid); err == nil {

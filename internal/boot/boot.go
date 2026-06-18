@@ -326,7 +326,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		if opts.SharedHost != nil {
 			for _, s := range eagerSpecs {
 				if pluginHost.HasClient(s.Name) {
-					tools, err := pluginHost.ToolsFor(s.Name)
+					tools, err := pluginHost.ToolsFor(ctx, s.Name)
 					if err == nil {
 						for _, t := range tools {
 							reg.Add(t)
@@ -334,8 +334,25 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 						continue
 					}
 				}
-				tools, err := pluginHost.Add(ctx, s)
+				// Use a bounded per-plugin timeout matching StartAvailable's
+				// defaultStartTimeout (5s) so a hanging MCP server doesn't
+				// block the tab boot indefinitely.
+				addCtx, addCancel := context.WithTimeout(ctx, 5*time.Second)
+				tools, err := pluginHost.Add(addCtx, s)
+				addCancel()
 				if err != nil {
+					if plugin.IsServerAlreadyConnected(err) || errors.Is(err, plugin.ErrSpawningInFlight) {
+						// Race: another tab connected the same server between
+						// HasClient and Add, or is currently spawning it.
+						// Fetch tools from the existing client, or wait briefly.
+						tools, err2 := pluginHost.ToolsFor(ctx, s.Name)
+						if err2 == nil {
+							for _, t := range tools {
+								reg.Add(t)
+							}
+							continue
+						}
+					}
 					sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn,
 						Text: fmt.Sprintf("mcp %s: %v", s.Name, err)})
 					continue
@@ -368,7 +385,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		for _, s := range specs {
 			// Already running on the shared host? Register tools directly.
 			if pluginHost.HasClient(s.Name) {
-				tools, err := pluginHost.ToolsFor(s.Name)
+				tools, err := pluginHost.ToolsFor(ctx, s.Name)
 				if err == nil {
 					for _, t := range tools {
 						reg.Add(t)
@@ -773,6 +790,21 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 				}
 				tools, err := pluginHost.Add(ctx, spec)
 				if err != nil {
+					// On a shared host the server may already be connected
+					// (e.g. another tab started it). Fall back to fetching
+					// its tools from the existing client.
+					if errors.Is(err, plugin.ErrServerAlreadyConnected) || errors.Is(err, plugin.ErrSpawningInFlight) {
+						tools, err2 := pluginHost.ToolsFor(ctx, spec.Name)
+						if err2 != nil {
+							return "", err2
+						}
+						reg.RemovePrefix(plugin.ToolPrefix(spec.Name))
+						names := addTools(reg, tools)
+						if len(names) == 0 {
+							return fmt.Sprintf("MCP server %q connected but exposed no tools.", spec.Name), nil
+						}
+						return fmt.Sprintf("enabled MCP server %q tools: %s.", spec.Name, strings.Join(names, ", ")), nil
+					}
 					return "", err
 				}
 				reg.RemovePrefix(plugin.ToolPrefix(spec.Name))

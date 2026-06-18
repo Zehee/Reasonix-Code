@@ -95,6 +95,14 @@ type Host struct {
 	deferredCancels []context.CancelFunc
 	deferredWG      sync.WaitGroup
 
+	// spawningMu + spawning prevent concurrent spawns of the same server from
+	// multiple callers (e.g. several controller tabs sharing one Host). Without
+	// this guard two goroutines can both pass the early h.has check in Add,
+	// both call start() in addConnected, and the loser kills a just-spawned
+	// process after the fact.
+	spawningMu sync.Mutex
+	spawning   map[string]struct{}
+
 	// Detached stats/schema-cache writers from Start; off the boot path but
 	// drained by Close so cleanup can't race a still-open cache file.
 	bgWrites sync.WaitGroup
@@ -619,6 +627,33 @@ func (h *Host) endDeferredSpawn() {
 	h.deferredWG.Done()
 }
 
+// ErrSpawningInFlight is returned by Host.Add when another caller is already
+// spawning the same server on this host. The caller should retry later.
+var ErrSpawningInFlight = errors.New("server spawn already in progress")
+
+// tryBeginSpawn atomically claims the sole right to spawn the named server.
+// Returns true if the caller should proceed; false if another caller is already
+// spawning it.
+func (h *Host) tryBeginSpawn(name string) bool {
+	h.spawningMu.Lock()
+	defer h.spawningMu.Unlock()
+	if h.spawning == nil {
+		h.spawning = make(map[string]struct{})
+	}
+	if _, ok := h.spawning[name]; ok {
+		return false
+	}
+	h.spawning[name] = struct{}{}
+	return true
+}
+
+// endSpawn releases the spawn claim for the named server.
+func (h *Host) endSpawn(name string) {
+	h.spawningMu.Lock()
+	delete(h.spawning, name)
+	h.spawningMu.Unlock()
+}
+
 // has reports whether a server with this name is already connected.
 func (h *Host) has(name string) bool {
 	h.mu.RLock()
@@ -639,8 +674,9 @@ func (h *Host) hasLocked(name string) bool {
 func (h *Host) HasClient(name string) bool { return h.has(name) }
 
 // ToolsFor returns the namespaced tool instances for an already-connected client.
-// An error is returned when no client with that name is connected.
-func (h *Host) ToolsFor(name string) ([]tool.Tool, error) {
+// ctx bounds the tools/list call so a non-responsive server does not hang
+// permanently. An error is returned when no client with that name is connected.
+func (h *Host) ToolsFor(ctx context.Context, name string) ([]tool.Tool, error) {
 	h.mu.RLock()
 	closed := h.closed
 	h.mu.RUnlock()
@@ -653,7 +689,7 @@ func (h *Host) ToolsFor(name string) ([]tool.Tool, error) {
 	if c == nil {
 		return nil, fmt.Errorf("client %q not found on shared host", name)
 	}
-	return c.listTools(context.Background())
+	return c.listTools(ctx)
 }
 
 // client returns the named connected client, or nil.
@@ -674,6 +710,15 @@ func (h *Host) client(name string) *Client {
 // stdio child's lifetime, so pass the session-scoped context — not a per-turn one
 // — or the subprocess dies when that turn ends. Errors if the name is taken.
 func (h *Host) Add(ctx context.Context, s Spec) ([]tool.Tool, error) {
+	if h.has(s.Name) {
+		return nil, serverAlreadyConnectedError(s.Name)
+	}
+	if !h.tryBeginSpawn(s.Name) {
+		return nil, fmt.Errorf("%w: %s", ErrSpawningInFlight, s.Name)
+	}
+	defer h.endSpawn(s.Name)
+	// Double-check after acquiring the spawn token: another caller may have
+	// connected the server between our h.has check and tryBeginSpawn.
 	if h.has(s.Name) {
 		return nil, serverAlreadyConnectedError(s.Name)
 	}
