@@ -30,7 +30,6 @@ func writeLegacy(t *testing.T, src, body string) {
 		t.Fatal(err)
 	}
 }
-
 func TestMigrateImportsKeyPluginsAndLang(t *testing.T) {
 	src, dest, home := legacyHome(t)
 	writeLegacy(t, src, `{
@@ -813,4 +812,3 @@ func TestMigrateSupportData(t *testing.T) {
 		}
 	}
 }
-
