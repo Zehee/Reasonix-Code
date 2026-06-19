@@ -2349,6 +2349,8 @@ export default function App() {
   const topicbarSubtitleTitle = sidebarImDetailConnection
     ? [topicbarWorkspaceLabel, topicbarImSourceLabel, sidebarImScopeLabel(sidebarImDetailConnection, t)].filter(Boolean).join(" · ")
     : [topicbarWorkspacePath || topicbarWorkspaceLabel, topicbarImSourceLabel].filter(Boolean).join(" · ");
+  const topicbarCanRename = !sidebarImDetailConnection && Boolean(activeTab?.topicId);
+  const topicbarTitleEditSize = Math.min(56, Math.max(4, topicTitleDraft.length || topicbarTitle.length || 1));
   const sidebarWorkbench = desktopLayoutStyle === "workbench";
   // Creation keeps the classic sidebar/chat structure while gating chrome tweaks
   // behind its own style flag so classic/workbench remain unchanged.
@@ -2618,6 +2620,8 @@ export default function App() {
                     <input
                       autoFocus
                       className="topicbar__title-input"
+                      aria-label={t("topicBar.renameSession")}
+                      size={sidebarCreation ? topicbarTitleEditSize : undefined}
                       value={topicTitleDraft}
                       onChange={(event) => setTopicTitleDraft(event.target.value)}
                       onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
@@ -2633,20 +2637,33 @@ export default function App() {
                       onBlur={() => void commitActiveTopicRename()}
                     />
                   </div>
+                ) : sidebarCreation && topicbarCanRename ? (
+                  <h1 title={topicTitle(activeTab)}>
+                    <button
+                      className="topicbar__title-button"
+                      type="button"
+                      onClick={startActiveTopicRename}
+                      aria-label={t("topicBar.renameSession")}
+                    >
+                      {topicbarTitle}
+                    </button>
+                  </h1>
                 ) : (
                   <h1 title={sidebarImDetailConnection ? topicbarTitle : topicTitle(activeTab)}>{topicbarTitle}</h1>
                 )}
-                <Tooltip label={t("topicBar.renameSession")}>
-                  <button
-                    className="topicbar__icon-btn"
-                    type="button"
-                    disabled={Boolean(sidebarImDetailConnection) || !activeTab?.topicId || topicbarEditing}
-                    onClick={startActiveTopicRename}
-                    aria-label={t("topicBar.renameSession")}
-                  >
-                    <Pencil size={14} />
-                  </button>
-                </Tooltip>
+                {!sidebarCreation && (
+                  <Tooltip label={t("topicBar.renameSession")}>
+                    <button
+                      className="topicbar__icon-btn"
+                      type="button"
+                      disabled={!topicbarCanRename || topicbarEditing}
+                      onClick={startActiveTopicRename}
+                      aria-label={t("topicBar.renameSession")}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  </Tooltip>
+                )}
               </div>
               {topicbarSubtitleVisible && (
                 <div className="topicbar__subtitle" title={topicbarSubtitleTitle}>
