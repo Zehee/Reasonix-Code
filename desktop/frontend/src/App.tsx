@@ -2515,6 +2515,14 @@ export default function App() {
                   <MessageSquare size={14} aria-hidden="true" />
                   <span>消息通道</span>
                 </button>
+                <button
+                  className="sidebar-feature-zone__item"
+                  type="button"
+                  onClick={() => setHeartbeatOpen(true)}
+                >
+                  <AlarmClock size={14} aria-hidden="true" />
+                  <span>{t("sidebar.automation")}</span>
+                </button>
               </div>
             </section>
           )}
@@ -2628,15 +2636,17 @@ export default function App() {
                   <span>{t("sidebar.trash")}</span>
                 </button>
               </Tooltip>
-              <Tooltip label={t("heartbeat.scheduler")} fill side="right" disabled={sidebarNavTooltipDisabled}>
-                <button
-                  className="sidebar__navitem"
-                  onClick={() => setHeartbeatOpen(true)}
-                >
-                  <AlarmClock size={15} />
-                  <span>{t("sidebar.automation")}</span>
-                </button>
-              </Tooltip>
+              {!sidebarCreation && (
+                <Tooltip label={t("heartbeat.scheduler")} fill side="right" disabled={sidebarNavTooltipDisabled}>
+                  <button
+                    className="sidebar__navitem"
+                    onClick={() => setHeartbeatOpen(true)}
+                  >
+                    <AlarmClock size={15} />
+                    <span>{t("sidebar.automation")}</span>
+                  </button>
+                </Tooltip>
+              )}
               <Tooltip label={t("topbar.settings")} fill side="right" disabled={sidebarNavTooltipDisabled}>
                 <button
                   className="sidebar__navitem"
