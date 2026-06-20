@@ -68,18 +68,24 @@ type Controller struct {
 	sink     event.Sink
 	policy   permission.Policy
 
-	label             string
-	modelRef          string
-	systemPrompt      string
-	sessionDir        string
-	host              *plugin.Host
-	commands          []command.Command
-	skills            []skill.Skill
-	allSkills         []skill.Skill
-	skillStore        *skill.Store
-	allSkillStore     *skill.Store
-	hooks             *hook.Runner // session hook runner; nil-safe (no hooks configured)
-	mem               *memory.Set
+	label         string
+	modelRef      string
+	systemPrompt  string
+	sessionDir    string
+	host          *plugin.Host
+	commands      []command.Command
+	skills        []skill.Skill
+	allSkills     []skill.Skill
+	skillStore    *skill.Store
+	allSkillStore *skill.Store
+	hooks         *hook.Runner // session hook runner; nil-safe (no hooks configured)
+	mem           *memory.Set
+	// memMu serializes memory mutations (QuickAdd/SaveDoc/SaveMemory/ForgetMemory/
+	// QueueMemory) so each write+reload+swap is atomic with respect to the others,
+	// WITHOUT holding c.mu across the disk I/O. c.mu is taken only briefly — to read
+	// the snapshot pointer and to swap the reloaded snapshot in — never around a
+	// filesystem walk, so a memory-panel save can't stall an approval or status poll.
+	memMu             sync.Mutex
 	cleanup           func()
 	autoPlan          string
 	reasoningLanguage string
@@ -3253,42 +3259,45 @@ func (c *Controller) Bypass() bool {
 
 // --- memory ---
 //
-// c.mem is treated as an immutable snapshot guarded by c.mu: reads take the lock
-// and return the pointer; writes mutate disk then swap in a freshly discovered
-// snapshot. A turn-tail note is queued for each write so the change applies this
-// session without disturbing the cache-stable system prefix (it folds into the
-// prefix on the next session). All of these are no-ops returning "" when memory
-// is disabled.
+// c.mem is an immutable snapshot: reads take c.mu briefly and return the pointer.
+// Writes are serialized by memMu and do their disk I/O (the doc/store write plus
+// the memory.Load re-discovery) OFF c.mu, taking c.mu only to read the snapshot
+// pointer and to swap the freshly discovered snapshot in — so a write never holds
+// c.mu across a filesystem walk. A turn-tail note is queued for each write so the
+// change applies this session without disturbing the cache-stable system prefix
+// (it folds into the prefix on the next session). All of these are no-ops
+// returning "" when memory is disabled.
 
 // QuickAdd appends a one-line note to the doc-memory file for scope (project
 // REASONIX.md by default) — the write side of "#<note>". Returns the file written.
 func (c *Controller) QuickAdd(scope memory.Scope, note string) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.mem == nil {
+	c.memMu.Lock()
+	defer c.memMu.Unlock()
+	mem := c.memSnapshot()
+	if mem == nil {
 		return "", nil
 	}
-	path := c.mem.DocPath(scope)
+	path := mem.DocPath(scope)
 	if path == "" {
 		return "", fmt.Errorf("no target file for memory scope %q", scope)
 	}
 	if err := memory.AppendDoc(path, note); err != nil {
 		return "", err
 	}
-	c.pendingMemory = append(c.pendingMemory, note)
-	c.refreshMemoryLocked()
+	c.applyMemoryWrite(mem, note)
 	return path, nil
 }
 
 // SaveDoc overwrites a recognized memory doc with body — the save side of the
 // desktop panel's in-place editor. Returns the file written.
 func (c *Controller) SaveDoc(path, body string) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.mem == nil {
+	c.memMu.Lock()
+	defer c.memMu.Unlock()
+	mem := c.memSnapshot()
+	if mem == nil {
 		return "", nil
 	}
-	written, err := c.mem.WriteDoc(path, body)
+	written, err := mem.WriteDoc(path, body)
 	if err != nil {
 		return "", err
 	}
@@ -3296,9 +3305,8 @@ func (c *Controller) SaveDoc(path, body string) (string, error) {
 	// the pre-edit version this session, so handing the model the current text
 	// avoids a stale-guidance gap until the next session re-folds it into the
 	// prefix. Trimmed to a single tail note (drained by Compose), not per-turn.
-	c.pendingMemory = append(c.pendingMemory,
+	c.applyMemoryWrite(mem,
 		"Memory file "+written+" was just edited. Its current contents:\n"+strings.TrimSpace(body))
-	c.refreshMemoryLocked()
 	return written, nil
 }
 
@@ -3306,18 +3314,18 @@ func (c *Controller) SaveDoc(path, body string) (string, error) {
 // snapshot. It is the explicit user-confirmed counterpart to the model-owned
 // remember tool, used by management surfaces that preview a candidate first.
 func (c *Controller) SaveMemory(m memory.Memory) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.mem == nil {
+	c.memMu.Lock()
+	defer c.memMu.Unlock()
+	mem := c.memSnapshot()
+	if mem == nil {
 		return "", nil
 	}
-	path, err := c.mem.Store.Save(m)
+	path, err := mem.Store.Save(m)
 	if err != nil {
 		return "", err
 	}
-	c.pendingMemory = append(c.pendingMemory,
+	c.applyMemoryWrite(mem,
 		"Saved memory \""+m.Name+"\": "+strings.Join(strings.Fields(m.Description), " "))
-	c.refreshMemoryLocked()
 	return path, nil
 }
 
@@ -3327,17 +3335,17 @@ func (c *Controller) SaveMemory(m memory.Memory) (string, error) {
 // until the next session re-folds the index). The file is archived for
 // traceability by Store.Delete.
 func (c *Controller) ForgetMemory(name string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.mem == nil {
+	c.memMu.Lock()
+	defer c.memMu.Unlock()
+	mem := c.memSnapshot()
+	if mem == nil {
 		return nil
 	}
-	if err := c.mem.Store.Delete(name); err != nil {
+	if err := mem.Store.Delete(name); err != nil {
 		return err
 	}
-	c.pendingMemory = append(c.pendingMemory,
+	c.applyMemoryWrite(mem,
 		"Forgot memory \""+name+"\" — disregard its line still shown in the saved-memories index until next session.")
-	c.refreshMemoryLocked()
 	return nil
 }
 
@@ -3346,10 +3354,17 @@ func (c *Controller) ForgetMemory(name string) error {
 // applies this session without touching the cache-stable prefix. It also
 // refreshes the snapshot a memory panel reads.
 func (c *Controller) QueueMemory(note string) {
+	c.memMu.Lock()
+	defer c.memMu.Unlock()
+	if mem := c.memSnapshot(); mem != nil {
+		c.applyMemoryWrite(mem, note)
+		return
+	}
+	// Memory disabled — still queue the turn-tail note; there's no snapshot to
+	// re-discover.
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.pendingMemory = append(c.pendingMemory, note)
-	c.refreshMemoryLocked()
+	c.mu.Unlock()
 }
 
 // Memory returns the loaded memory snapshot (nil when memory is disabled), for
@@ -3361,13 +3376,28 @@ func (c *Controller) Memory() *memory.Set {
 	return c.mem
 }
 
-// refreshMemoryLocked re-discovers memory from disk so a later Memory() reflects
-// a just-applied write. Caller holds c.mu.
-func (c *Controller) refreshMemoryLocked() {
-	if c.mem == nil {
-		return
+// memSnapshot returns the current memory snapshot under a brief c.mu, so callers
+// can do the doc/store write and re-discovery off-lock. Holding memMu keeps the
+// returned pointer current until the matching applyMemoryWrite swaps it in.
+func (c *Controller) memSnapshot() *memory.Set {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.mem
+}
+
+// applyMemoryWrite re-discovers memory from disk (off-lock, the expensive part)
+// then, under a brief c.mu, swaps the fresh snapshot in and queues the turn-tail
+// note so a later Memory() reflects the just-applied write. mem is the snapshot
+// taken at the start of the memMu-serialized write and supplies the discovery
+// roots. Callers hold memMu.
+func (c *Controller) applyMemoryWrite(mem *memory.Set, note string) {
+	reloaded := memory.Load(memory.Options{CWD: mem.CWD, UserDir: mem.UserDir})
+	c.mu.Lock()
+	if note != "" {
+		c.pendingMemory = append(c.pendingMemory, note)
 	}
-	c.mem = memory.Load(memory.Options{CWD: c.mem.CWD, UserDir: c.mem.UserDir})
+	c.mem = reloaded
+	c.mu.Unlock()
 }
 
 // --- approval bridge (agent gate → events) ---
