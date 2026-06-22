@@ -534,6 +534,9 @@ func RenderTOMLProjectDelta(c *Config) string {
 	var b strings.Builder
 
 	// Top-level scalar fields
+	if v := configVersion(c); v != d.ConfigVersion {
+		fmt.Fprintf(&b, "config_version = %d\n", v)
+	}
 	if c.DefaultModel != d.DefaultModel {
 		fmt.Fprintf(&b, "default_model = %q\n", c.DefaultModel)
 	}
