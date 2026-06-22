@@ -14,6 +14,12 @@ func TestTaskWarrantsPlanner(t *testing.T) {
 		{"", false},
 		{"   ", false},
 		{"/init", false},
+		{"1", false},
+		{"2.", false},
+		{"A", false},
+		{"好的", false},
+		{"继续", false},
+		{"选 1", false},
 		{"what does this function do?", false}, // low-risk question → executor only
 		{"why did the test fail", false},
 		{"解释一下这段代码", false},
