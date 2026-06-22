@@ -2006,7 +2006,7 @@ export default function App() {
   // Display items: truncated when an optimistic rewind is pending.
   const displayItems = useMemo(() => {
     if (!rewindState) return state.items;
-    return state.items.slice(0, rewindState.boundaryIdx);
+    return state.items.slice(0, rewindState.boundaryIdx).filter((it) => it.kind !== "compaction");
   }, [state.items, rewindState]);
 
   // send wrapper: commits any pending optimistic rewind before sending.
@@ -2014,12 +2014,12 @@ export default function App() {
     if (activeTab?.readOnly) return;
     const rs = rewindStateRef.current;
     if (rs) {
-      setRewindState(null);
       const ok = await rewind(rs.turn, rs.scope);
       if (!ok) {
-        // Rewind failed: the Go conversation is intact, so the cleared
-        // optimistic state already shows the full transcript. Don't send —
-        // the controller emits a notice with the reason.
+        // Rewind failed: the Go conversation is intact, so the
+        // optimistic state still shows the truncated transcript. Clear it and
+        // don't send — the controller emits a notice with the reason.
+        setRewindState(null);
         return;
       }
       setRewindSignal((v) => v + 1);
@@ -2028,6 +2028,7 @@ export default function App() {
         setDockRefreshKey((v) => v + 1);
         setProjectRevision((v) => v + 1);
       }
+      setRewindState(null);
     }
     send(displayText, submitText);
   }, [activeTab?.readOnly, send, rewind]);
@@ -2047,6 +2048,17 @@ export default function App() {
     // Code-only rewind only affects files — no message truncation,
     // no optimistic UI needed.  Execute immediately.
     if (scope === "code") {
+      rewind(turn, scope).then((ok) => {
+        if (!ok) return;
+        setDockRefreshKey((v) => v + 1);
+        setProjectRevision((v) => v + 1);
+      });
+      return;
+    }
+
+    // Summarize only compresses the conversation log — no files touched,
+    // no optimistic UI needed. Execute immediately like code-only rewind.
+    if (scope === "summ-from" || scope === "summ-upto") {
       rewind(turn, scope).then((ok) => {
         if (!ok) return;
         setDockRefreshKey((v) => v + 1);
