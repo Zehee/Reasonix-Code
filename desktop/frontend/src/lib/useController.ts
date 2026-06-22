@@ -610,7 +610,10 @@ function applyEvent(s: State, e: WireEvent): State {
         return it;
       });
       let items: Item[] = e.err ? [...finalized, { kind: "notice", id: `e${s.seq}`, level: "warn", text: e.err }] : finalized;
-      return { ...s, items, live: undefined, running: false, turnActive: false, pendingPrompt: false, cancelRequested: false, cancellable: false, currentAssistant: undefined, approval: undefined, ask: undefined, seq: s.seq + 1 };
+      // Plan approval can arrive before turn_done on some Wails event paths.
+      // Keep that gate visible instead of clearing the only UI that can answer it.
+      const keepPlanApproval = s.approval?.tool === "exit_plan_mode";
+      return { ...s, items, live: undefined, running: false, turnActive: false, pendingPrompt: false, cancelRequested: false, cancellable: false, currentAssistant: undefined, approval: keepPlanApproval ? s.approval : undefined, ask: undefined, seq: s.seq + 1 };
     }
     default: return s;
   }
@@ -867,6 +870,9 @@ export function useController() {
       cancelRequested: Boolean(tab.cancelRequested),
       cancellable: foregroundRunning,
     });
+    // backend_status reconciliation can clear a live prompt from frontend state.
+    // If the backend is still blocked, ask it to replay the approval/ask event.
+    if (tab.pendingPrompt) replayPendingPromptsForActiveTab(tabId);
     if (needsInitialLoad || missedTurnDone) {
       await loadSessionDataForTab(tabId, missedTurnDone);
       return tabs;
