@@ -1520,10 +1520,6 @@ func (a *App) buildTabControllerWithLoadedSession(tab *WorkspaceTab, loadedSessi
 		return
 	}
 
-	// One-time legacy bridge: lift old ~/.env provider keys into Reasonix's
-	// global .env so every workspace observes the same saved credentials.
-	promoteProviderKeysToCredentials(cfg)
-
 	if tab.sink != nil {
 		tab.sink.setContext(wailsCtx)
 	}

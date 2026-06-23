@@ -275,7 +275,7 @@ func CredentialStored(key string) bool {
 	if key == "" {
 		return false
 	}
-	return envFileHasKey(UserCredentialsPath(), key)
+	return envFileHasValue(UserCredentialsPath(), key)
 }
 
 func credentialCurrentStoreHasKey(key string) bool {
@@ -283,7 +283,7 @@ func credentialCurrentStoreHasKey(key string) bool {
 	if key == "" {
 		return false
 	}
-	return envFileHasKey(UserCredentialsPath(), key)
+	return envFileHasValue(UserCredentialsPath(), key)
 }
 
 func credentialCurrentStoreClearedKey(key string) bool {
@@ -641,20 +641,12 @@ func isCredentialKey(key string) bool {
 	return true
 }
 
-func envFileHasKey(path, key string) bool {
+func envFileHasValue(path, key string) bool {
 	if strings.TrimSpace(path) == "" {
 		return false
 	}
-	lines, err := readCredentialFileLines(path)
-	if err != nil {
-		return false
-	}
-	for _, line := range lines {
-		if k, ok := credentialLineKey(line); ok && k == key {
-			return true
-		}
-	}
-	return false
+	value, ok := envFileValue(path, key)
+	return ok && strings.TrimSpace(value) != ""
 }
 
 func envFileHasClearedKey(path, key string) bool {

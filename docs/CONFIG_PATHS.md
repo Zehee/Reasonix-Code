@@ -108,10 +108,14 @@ Rules:
 For provider requests, Reasonix resolves only this global `.env`. Project `.env`
 files, home `.env` files, inherited shell environment variables, the old
 `credentials` file, and the OS keyring do not act as runtime provider-key
-fallbacks. The old `credentials` file and old keyring entries are read only as
-non-destructive migration sources when the new global `.env` is missing a key.
-Project `.env` files are still loaded for non-provider expansion such as
-`${VAR}` references in MCP/plugin env, headers, URLs, commands, and args.
+fallbacks. Project `.env`, home `.env`, and inherited shell environment values
+are not imported into the global credentials file. The old `credentials` file
+and old keyring entries are read only as non-destructive migration sources when
+the new global `.env` is missing a key. Project `.env` files are still read as
+workspace-scoped, non-provider expansion sources for `${VAR}` references in
+MCP/plugin env, headers, URLs, commands, and args; those values are not written
+into the process environment, and Reasonix control variables such as
+`REASONIX_HOME`, `REASONIX_STATE_HOME`, and `XDG_CONFIG_HOME` are ignored there.
 
 Caches remain in the OS cache directory, for example
 `~/Library/Caches/reasonix` on macOS, `$XDG_CACHE_HOME/reasonix` or

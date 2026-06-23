@@ -6,10 +6,7 @@ import (
 	"testing"
 )
 
-// TestLoadDotEnvReadsProjectEnvForExpansionButIgnoresHomeEnv proves workspace
-// .env values remain available for plugin/MCP expansion, while home .env is not
-// part of Reasonix's provider-key path.
-func TestLoadDotEnvReadsProjectEnvForExpansionButIgnoresHomeEnv(t *testing.T) {
+func TestLoadDotEnvDoesNotImportProjectOrHomeEnv(t *testing.T) {
 	cwd := t.TempDir()
 	home := t.TempDir()
 
@@ -35,14 +32,14 @@ func TestLoadDotEnvReadsProjectEnvForExpansionButIgnoresHomeEnv(t *testing.T) {
 
 	loadDotEnv()
 
-	if got := os.Getenv("KEY_CWD"); got != "from_cwd" {
-		t.Errorf("project .env key was not loaded for expansion: KEY_CWD=%q", got)
+	if got := os.Getenv("KEY_CWD"); got != "" {
+		t.Errorf("project .env key was imported into process env: KEY_CWD=%q", got)
 	}
 	if got := os.Getenv("KEY_HOME"); got != "" {
 		t.Errorf("home .env key was loaded: KEY_HOME=%q", got)
 	}
-	if got := os.Getenv("KEY_SHARED"); got != "cwd_wins" {
-		t.Errorf("project .env shared key = %q, want cwd_wins", got)
+	if got := os.Getenv("KEY_SHARED"); got != "" {
+		t.Errorf("project/home .env shared key was imported: KEY_SHARED=%q", got)
 	}
 }
 
@@ -126,6 +123,118 @@ func TestLoadForRootExpandsPluginAuthFromProjectDotEnv(t *testing.T) {
 	got := cfg.Plugins[0].ExpandedPlugin().Headers["Authorization"]
 	if got != "Bearer project-token" {
 		t.Fatalf("expanded auth header = %q, want project token", got)
+	}
+	if got := os.Getenv("STRIPE_KEY"); got != "" {
+		t.Fatalf("project .env leaked into process env: STRIPE_KEY=%q", got)
+	}
+}
+
+func TestLoadForRootScopesProjectDotEnvPerWorkspace(t *testing.T) {
+	home := t.TempDir()
+	projectA := t.TempDir()
+	projectB := t.TempDir()
+
+	t.Setenv("HOME", home)
+	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("AppData", filepath.Join(home, "AppData"))
+	t.Setenv("SHARED_TOKEN", "")
+	os.Unsetenv("SHARED_TOKEN")
+
+	for _, tc := range []struct {
+		root  string
+		value string
+	}{
+		{projectA, "token-a"},
+		{projectB, "token-b"},
+	} {
+		if err := os.WriteFile(filepath.Join(tc.root, ".env"), []byte("SHARED_TOKEN="+tc.value+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tc.root, ".mcp.json"), []byte(`{
+  "mcpServers": {
+    "svc": {
+      "type": "http",
+      "url": "https://mcp.example.test",
+      "headers": { "Authorization": "Bearer ${SHARED_TOKEN}" }
+    }
+  }
+}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cfgA, err := LoadForRoot(projectA)
+	if err != nil {
+		t.Fatalf("LoadForRoot A: %v", err)
+	}
+	cfgB, err := LoadForRoot(projectB)
+	if err != nil {
+		t.Fatalf("LoadForRoot B: %v", err)
+	}
+	if got := cfgA.Plugins[0].ExpandedPlugin().Headers["Authorization"]; got != "Bearer token-a" {
+		t.Fatalf("project A auth = %q, want token-a", got)
+	}
+	if got := cfgB.Plugins[0].ExpandedPlugin().Headers["Authorization"]; got != "Bearer token-b" {
+		t.Fatalf("project B auth = %q, want token-b", got)
+	}
+	if got := os.Getenv("SHARED_TOKEN"); got != "" {
+		t.Fatalf("project token leaked into process env: %q", got)
+	}
+}
+
+func TestLoadForRootFiltersProjectDotEnvControlVars(t *testing.T) {
+	home := t.TempDir()
+	project := t.TempDir()
+	redirect := filepath.Join(project, "state")
+
+	t.Setenv("HOME", home)
+	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("AppData", filepath.Join(home, "AppData"))
+	t.Setenv("REASONIX_STATE_HOME", "")
+	os.Unsetenv("REASONIX_STATE_HOME")
+
+	wantCred := UserCredentialsPath()
+	if wantCred == "" {
+		t.Skip("user credentials path unavailable")
+	}
+	if err := os.WriteFile(filepath.Join(project, ".env"), []byte("REASONIX_STATE_HOME="+redirect+"\nPLUGIN_TOKEN=project-token\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".mcp.json"), []byte(`{
+  "mcpServers": {
+    "svc": {
+      "type": "http",
+      "url": "https://mcp.example.test",
+      "headers": {
+        "Authorization": "Bearer ${PLUGIN_TOKEN}",
+        "State": "${REASONIX_STATE_HOME:-default-state}"
+      }
+    }
+  }
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadForRoot(project)
+	if err != nil {
+		t.Fatalf("LoadForRoot: %v", err)
+	}
+	headers := cfg.Plugins[0].ExpandedPlugin().Headers
+	if got := headers["Authorization"]; got != "Bearer project-token" {
+		t.Fatalf("plugin token = %q, want project token", got)
+	}
+	if got := headers["State"]; got != "default-state" {
+		t.Fatalf("control var expansion = %q, want default-state", got)
+	}
+	if got := UserCredentialsPath(); got != wantCred {
+		t.Fatalf("project .env redirected credentials path: %q want %q", got, wantCred)
+	}
+	if got := os.Getenv("REASONIX_STATE_HOME"); got != "" {
+		t.Fatalf("project control var leaked into process env: %q", got)
 	}
 }
 
