@@ -43,6 +43,41 @@ export function initialWorkspaceSplitTreeWidth({
   return clampWorkspaceSplitTreeWidth({ width: target, panelWidth, railWidth, treeMinWidth, previewMinWidth });
 }
 
+export type WorkspaceSplitTreeWidthMode = "even" | "manual";
+
+export function resolveWorkspaceSplitTreeWidth({
+  mode,
+  currentTreeWidth,
+  panelWidth,
+  railWidth = 0,
+  treeMinWidth,
+  previewMinWidth,
+}: {
+  mode: WorkspaceSplitTreeWidthMode;
+  currentTreeWidth: number;
+  panelWidth?: number;
+  railWidth?: number;
+  treeMinWidth: number;
+  previewMinWidth: number;
+}): number {
+  if (mode === "even") {
+    return initialWorkspaceSplitTreeWidth({
+      panelWidth,
+      railWidth,
+      savedTreeWidth: null,
+      treeMinWidth,
+      previewMinWidth,
+    });
+  }
+  return clampWorkspaceSplitTreeWidth({
+    width: currentTreeWidth,
+    panelWidth,
+    railWidth,
+    treeMinWidth,
+    previewMinWidth,
+  });
+}
+
 export function workspaceSplitTreeWidthFromPointer({
   clientX,
   panelLeft,

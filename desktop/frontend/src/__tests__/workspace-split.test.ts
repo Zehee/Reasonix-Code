@@ -1,6 +1,10 @@
 // Run: tsx src/__tests__/workspace-split.test.ts
 
-import { initialWorkspaceSplitTreeWidth, workspaceSplitTreeWidthFromPointer } from "../lib/workspaceSplit";
+import {
+  initialWorkspaceSplitTreeWidth,
+  resolveWorkspaceSplitTreeWidth,
+  workspaceSplitTreeWidthFromPointer,
+} from "../lib/workspaceSplit";
 import { resolveWorkspacePanelWidth } from "../lib/workspaceLayout";
 
 let passed = 0;
@@ -70,6 +74,32 @@ eq(
   }),
   476,
   "tree resize pointer clamps against the preview minimum after reserving the rail",
+);
+
+eq(
+  resolveWorkspaceSplitTreeWidth({
+    mode: "even",
+    currentTreeWidth: 140,
+    panelWidth: 660,
+    railWidth: TREE_RAIL_WIDTH,
+    treeMinWidth: TREE_MIN_WIDTH,
+    previewMinWidth: PREVIEW_MIN_WIDTH,
+  }),
+  308,
+  "default split recomputes evenly after the parent preview width applies",
+);
+
+eq(
+  resolveWorkspaceSplitTreeWidth({
+    mode: "manual",
+    currentTreeWidth: 256,
+    panelWidth: 660,
+    railWidth: TREE_RAIL_WIDTH,
+    treeMinWidth: TREE_MIN_WIDTH,
+    previewMinWidth: PREVIEW_MIN_WIDTH,
+  }),
+  256,
+  "manual split width is preserved when the parent width changes",
 );
 
 eq(

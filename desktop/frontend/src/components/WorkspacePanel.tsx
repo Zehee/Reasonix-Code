@@ -29,6 +29,8 @@ import { useT } from "../lib/i18n";
 import {
   clampWorkspaceSplitTreeWidth,
   initialWorkspaceSplitTreeWidth,
+  resolveWorkspaceSplitTreeWidth,
+  type WorkspaceSplitTreeWidthMode,
   workspaceSplitTreeWidthFromPointer,
 } from "../lib/workspaceSplit";
 import type { DirEntry, FilePreview, GitCommitView, GitCommitDetailView, WorkspaceChangeView } from "../lib/types";
@@ -250,6 +252,7 @@ export function WorkspacePanel({
   const [scopedChangeRows, setScopedChangeRows] = useState<WorkspaceChangeListEntry[] | null>(null);
   const [treeVisible, setTreeVisible] = useState(true);
   const [treeWidth, setTreeWidth] = useState(WORKSPACE_TREE_DEFAULT_WIDTH);
+  const [treeWidthMode, setTreeWidthMode] = useState<WorkspaceSplitTreeWidthMode>("manual");
   const [treeResizing, setTreeResizing] = useState(false);
   const [recentOpen, setRecentOpen] = useState(false);
   const lastPreviewModeActiveRef = useRef<boolean | null>(null);
@@ -362,6 +365,7 @@ export function WorkspacePanel({
         treeMinWidth: WORKSPACE_TREE_MIN_WIDTH,
         previewMinWidth: WORKSPACE_PREVIEW_MIN_WIDTH,
       }));
+      setTreeWidthMode("even");
       setSelectedPath(path);
       setScopedFilePaths((current) => {
         if (current) dismissedFileListRequestIdRef.current = lastFileListRequestIdRef.current;
@@ -762,11 +766,6 @@ export function WorkspacePanel({
 
   const searchPlaceholder = t(scopedFilePaths ? "workspace.filterReferencedFiles" : changedMode ? "workspace.filterChanges" : "workspace.filter");
 
-  const effectiveTreeWidth = useMemo(() => clampWorkspaceTreeWidth(treeWidth, panelWidth), [panelWidth, treeWidth]);
-  const maxTreeWidthForPanel = useMemo(
-    () => Math.max(WORKSPACE_TREE_MIN_WIDTH, (panelWidth ?? WORKSPACE_DUAL_PANEL_TARGET_WIDTH) - WORKSPACE_TREE_RAIL_WIDTH - WORKSPACE_PREVIEW_MIN_WIDTH),
-    [panelWidth],
-  );
   const filePreviewActive = openTabs.length > 0 || selectedPath !== null;
   const changeDetailActive = changedMode && expandedCommit !== null;
   const previewVisible = changedMode || filePreviewActive;
@@ -775,6 +774,22 @@ export function WorkspacePanel({
   const previewModeActive = open && (filePreviewActive || changeDetailActive);
   const embeddedDockMode = !showViewTabs;
   const showFileTools = showViewTabs || filePreviewActive;
+  const effectiveTreeWidth = useMemo(
+    () =>
+      resolveWorkspaceSplitTreeWidth({
+        mode: treeWidthMode,
+        currentTreeWidth: treeWidth,
+        panelWidth,
+        railWidth: WORKSPACE_TREE_RAIL_WIDTH,
+        treeMinWidth: WORKSPACE_TREE_MIN_WIDTH,
+        previewMinWidth: WORKSPACE_PREVIEW_MIN_WIDTH,
+      }),
+    [panelWidth, treeWidth, treeWidthMode],
+  );
+  const maxTreeWidthForPanel = useMemo(
+    () => Math.max(WORKSPACE_TREE_MIN_WIDTH, (panelWidth ?? WORKSPACE_DUAL_PANEL_TARGET_WIDTH) - WORKSPACE_TREE_RAIL_WIDTH - WORKSPACE_PREVIEW_MIN_WIDTH),
+    [panelWidth],
+  );
 
   useEffect(() => {
     if (!selectedPath || !actualTreeVisible) return;
@@ -819,6 +834,7 @@ export function WorkspacePanel({
       treeMinWidth: WORKSPACE_TREE_MIN_WIDTH,
       previewMinWidth: WORKSPACE_PREVIEW_MIN_WIDTH,
     }));
+    setTreeWidthMode("even");
     setTreeVisible(true);
   }, [panelWidth]);
 
@@ -850,6 +866,7 @@ export function WorkspacePanel({
     (width: number) => {
       const next = clampWorkspaceTreeWidth(width, panelWidth);
       setTreeWidth(next);
+      setTreeWidthMode("manual");
     },
     [panelWidth],
   );
@@ -860,6 +877,7 @@ export function WorkspacePanel({
       const rect = panelRef.current?.getBoundingClientRect();
       if (!rect) return;
       event.preventDefault();
+      setTreeWidthMode("manual");
       setTreeResizing(true);
       let nextWidth = effectiveTreeWidth;
       const onMove = (moveEvent: PointerEvent) => {
