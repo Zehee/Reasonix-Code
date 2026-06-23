@@ -9,17 +9,6 @@ import (
 	"reasonix/internal/fileutil"
 )
 
-// credentialsPath is the reasonix-owned global .env used for provider keys.
-func credentialsPath() string {
-	if p := config.UserCredentialsPath(); p != "" {
-		return p
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".env")
-	}
-	return ".env"
-}
-
 // upsertDotEnv stores KEY=value in Reasonix's global .env and applies it to the
 // running process so a rebuild picks it up without a restart.
 func upsertDotEnv(key, value string) error {
