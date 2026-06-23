@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/BurntSushi/toml"
-	"github.com/zalando/go-keyring"
 
 	"reasonix/internal/fileutil"
 )
@@ -284,15 +283,6 @@ func credentialCurrentStoreHasKey(key string) bool {
 		return false
 	}
 	return envFileHasKey(UserCredentialsPath(), key)
-}
-
-func legacyKeyringCredentialValue(key string) (string, bool) {
-	key = strings.TrimSpace(key)
-	if key == "" {
-		return "", false
-	}
-	value, err := keyring.Get(credentialsKeyringService, key)
-	return value, err == nil && value != ""
 }
 
 func CredentialsTargetDescription() string {
