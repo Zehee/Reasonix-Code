@@ -5968,6 +5968,23 @@ a[href] {
   background: var(--accent);
   animation: pulse 1.2s ease-in-out infinite;
 }
+.statusbar__group--hydrate {
+  max-width: 190px;
+  overflow: hidden;
+}
+.statusbar__hydrate {
+  color: var(--accent);
+  max-width: 190px;
+}
+.statusbar__hydrate svg {
+  flex: 0 0 auto;
+  animation: spin 1s linear infinite;
+}
+.statusbar__hydrate span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 @keyframes pulse {
   50% {
     opacity: 0.35;
