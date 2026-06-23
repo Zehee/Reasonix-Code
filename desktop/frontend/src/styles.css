@@ -6879,13 +6879,13 @@ a[href] {
   border-left: none;
 }
 .workspace-panel--tree-hidden {
-  grid-template-columns: var(--workspace-tree-rail-width) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 .workspace-panel--tree-hidden .workspace-files {
   display: none;
 }
 .workspace-panel--tree-hidden .workspace-preview {
-  grid-column: 2;
+  grid-column: 1;
 }
 .workspace-panel--detail-only {
   grid-template-columns: minmax(0, 1fr);

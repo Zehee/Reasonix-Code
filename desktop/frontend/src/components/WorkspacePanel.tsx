@@ -26,7 +26,8 @@ import {
 } from "lucide-react";
 import { app } from "../lib/bridge";
 import { useT } from "../lib/i18n";
-import { loadLayoutSize, saveLayoutSize } from "../lib/layoutPreferences";
+import { loadOptionalLayoutSize, saveLayoutSize } from "../lib/layoutPreferences";
+import { clampWorkspaceSplitTreeWidth, initialWorkspaceSplitTreeWidth, workspaceSplitMinWidth } from "../lib/workspaceSplit";
 import type { DirEntry, FilePreview, GitCommitView, GitCommitDetailView, WorkspaceChangeView } from "../lib/types";
 import { formatWorkspaceReference, WORKSPACE_REF_DRAG_TYPE } from "../lib/workspaceDrag";
 import { cleanGitDiff } from "../lib/diff";
@@ -39,10 +40,9 @@ import { AnchoredPopover } from "./AnchoredPopover";
 
 const WORKSPACE_TREE_MIN_WIDTH = 300;
 const WORKSPACE_TREE_DEFAULT_WIDTH = 300;
-const WORKSPACE_TREE_MAX_WIDTH = 340;
-const WORKSPACE_PREVIEW_MIN_WIDTH = 360;
+const WORKSPACE_PREVIEW_MIN_WIDTH = 300;
 const WORKSPACE_PREVIEW_TARGET_WIDTH = 360;
-const WORKSPACE_DUAL_PANEL_MIN_WIDTH = WORKSPACE_TREE_MIN_WIDTH + WORKSPACE_PREVIEW_MIN_WIDTH;
+export const WORKSPACE_DUAL_PANEL_MIN_WIDTH = workspaceSplitMinWidth(WORKSPACE_TREE_MIN_WIDTH, WORKSPACE_PREVIEW_MIN_WIDTH);
 const WORKSPACE_DUAL_PANEL_TARGET_WIDTH = WORKSPACE_TREE_DEFAULT_WIDTH + WORKSPACE_PREVIEW_TARGET_WIDTH;
 const WORKSPACE_CONTEXT_MENU_FILE_HEIGHT = 136;
 const WORKSPACE_CONTEXT_MENU_REF_HEIGHT = 92;
@@ -55,16 +55,16 @@ type WorkspaceChangeListEntry = { key: string; path: string; meta: string; time:
 type WorkspaceChangeListRequest = { id: number; changes: WorkspaceChangeListEntry[] };
 
 function clampWorkspaceTreeWidth(width: number, panelWidth?: number): number {
-  const maxForPanel =
-    typeof panelWidth === "number" && Number.isFinite(panelWidth)
-      ? Math.max(WORKSPACE_TREE_MIN_WIDTH, panelWidth - WORKSPACE_PREVIEW_MIN_WIDTH)
-      : WORKSPACE_TREE_MAX_WIDTH;
-  const max = Math.min(WORKSPACE_TREE_MAX_WIDTH, maxForPanel);
-  return Math.min(max, Math.max(WORKSPACE_TREE_MIN_WIDTH, Math.round(width)));
+  return clampWorkspaceSplitTreeWidth({
+    width,
+    panelWidth,
+    treeMinWidth: WORKSPACE_TREE_MIN_WIDTH,
+    previewMinWidth: WORKSPACE_PREVIEW_MIN_WIDTH,
+  });
 }
 
-function loadWorkspaceTreeWidth(): number {
-  return loadLayoutSize("workspaceTreeWidth", WORKSPACE_TREE_DEFAULT_WIDTH, clampWorkspaceTreeWidth);
+function loadWorkspaceTreeWidthPreference(): number | null {
+  return loadOptionalLayoutSize("workspaceTreeWidth", clampWorkspaceTreeWidth);
 }
 
 function saveWorkspaceTreeWidth(width: number): void {
@@ -200,6 +200,7 @@ export function WorkspacePanel({
   onClose,
   onToggleMaximized,
   onPreviewModeChange,
+  onFilesSplitModeChange,
   onAddToChat,
   onRequestPanelWidth,
   refreshKey,
@@ -218,6 +219,7 @@ export function WorkspacePanel({
   onClose: () => void;
   onToggleMaximized: () => void;
   onPreviewModeChange?: (active: boolean) => void;
+  onFilesSplitModeChange?: (active: boolean) => void;
   onAddToChat?: (text: string) => void;
   onRequestPanelWidth?: (width: number) => void;
   refreshKey?: number;
@@ -253,7 +255,8 @@ export function WorkspacePanel({
   const [scopedFilePaths, setScopedFilePaths] = useState<string[] | null>(null);
   const [scopedChangeRows, setScopedChangeRows] = useState<WorkspaceChangeListEntry[] | null>(null);
   const [treeVisible, setTreeVisible] = useState(true);
-  const [treeWidth, setTreeWidth] = useState(loadWorkspaceTreeWidth);
+  const [treeWidthPreference, setTreeWidthPreference] = useState<number | null>(loadWorkspaceTreeWidthPreference);
+  const [treeWidth, setTreeWidth] = useState(() => treeWidthPreference ?? WORKSPACE_TREE_DEFAULT_WIDTH);
   const [treeResizing, setTreeResizing] = useState(false);
   const [recentOpen, setRecentOpen] = useState(false);
   const lastPreviewModeActiveRef = useRef<boolean | null>(null);
@@ -271,6 +274,7 @@ export function WorkspacePanel({
   const commitDetailRequestIdRef = useRef(0);
   const recentAnchorRef = useRef<HTMLButtonElement>(null);
   const openDirsRef = useRef(openDirs);
+  const lastFilesSplitModeActiveRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     openDirsRef.current = openDirs;
@@ -679,30 +683,6 @@ export function WorkspacePanel({
     [entriesByDir, loadDir],
   );
 
-  const closeTab = (path: string) => {
-    if (lastRevealRequestIdRef.current === revealPathRequest?.id && revealPathRequest.path === path) {
-      dismissedRevealRequestIdRef.current = revealPathRequest.id;
-    }
-    if (lastChangeRevealRequestIdRef.current === changeRevealRequest?.id && changeRevealRequest.path === path) {
-      dismissedChangeRevealRequestIdRef.current = changeRevealRequest.id;
-    }
-    setOpenTabs((tabs) => {
-      const next = tabs.filter((tab) => tab !== path);
-      if (selectedPath === path) {
-        const replacement = next[next.length - 1] ?? null;
-        setSelectedPath(replacement);
-        if (!replacement) {
-          setPreview(null);
-          setTreeVisible(true);
-        }
-        setSelectionMenu(null);
-        setTreeMenu(null);
-        setRecentOpen(false);
-      }
-      return next;
-    });
-  };
-
   const breadcrumbDirs = selectedPath ? parentDirs(selectedPath) : [""];
   const pathParts = selectedPath?.split("/").filter(Boolean) ?? [];
   const sessionChanges = useMemo(
@@ -785,17 +765,28 @@ export function WorkspacePanel({
   const searchPlaceholder = t(scopedFilePaths ? "workspace.filterReferencedFiles" : changedMode ? "workspace.filterChanges" : "workspace.filter");
 
   const effectiveTreeWidth = useMemo(() => clampWorkspaceTreeWidth(treeWidth, panelWidth), [panelWidth, treeWidth]);
+  const maxTreeWidthForPanel = useMemo(
+    () => Math.max(WORKSPACE_TREE_MIN_WIDTH, (panelWidth ?? WORKSPACE_DUAL_PANEL_TARGET_WIDTH) - WORKSPACE_PREVIEW_MIN_WIDTH),
+    [panelWidth],
+  );
   const filePreviewActive = openTabs.length > 0 || selectedPath !== null;
   const changeDetailActive = changedMode && expandedCommit !== null;
   const previewVisible = changedMode || filePreviewActive;
-  const selectedFileVisible = selectedPath !== null;
-  const compactTreeRail =
-    treeVisible && selectedFileVisible && panelWidth !== undefined && panelWidth < WORKSPACE_DUAL_PANEL_MIN_WIDTH;
-  const actualTreeVisible = changedMode ? false : treeVisible && !compactTreeRail;
-  const showTreeRail = previewVisible && (!actualTreeVisible || compactTreeRail) && !changedMode;
+  const actualTreeVisible = changedMode ? false : treeVisible;
   const previewModeActive = open && (filePreviewActive || changeDetailActive);
+  const filesSplitModeActive = open && !changedMode && previewVisible && actualTreeVisible;
   const embeddedDockMode = !showViewTabs;
   const showFileTools = showViewTabs || filePreviewActive;
+
+  useEffect(() => {
+    if (!filesSplitModeActive || treeWidthPreference !== null) return;
+    setTreeWidth(initialWorkspaceSplitTreeWidth({
+      panelWidth,
+      savedTreeWidth: null,
+      treeMinWidth: WORKSPACE_TREE_MIN_WIDTH,
+      previewMinWidth: WORKSPACE_PREVIEW_MIN_WIDTH,
+    }));
+  }, [filesSplitModeActive, panelWidth, treeWidthPreference]);
 
   useEffect(() => {
     if (!selectedPath || !actualTreeVisible) return;
@@ -809,9 +800,9 @@ export function WorkspacePanel({
     () =>
       ({
         "--workspace-tree-width": `${effectiveTreeWidth}px`,
-        "--workspace-preview-min-width": compactTreeRail ? "0px" : `${WORKSPACE_PREVIEW_MIN_WIDTH}px`,
+        "--workspace-preview-min-width": `${WORKSPACE_PREVIEW_MIN_WIDTH}px`,
       }) as CSSProperties,
-    [compactTreeRail, effectiveTreeWidth],
+    [effectiveTreeWidth],
   );
 
   useEffect(() => {
@@ -819,6 +810,12 @@ export function WorkspacePanel({
     lastPreviewModeActiveRef.current = previewModeActive;
     onPreviewModeChange?.(previewModeActive);
   }, [onPreviewModeChange, previewModeActive]);
+
+  useEffect(() => {
+    if (lastFilesSplitModeActiveRef.current === filesSplitModeActive) return;
+    lastFilesSplitModeActiveRef.current = filesSplitModeActive;
+    onFilesSplitModeChange?.(filesSplitModeActive);
+  }, [filesSplitModeActive, onFilesSplitModeChange]);
 
   useEffect(() => {
     if (open && !treeVisible && !previewVisible) onClose();
@@ -832,10 +829,27 @@ export function WorkspacePanel({
     }
   }, [onClose, previewVisible]);
 
+  const closePreviewArea = useCallback(() => {
+    if (lastRevealRequestIdRef.current === revealPathRequest?.id) {
+      dismissedRevealRequestIdRef.current = revealPathRequest.id;
+    }
+    if (lastChangeRevealRequestIdRef.current === changeRevealRequest?.id) {
+      dismissedChangeRevealRequestIdRef.current = changeRevealRequest.id;
+    }
+    setSelectedPath(null);
+    setOpenTabs([]);
+    setPreview(null);
+    setSelectionMenu(null);
+    setTreeMenu(null);
+    setRecentOpen(false);
+    setTreeVisible(true);
+  }, [changeRevealRequest, revealPathRequest]);
+
   const setSavedTreeWidth = useCallback(
     (width: number) => {
       const next = clampWorkspaceTreeWidth(width, panelWidth);
       setTreeWidth(next);
+      setTreeWidthPreference(next);
       saveWorkspaceTreeWidth(next);
     },
     [panelWidth],
@@ -855,6 +869,7 @@ export function WorkspacePanel({
       };
       const onDone = () => {
         setTreeWidth(nextWidth);
+        setTreeWidthPreference(nextWidth);
         saveWorkspaceTreeWidth(nextWidth);
         setTreeResizing(false);
         window.removeEventListener("pointermove", onMove);
@@ -882,10 +897,10 @@ export function WorkspacePanel({
         setSavedTreeWidth(WORKSPACE_TREE_MIN_WIDTH);
       } else if (event.key === "End") {
         event.preventDefault();
-        setSavedTreeWidth(WORKSPACE_TREE_MAX_WIDTH);
+        setSavedTreeWidth(maxTreeWidthForPanel);
       }
     },
-    [effectiveTreeWidth, setSavedTreeWidth],
+    [effectiveTreeWidth, maxTreeWidthForPanel, setSavedTreeWidth],
   );
 
   if (!open) return null;
@@ -1064,7 +1079,7 @@ export function WorkspacePanel({
   return (
     <aside
       ref={panelRef}
-      className={`workspace-panel${embeddedDockMode ? " workspace-panel--embedded" : ""}${changedMode ? " workspace-panel--detail-only" : ""}${previewVisible && actualTreeVisible ? " workspace-panel--split-preview" : ""}${compactTreeRail ? " workspace-panel--compact-rail" : ""}${actualTreeVisible ? "" : " workspace-panel--tree-hidden"}${previewVisible ? "" : " workspace-panel--preview-hidden"}${treeResizing ? " workspace-panel--tree-resizing" : ""}`}
+      className={`workspace-panel${embeddedDockMode ? " workspace-panel--embedded" : ""}${changedMode ? " workspace-panel--detail-only" : ""}${previewVisible && actualTreeVisible ? " workspace-panel--split-preview" : ""}${actualTreeVisible ? "" : " workspace-panel--tree-hidden"}${previewVisible ? "" : " workspace-panel--preview-hidden"}${treeResizing ? " workspace-panel--tree-resizing" : ""}`}
       aria-label={t("workspace.title")}
       style={panelStyle}
     >
@@ -1097,6 +1112,21 @@ export function WorkspacePanel({
           </div>
 
           <div className="workspace-preview__window-actions">
+            {!changedMode && !actualTreeVisible && (
+              <Tooltip label={t("workspace.showTree")}>
+                <button
+                  className="workspace-iconbtn workspace-iconbtn--on"
+                  type="button"
+                  aria-label={t("workspace.showTree")}
+                  onClick={() => {
+                    setTreeVisible(true);
+                    onRequestPanelWidth?.(WORKSPACE_DUAL_PANEL_TARGET_WIDTH);
+                  }}
+                >
+                  <FolderTree size={15} />
+                </button>
+              </Tooltip>
+            )}
             <Tooltip label={maximized ? t("workspace.restore") : t("workspace.maximize")}>
               <button className="workspace-iconbtn" onClick={onToggleMaximized}>
                 {maximized ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
@@ -1104,7 +1134,7 @@ export function WorkspacePanel({
             </Tooltip>
             {selectedPath && (
               <Tooltip label={t("workspace.closePreview")}>
-                <button className="workspace-iconbtn" onClick={() => closeTab(selectedPath)}>
+                <button className="workspace-iconbtn" onClick={closePreviewArea}>
                   <X size={15} />
                 </button>
               </Tooltip>
@@ -1396,24 +1426,6 @@ export function WorkspacePanel({
         </div>
       </section>}
 
-      {showTreeRail && (
-        <section className="workspace-tree-rail" aria-label={t("workspace.showTree")}>
-          <Tooltip label={t("workspace.showTree")} side="right">
-            <button
-              className="workspace-tree-reveal workspace-iconbtn workspace-iconbtn--on"
-              type="button"
-              aria-label={t("workspace.showTree")}
-              onClick={() => {
-                setTreeVisible(true);
-                onRequestPanelWidth?.(WORKSPACE_DUAL_PANEL_TARGET_WIDTH);
-              }}
-            >
-              <FolderTree size={15} />
-            </button>
-          </Tooltip>
-        </section>
-      )}
-
       {actualTreeVisible && previewVisible && (
         <button
           className="workspace-tree-resizer"
@@ -1422,7 +1434,7 @@ export function WorkspacePanel({
           aria-orientation="vertical"
           aria-label={t("workspace.resizeTree")}
           aria-valuemin={WORKSPACE_TREE_MIN_WIDTH}
-          aria-valuemax={WORKSPACE_TREE_MAX_WIDTH}
+          aria-valuemax={maxTreeWidthForPanel}
           aria-valuenow={effectiveTreeWidth}
           onPointerDown={startTreeResize}
           onKeyDown={resizeTreeWithKeyboard}

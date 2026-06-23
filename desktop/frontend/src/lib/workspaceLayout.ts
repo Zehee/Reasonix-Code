@@ -20,15 +20,19 @@ export function resolveWorkspacePanelWidth({
   preferredWidth,
   minWidth,
   availableWidth,
+  enforceMinWidth = false,
 }: {
   open: boolean;
   maximized: boolean;
   preferredWidth: number;
   minWidth: number;
   availableWidth: number;
+  enforceMinWidth?: boolean;
 }): number {
   if (!open || maximized) return preferredWidth;
-  return Math.min(Math.max(minWidth, preferredWidth), Math.max(0, availableWidth));
+  const available = Math.max(0, availableWidth);
+  const target = Math.min(Math.max(minWidth, preferredWidth), available);
+  return enforceMinWidth ? Math.max(minWidth, target) : target;
 }
 
 export function workspacePanelAriaMinWidth(minWidth: number, renderedWidth: number): number {
