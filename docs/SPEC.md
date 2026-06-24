@@ -470,6 +470,8 @@ max_steps         = 0    # user/global only; executor tool-call rounds; 0 = no l
 planner_max_steps = 0    # user/global only; planner read-only tool-call rounds; 0 = no limit
 temperature       = 0.0
 reasoning_language = "auto"       # visible reasoning text: auto|zh|en
+# plan_mode_allowed_tools = ["custom_reader"]   # extra read-only declarations for custom tools;
+#                                                # cannot unlock known blocked tools or unsafe bash
 # planner_model = "deepseek-pro"   # optional: two-model collaboration (low-frequency planner)
 # subagent_model = "deepseek-pro"   # optional default for runAs=subagent skills
 # subagent_models = { review = "deepseek-pro", security_review = "deepseek-pro" }

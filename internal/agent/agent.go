@@ -528,11 +528,8 @@ type Options struct {
 	// user-turn context. Empty/auto injects nothing.
 	ReasoningLanguage string
 
-	// PlanModeAllowedTools names tools that bypass the plan-mode read-only gate.
-	// When a tool named here is called while planMode is true, it executes
-	// without the "plan mode is read-only" block — even if its ReadOnly contract
-	// returns false. Use sparingly; the caller is responsible for ensuring the
-	// tool invocation is safe in a read-only context (e.g. bash for git status).
+	// PlanModeAllowedTools names extra custom tools the plan-mode policy may treat
+	// as read-only. It cannot unlock known blocked tools or unsafe bash commands.
 	PlanModeAllowedTools []string
 }
 

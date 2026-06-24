@@ -1252,6 +1252,51 @@ model = "x"
 	}
 }
 
+func TestBuildWarnsIgnoredPlanModeAllowedTools(t *testing.T) {
+	isolateConfigHome(t)
+	dir := robustTempDir(t)
+	t.Chdir(dir)
+
+	registerBootTokenProfileTestProvider()
+	prov := testutil.NewMock("plan-mode-allowed-tools", testutil.Turn{Text: "done"})
+	setBootTokenProfileTestProvider(t, prov)
+	writeFile(t, dir, "reasonix.toml", `
+default_model = "test-model"
+
+[agent]
+system_prompt = "BASE"
+plan_mode_allowed_tools = ["bash", "custom_reader"]
+
+[[providers]]
+name = "test-model"
+kind = "boot-token-profile-test"
+model = "x"
+`)
+
+	var notices []event.Event
+	sink := event.FuncSink(func(e event.Event) {
+		if e.Kind == event.Notice {
+			notices = append(notices, e)
+		}
+	})
+
+	ctrl, err := Build(context.Background(), Options{Sink: sink})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	defer ctrl.Close()
+
+	for _, notice := range notices {
+		if notice.Level == event.LevelWarn && strings.Contains(notice.Text, "plan_mode_allowed_tools") && strings.Contains(notice.Text, "bash") {
+			if strings.Contains(notice.Text, "custom_reader") {
+				t.Fatalf("warning should name ignored entries only, got %q", notice.Text)
+			}
+			return
+		}
+	}
+	t.Fatalf("missing ignored plan_mode_allowed_tools warning; got %+v", notices)
+}
+
 func TestBuildTokenEconomyWebFetchConnectorHonorsDisabledBuiltin(t *testing.T) {
 	isolateConfigHome(t)
 	dir := robustTempDir(t)

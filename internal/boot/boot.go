@@ -35,6 +35,7 @@ import (
 	"reasonix/internal/netclient"
 	"reasonix/internal/outputstyle"
 	"reasonix/internal/permission"
+	"reasonix/internal/planmode"
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
 	"reasonix/internal/sandbox"
@@ -167,6 +168,13 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	// outlive a turn and are cancelled by Controller.Close.
 	sink := event.Sync(opts.Sink)
 
+	if ignored := (planmode.Policy{AllowedTools: cfg.Agent.PlanModeAllowedTools}).IgnoredAllowedTools(); len(ignored) > 0 {
+		sink.Emit(event.Event{
+			Kind:  event.Notice,
+			Level: event.LevelWarn,
+			Text:  fmt.Sprintf("plan_mode_allowed_tools ignored known blocked entries: %s; this setting only declares extra read-only custom tools and cannot unlock known blocked tools or unsafe bash", strings.Join(ignored, ", ")),
+		})
+	}
 	if migErr != nil {
 		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "config migration from ~/.reasonix failed: " + migErr.Error()})
 	} else if migrated != nil {

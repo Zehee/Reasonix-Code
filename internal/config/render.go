@@ -222,6 +222,11 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 		b.WriteString("# recent_keep         = 2   # minimum recent messages kept verbatim\n")
 	}
 	fmt.Fprintf(&b, "cold_resume_prune   = %v   # elide stale tool results when reopening a session past the provider cache window\n", c.ColdResumePruneEnabled())
+	if len(c.Agent.PlanModeAllowedTools) > 0 {
+		fmt.Fprintf(&b, "plan_mode_allowed_tools = %s   # extra read-only declarations for custom tools; cannot unlock known blocked tools or unsafe bash\n", renderStringArray(c.Agent.PlanModeAllowedTools))
+	} else {
+		b.WriteString("# plan_mode_allowed_tools = [\"custom_reader\"]   # extra read-only declarations; cannot unlock known blocked tools or unsafe bash\n")
+	}
 	if c.Agent.PlannerModel != "" {
 		fmt.Fprintf(&b, "planner_model = %q   # low-frequency planner (two-model collaboration)\n", c.Agent.PlannerModel)
 	} else {
@@ -650,6 +655,10 @@ func RenderTOMLProjectDelta(c *Config) string {
 	}
 	if c.Agent.ColdResumePrune != d.Agent.ColdResumePrune {
 		fmt.Fprintf(&agentBuf, "cold_resume_prune = %v\n", c.ColdResumePruneEnabled())
+		anyAgent = true
+	}
+	if len(c.Agent.PlanModeAllowedTools) > 0 && !reflect.DeepEqual(c.Agent.PlanModeAllowedTools, d.Agent.PlanModeAllowedTools) {
+		fmt.Fprintf(&agentBuf, "plan_mode_allowed_tools = %s\n", renderStringArray(c.Agent.PlanModeAllowedTools))
 		anyAgent = true
 	}
 	if c.Agent.PlannerModel != "" && c.Agent.PlannerModel != d.Agent.PlannerModel {
