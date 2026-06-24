@@ -166,6 +166,7 @@ type ExecutionTrace struct {
 	ControlSignals      []string                  `json:"control_signals,omitempty"`
 	EquilibriumTrace    *EquilibriumTrace         `json:"equilibrium_trace,omitempty"`
 	ProductionHardening *ProductionHardeningTrace `json:"production_hardening,omitempty"`
+	Compression         *CompressionReport        `json:"compression,omitempty"`
 	Cost                CostMetrics               `json:"cost,omitempty"`
 	MutationEvaluations []MutationEvaluation      `json:"mutation_evaluations,omitempty"`
 	FailureReason       string                    `json:"failure_reason,omitempty"`
@@ -323,6 +324,7 @@ type LearningTrace struct {
 	ControlSignals       []string                  `json:"control_signals,omitempty"`
 	EquilibriumTrace     *EquilibriumTrace         `json:"equilibrium_trace,omitempty"`
 	ProductionHardening  *ProductionHardeningTrace `json:"production_hardening,omitempty"`
+	Compression          *CompressionReport        `json:"compression,omitempty"`
 	CausalFindings       []string                  `json:"causal_findings,omitempty"`
 	CompilerImprovements []string                  `json:"compiler_improvements,omitempty"`
 	MutationEvaluations  []MutationEvaluation      `json:"mutation_evaluations,omitempty"`
@@ -429,18 +431,19 @@ func (s Strategy) SuccessRate() float64 {
 }
 
 type state struct {
-	Nodes          []MemoryNode       `json:"nodes,omitempty"`
-	Edges          []MemoryEdge       `json:"edges,omitempty"`
-	Decisions      []DecisionNode     `json:"decisions,omitempty"`
-	ExecutionState ExecutionState     `json:"execution_state,omitempty"`
-	Strategies     []Strategy         `json:"strategies,omitempty"`
-	Mutations      []CompilerMutation `json:"mutations,omitempty"`
-	Learnings      []SystemLearning   `json:"learnings,omitempty"`
-	DriftReports   []DriftReport      `json:"drift_reports,omitempty"`
-	ControlReports []ControlReport    `json:"control_reports,omitempty"`
-	Production     ProductionState    `json:"production,omitempty"`
-	NoisyRefs      map[string]int     `json:"noisy_refs,omitempty"`
-	UpdatedAt      time.Time          `json:"updated_at,omitempty"`
+	Nodes              []MemoryNode        `json:"nodes,omitempty"`
+	Edges              []MemoryEdge        `json:"edges,omitempty"`
+	Decisions          []DecisionNode      `json:"decisions,omitempty"`
+	ExecutionState     ExecutionState      `json:"execution_state,omitempty"`
+	Strategies         []Strategy          `json:"strategies,omitempty"`
+	Mutations          []CompilerMutation  `json:"mutations,omitempty"`
+	Learnings          []SystemLearning    `json:"learnings,omitempty"`
+	DriftReports       []DriftReport       `json:"drift_reports,omitempty"`
+	ControlReports     []ControlReport     `json:"control_reports,omitempty"`
+	CompressionReports []CompressionReport `json:"compression_reports,omitempty"`
+	Production         ProductionState     `json:"production,omitempty"`
+	NoisyRefs          map[string]int      `json:"noisy_refs,omitempty"`
+	UpdatedAt          time.Time           `json:"updated_at,omitempty"`
 }
 
 // Turn records one top-level agent turn.
@@ -2024,6 +2027,7 @@ func (r *Runtime) writeTraceAndLearn(tr ExecutionTrace, strategyID string) {
 	now := time.Now().UTC()
 	st.ControlReports = appendControlReport(st.ControlReports, controlReportForTrace(tr.ID, policy, now))
 	st, tr = r.applyProductionHardening(st, tr, policy, now)
+	st, tr = applyCausalCompression(st, tr, learning, policy, now)
 	st.UpdatedAt = now
 	bundle := splitTrace(tr, learning, debugTraceEnabled())
 	_ = appendJSONL(filepath.Join(r.dir, tracesFile), bundle.RuntimeTrace)
@@ -2430,6 +2434,7 @@ func executionTraceProjection(tr ExecutionTrace) ExecutionTrace {
 		ControlGain:         tr.ControlGain,
 		EquilibriumTrace:    cloneEquilibriumTrace(tr.EquilibriumTrace),
 		ProductionHardening: cloneProductionHardeningTrace(tr.ProductionHardening),
+		Compression:         cloneCompressionReport(tr.Compression),
 		Cost:                tr.Cost,
 		FailureReason:       tr.FailureReason,
 		StartedAt:           tr.StartedAt,
@@ -2449,7 +2454,7 @@ func learningTraceFor(tr ExecutionTrace, learning SystemLearning) (LearningTrace
 		StrategyUsed:         append([]string(nil), tr.StrategyUsed...),
 		MemoryUsed:           append([]string(nil), tr.MemoryUsed...),
 		DecisionBranches:     append([]DecisionBranch(nil), tr.DecisionBranches...),
-		CausalEdges:          append([]CausalEdge(nil), tr.CausalEdges...),
+		CausalEdges:          compressCausalEdges(tr.CausalEdges, tr.ProductionHardening, maxCompressedCausalAnchors).AnchorEdges,
 		SemanticDrift:        append([]string(nil), tr.SemanticDrift...),
 		SemanticDriftHard:    append([]string(nil), tr.SemanticDriftHard...),
 		SemanticDriftSoft:    append([]string(nil), tr.SemanticDriftSoft...),
@@ -2459,6 +2464,7 @@ func learningTraceFor(tr ExecutionTrace, learning SystemLearning) (LearningTrace
 		ControlSignals:       append([]string(nil), tr.ControlSignals...),
 		EquilibriumTrace:     cloneEquilibriumTrace(tr.EquilibriumTrace),
 		ProductionHardening:  cloneProductionHardeningTrace(tr.ProductionHardening),
+		Compression:          cloneCompressionReport(tr.Compression),
 		CausalFindings:       append([]string(nil), learning.CausalFindings...),
 		CompilerImprovements: append([]string(nil), learning.CompilerImprovements...),
 		MutationEvaluations:  append([]MutationEvaluation(nil), tr.MutationEvaluations...),
@@ -3071,12 +3077,8 @@ func updateGraph(nodes []MemoryNode, edges []MemoryEdge, decisions []DecisionNod
 		})
 		edges = appendEdge(edges, MemoryEdge{From: id, To: traceNode.ID, Relation: "contradicts"})
 	}
-	if len(nodes) > 300 {
-		nodes = nodes[len(nodes)-300:]
-	}
-	if len(edges) > 600 {
-		edges = edges[len(edges)-600:]
-	}
+	nodes = retainMemoryNodes(nodes, maxMemoryGraphNodes)
+	edges = retainMemoryEdges(edges, maxMemoryGraphEdges)
 	if len(decisions) > 100 {
 		decisions = decisions[len(decisions)-100:]
 	}
