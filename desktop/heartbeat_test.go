@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"reasonix/internal/config"
+	"reasonix/internal/control"
 )
 
 func TestHeartbeatConfigPathUsesReasonixUserStateDir(t *testing.T) {
@@ -58,6 +59,49 @@ func TestHeartbeatTaskDueAtHonorsWeeklySelection(t *testing.T) {
 	}
 	if !heartbeatTaskDueAt(task, time.Date(2026, 6, 19, 9, 0, 0, 0, loc)) {
 		t.Fatal("weekly task should run on the selected weekday and time")
+	}
+}
+
+type heartbeatStatusStub struct {
+	status control.RuntimeStatus
+}
+
+func (s heartbeatStatusStub) RuntimeStatus() control.RuntimeStatus {
+	return s.status
+}
+
+func TestHeartbeatControllerBusyIncludesPendingPrompt(t *testing.T) {
+	if heartbeatControllerBusy(heartbeatStatusStub{status: control.RuntimeStatus{Running: false, PendingPrompt: false}}) {
+		t.Fatal("idle controller should be available for heartbeat execution")
+	}
+	if !heartbeatControllerBusy(heartbeatStatusStub{status: control.RuntimeStatus{Running: true}}) {
+		t.Fatal("running controller should be busy")
+	}
+	if !heartbeatControllerBusy(heartbeatStatusStub{status: control.RuntimeStatus{PendingPrompt: true}}) {
+		t.Fatal("pending prompt should keep controller busy")
+	}
+}
+
+func TestHeartbeatTaskDueAtHonorsIntervalTimeWindow(t *testing.T) {
+	loc := time.UTC
+	lastRun := time.Date(2026, 6, 18, 16, 0, 0, 0, loc)
+	task := HeartbeatTask{
+		ID:              "window",
+		Interval:        "30m",
+		Enabled:         true,
+		LastRunAt:       lastRun.UnixMilli(),
+		TimeWindowStart: "09:00",
+		TimeWindowEnd:   "17:00",
+	}
+
+	if !heartbeatTaskDueAt(task, time.Date(2026, 6, 18, 16, 30, 0, 0, loc)) {
+		t.Fatal("interval task should run in the configured time window once due")
+	}
+	if heartbeatTaskDueAt(task, time.Date(2026, 6, 18, 17, 20, 0, 0, loc)) {
+		t.Fatal("interval task should wait while outside the configured time window")
+	}
+	if !heartbeatTaskDueAt(task, time.Date(2026, 6, 19, 9, 0, 0, 0, loc)) {
+		t.Fatal("interval task should run when the next time window opens")
 	}
 }
 

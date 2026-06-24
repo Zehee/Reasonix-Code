@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"reasonix/internal/config"
+	"reasonix/internal/control"
 )
 
 // ── Data model ──────────────────────────────────────────────────────────────
@@ -189,6 +190,15 @@ func normalizeHeartbeatApprovalMode(mode string) string {
 	}
 }
 
+type heartbeatRuntimeStatus interface {
+	RuntimeStatus() control.RuntimeStatus
+}
+
+func heartbeatControllerBusy(ctrl heartbeatRuntimeStatus) bool {
+	status := ctrl.RuntimeStatus()
+	return status.Running || status.PendingPrompt
+}
+
 // executeTask runs one heartbeat: creates/opens topic, submits prompt.
 // Returns the updated task (topicId and LastRunAt may change).
 // On controller failure the task is returned WITHOUT updating LastRunAt,
@@ -229,30 +239,32 @@ func (e *HeartbeatEngine) executeTask(t HeartbeatTask) HeartbeatTask {
 		return t
 	}
 
-	// Set the task's approval mode on the tab before the controller is built.
-	// This sets tab.toolApprovalMode which is picked up by the controller
-	// during build (see buildWorkspaceTab). For reused topics where the
-	// controller already exists, SetToolApprovalModeForTab applies it
-	// immediately.  Normalize and store the normalized value so the
-	// persisted JSON gets a real value (e.g. "yolo") rather than "" or null.
-	mode := normalizeHeartbeatApprovalMode(t.ApprovalMode)
-	t.ApprovalMode = mode
-	e.app.SetToolApprovalModeForTab(tabMeta.ID, mode)
-
 	// Wait for the tab's controller to be built (it's started
 	// asynchronously in a goroutine by openTopicTab).
-	controllerReady := false
+	var ctrl heartbeatRuntimeStatus
 	for i := 0; i < 40; i++ {
-		if ctrl := e.app.ctrlByTabID(tabMeta.ID); ctrl != nil {
-			controllerReady = true
+		if candidate := e.app.ctrlByTabID(tabMeta.ID); candidate != nil {
+			ctrl = candidate
 			break
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
-	if !controllerReady {
+	if ctrl == nil {
 		log.Printf("[heartbeat] controller not ready for %q, skipping", t.Title)
 		return t // don't update LastRunAt — retry next tick
 	}
+	if heartbeatControllerBusy(ctrl) {
+		log.Printf("[heartbeat] controller busy for %q, skipping", t.Title)
+		return t // don't change approval mode for an existing turn — retry next tick
+	}
+
+	// Set the task's approval mode only after confirming the controller is idle.
+	// SetToolApprovalModeForTab may drain pending approvals for auto/yolo modes,
+	// so applying it to a busy reused topic would accidentally approve a previous
+	// turn instead of preparing this heartbeat prompt.
+	mode := normalizeHeartbeatApprovalMode(t.ApprovalMode)
+	t.ApprovalMode = mode
+	e.app.SetToolApprovalModeForTab(tabMeta.ID, mode)
 
 	// Submit as a plain user turn so scheduled prompts cannot invoke desktop
 	// shell or slash-command handlers such as "!cmd", "/clear", or "/compact".

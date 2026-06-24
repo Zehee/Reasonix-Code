@@ -30,6 +30,72 @@ import {
 import type { HeartbeatTask } from "./heartbeat.types";
 import type { WorkspaceView } from "../../../lib/types";
 
+const INTERVAL_MS: Record<"s" | "m" | "h", number> = {
+  s: 1000,
+  m: 60_000,
+  h: 3_600_000,
+};
+
+function heartbeatIntervalMs(interval?: string): number | null {
+  const clean = (interval || "").replace(/\|.*$/, "");
+  const m = clean.match(/^(\d+)([smh])$/);
+  if (!m) return null;
+  return parseInt(m[1], 10) * INTERVAL_MS[m[2] as "s" | "m" | "h"];
+}
+
+function heartbeatClockMinutes(value?: string): number | null {
+  const m = (value || "").match(/^(\d{2}):(\d{2})$/);
+  if (!m) return null;
+  const hour = parseInt(m[1], 10);
+  const minute = parseInt(m[2], 10);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
+function dateAtMinutes(base: Date, minutes: number): Date {
+  const d = new Date(base);
+  d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+  return d;
+}
+
+function heartbeatWithinWindow(date: Date, start: number | null, end: number | null): boolean {
+  if (start === null && end === null) return true;
+  const minutes = date.getHours() * 60 + date.getMinutes();
+  if (start !== null && end === null) return minutes >= start;
+  if (start === null && end !== null) return minutes < end;
+  if (start === end) return true;
+  if (start! < end!) return minutes >= start! && minutes < end!;
+  return minutes >= start! || minutes < end!;
+}
+
+function nextHeartbeatWindowTime(from: Date, start: number | null, end: number | null): Date {
+  if (heartbeatWithinWindow(from, start, end)) return from;
+  if (start !== null && end === null) return dateAtMinutes(from, start);
+  if (start === null && end !== null) {
+    const next = new Date(from);
+    next.setDate(next.getDate() + 1);
+    next.setHours(0, 0, 0, 0);
+    return next;
+  }
+  const minutes = from.getHours() * 60 + from.getMinutes();
+  if (start! < end! && minutes < start!) return dateAtMinutes(from, start!);
+  const next = dateAtMinutes(from, start!);
+  next.setDate(next.getDate() + 1);
+  return next;
+}
+
+export function heartbeatNextRunAt(task: Pick<HeartbeatTask, "interval" | "lastRunAt" | "timeWindowStart" | "timeWindowEnd">, now = Date.now()): number | null {
+  if (!task.lastRunAt) return null;
+  const intervalMs = heartbeatIntervalMs(task.interval);
+  if (intervalMs === null) return null;
+  const rawNext = task.lastRunAt + intervalMs;
+  const start = heartbeatClockMinutes(task.timeWindowStart);
+  const end = heartbeatClockMinutes(task.timeWindowEnd);
+  if (start === null && end === null) return rawNext;
+  const candidate = new Date(Math.max(rawNext, now));
+  return nextHeartbeatWindowTime(candidate, start, end).getTime();
+}
+
 interface HeartbeatPanelProps {
   open: boolean;
   onClose: () => void;
@@ -456,13 +522,9 @@ function TaskCard({
 
   const nextRunLabel = (() => {
     if (!task.enabled) return t("heartbeat.disabled");
-    const clean = (task.interval || "").replace(/\|.*$/, "");
-    const m = clean.match(/^(\d+)([smh])$/);
-    if (!m) return "";
-    const ms = parseInt(m[1]) * { s: 1000, m: 60000, h: 3600000 }[m[2] as "s" | "m" | "h"];
-    if (!task.lastRunAt) return t("heartbeat.neverRun");
-    const next = task.lastRunAt + ms;
     const now = Date.now();
+    const next = heartbeatNextRunAt(task, now);
+    if (next === null) return task.lastRunAt ? "" : t("heartbeat.neverRun");
     const diff = next - now;
     if (diff <= 0) return t("heartbeat.due" as any);
     if (diff < 60000) return t("heartbeat.soon" as any);
