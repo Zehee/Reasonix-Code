@@ -136,3 +136,108 @@ func TestCausalCompressionSummarizesStateAndRetainsImportantMemory(t *testing.T)
 		t.Fatalf("compression report nodes folded = %d, want %d", tr.Compression.MemoryGraph.NodesFolded, len(nodes))
 	}
 }
+
+func TestCompressCausalEdgesRetainsLongTailRelation(t *testing.T) {
+	edges := []CausalEdge{}
+	for i := 0; i < 40; i++ {
+		edges = append(edges, CausalEdge{
+			From:     fmt.Sprintf("important-%02d", i),
+			To:       "decision:long-tail",
+			Relation: "influenced",
+		})
+	}
+	edges = append(edges, CausalEdge{
+		From:     "rare-cause",
+		To:       "decision:long-tail",
+		Relation: "rare_relation",
+	})
+
+	compressed := compressCausalEdges(edges, nil, 12)
+	if compressed.RetainedEdges != 12 {
+		t.Fatalf("retained edges = %d, want 12", compressed.RetainedEdges)
+	}
+	foundRare := false
+	for _, edge := range compressed.AnchorEdges {
+		if edge.Relation == "rare_relation" {
+			foundRare = true
+			break
+		}
+	}
+	if !foundRare {
+		t.Fatalf("long-tail causal relation was dropped: %+v", compressed.AnchorEdges)
+	}
+	if len(compressed.LongTailEdges) != 1 || compressed.LongTailSignals[0] != "rare_relation" {
+		t.Fatalf("missing long-tail bias report: %+v", compressed)
+	}
+}
+
+func TestCompressionReportIncludesCrossGraphAlignment(t *testing.T) {
+	now := time.Now().UTC()
+	st := state{
+		Nodes: []MemoryNode{{
+			ID:         "memory-1",
+			Type:       "fact",
+			Content:    "supports plan",
+			Timestamp:  now,
+			Confidence: 0.9,
+			Quality:    QualityHighSignal,
+		}},
+		Edges: []MemoryEdge{
+			{From: "memory-1", To: "trace-1", Relation: "supports"},
+			{From: "memory-1", To: "decision-1", Relation: "depends_on"},
+		},
+	}
+	tr := ExecutionTrace{
+		ID:      "trace-alignment",
+		Outcome: "success",
+		CausalEdges: []CausalEdge{
+			{From: "memory-1", To: "decision:trace-alignment", Relation: "influenced"},
+			{From: "decision:trace-alignment", To: "outcome:trace-alignment", Relation: "selected_strategy:general"},
+		},
+		StartedAt:   now,
+		CompletedAt: now.Add(time.Second),
+	}
+
+	report := buildCompressionReport(st, tr, SystemLearning{}, defaultControlPolicy(), now)
+	if report.Alignment.Status != "partial" {
+		t.Fatalf("alignment status = %q, want partial: %+v", report.Alignment.Status, report.Alignment)
+	}
+	if !containsString(report.Alignment.SharedRelations, "supports") {
+		t.Fatalf("missing shared support relation: %+v", report.Alignment)
+	}
+	if !containsString(report.Alignment.MissingFromMemory, "causes") {
+		t.Fatalf("missing causal-only cause relation: %+v", report.Alignment)
+	}
+	if report.BiasCorrection.AlignmentStatus != report.Alignment.Status {
+		t.Fatalf("bias report did not mirror alignment status: %+v", report.BiasCorrection)
+	}
+}
+
+func TestTruthLockedImportanceDecaysForCompressionPriority(t *testing.T) {
+	now := time.Now().UTC()
+	oldTruth := MemoryNode{
+		ID:          "old-truth",
+		Type:        "tool_result",
+		Content:     "old low-confidence truth",
+		Timestamp:   now.Add(-365 * 24 * time.Hour),
+		Confidence:  0.2,
+		Quality:     QualityNoise,
+		TruthLocked: true,
+	}
+	newSignal := MemoryNode{
+		ID:         "new-signal",
+		Type:       "fact",
+		Content:    "new high signal",
+		Timestamp:  now,
+		Confidence: 0.95,
+		Quality:    QualityHighSignal,
+	}
+	retained := retainMemoryNodes([]MemoryNode{oldTruth, newSignal}, 1, now)
+	if len(retained) != 1 || retained[0].ID != "new-signal" {
+		t.Fatalf("stale truth lock dominated high-signal node: %+v", retained)
+	}
+	memory := compressMemoryGraph(state{Nodes: []MemoryNode{oldTruth, newSignal}}, now)
+	if !containsString(memory.TruthLockDecay, "old-truth") {
+		t.Fatalf("missing truth-lock decay report: %+v", memory)
+	}
+}
