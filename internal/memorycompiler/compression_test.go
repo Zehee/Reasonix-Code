@@ -585,3 +585,85 @@ func TestLongTailSafetyPreservesRareStaleSignals(t *testing.T) {
 		t.Fatalf("long-tail retention exceeded floor: %+v", report.LongTailSafety)
 	}
 }
+
+func TestLayerCollapseReportDetectsSemanticSaturation(t *testing.T) {
+	now := time.Now().UTC()
+	relations := []string{"constrained", "influenced", "supported_outcome", "weakened_outcome"}
+	edges := []CausalEdge{}
+	for i := 0; i < 6; i++ {
+		for _, relation := range relations {
+			edges = append(edges, CausalEdge{
+				From:     fmt.Sprintf("%s-%02d", relation, i),
+				To:       "decision:layer-collapse",
+				Relation: relation,
+			})
+		}
+	}
+	st := state{
+		Nodes: []MemoryNode{{
+			ID:         "memory-layer",
+			Type:       "fact",
+			Content:    "layer interaction",
+			Timestamp:  now,
+			Confidence: 0.8,
+			Quality:    QualityHighSignal,
+		}},
+		Edges: []MemoryEdge{{From: "memory-layer", To: "decision:layer-collapse", Relation: "supports"}},
+	}
+	report := buildCompressionReport(st, ExecutionTrace{
+		ID:          "trace-layer-collapse",
+		Outcome:     "partial_success",
+		CausalEdges: edges,
+		Cost:        CostMetrics{LatencyMs: 150},
+	}, SystemLearning{}, defaultControlPolicy(), now)
+	if report.LayerCollapse.Mode != "v6_pre_layer_collapse_analyzer" || report.LayerCollapse.RuntimeInfluence || !report.LayerCollapse.CacheSafe {
+		t.Fatalf("layer collapse analyzer changed runtime/cache contract: %+v", report.LayerCollapse)
+	}
+	if report.LayerCollapse.SemanticSaturationBand != "high" || report.LayerCollapse.LayerCount < 8 {
+		t.Fatalf("semantic saturation was not detected: %+v", report.LayerCollapse)
+	}
+	for _, signal := range []string{"control_equilibrium_overlap", "prediction_counterfactual_overlap", "logical_physical_time_overlap"} {
+		if !containsString(report.LayerCollapse.OverlapSignals, signal) {
+			t.Fatalf("missing overlap signal %q: %+v", signal, report.LayerCollapse)
+		}
+	}
+	if !containsString(report.LayerCollapse.SuggestedAbstractions, "evaluate_causal_field_model") ||
+		!containsString(report.LayerCollapse.SuggestedAbstractions, "unify_control_equilibrium_prediction") {
+		t.Fatalf("missing v6 abstraction suggestions: %+v", report.LayerCollapse)
+	}
+}
+
+func TestLayerCollapseReportFlagsCounterfactualOverConstraint(t *testing.T) {
+	policy := defaultControlPolicy()
+	policy.ExplorationRatePercent = 0
+	current := CausalSignalDynamics{
+		OverRegularized:  true,
+		AmplifiedSignals: []string{"supported_outcome"},
+	}
+	observer := observerLoopReport(nil, current, policy, 0)
+	control := compressControlGraph(state{}, policy)
+	collapse := layerCollapseReport(CausalGraphCompression{}, control, MemoryGraphCompression{}, CrossGraphAlignment{}, current, observer)
+	if collapse.OverConstraintRisk != "high" {
+		t.Fatalf("over-constraint risk = %q, want high: %+v", collapse.OverConstraintRisk, collapse)
+	}
+	if !containsString(collapse.SuggestedAbstractions, "tune_counterfactual_guard_gain") {
+		t.Fatalf("missing counterfactual guard tuning suggestion: %+v", collapse)
+	}
+}
+
+func TestLayerCollapseReportSurfacesDualClockComplexity(t *testing.T) {
+	history := []CompressionReport{{
+		TraceID: "slow-clock",
+		ObserverLoop: ObserverLoopReport{
+			TemporalVariance: TemporalVarianceReport{PhysicalLatencyMs: 1000},
+		},
+	}}
+	observer := observerLoopReport(history, CausalSignalDynamics{}, defaultControlPolicy(), 100)
+	collapse := layerCollapseReport(CausalGraphCompression{}, ControlGraphCompression{}, MemoryGraphCompression{}, CrossGraphAlignment{}, CausalSignalDynamics{}, observer)
+	if collapse.TemporalComplexity != "high" {
+		t.Fatalf("temporal complexity = %q, want high: %+v", collapse.TemporalComplexity, collapse)
+	}
+	if !containsString(collapse.SuggestedAbstractions, "fold_dual_clock_into_causal_time") {
+		t.Fatalf("missing causal time simplification suggestion: %+v", collapse)
+	}
+}

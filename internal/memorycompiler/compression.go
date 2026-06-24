@@ -37,6 +37,7 @@ type CompressionReport struct {
 	BiasCorrection   CompressionBiasReport   `json:"bias_correction,omitempty"`
 	Dynamics         CausalSignalDynamics    `json:"dynamics,omitempty"`
 	ObserverLoop     ObserverLoopReport      `json:"observer_loop,omitempty"`
+	LayerCollapse    LayerCollapseReport     `json:"layer_collapse,omitempty"`
 	CompressionRatio float64                 `json:"compression_ratio,omitempty"`
 	CreatedAt        time.Time               `json:"created_at,omitempty"`
 }
@@ -213,6 +214,19 @@ type LongTailSafetyReport struct {
 	LongTailPreserved bool     `json:"long_tail_preserved"`
 }
 
+type LayerCollapseReport struct {
+	Mode                   string   `json:"mode,omitempty"`
+	LayerCount             int      `json:"layer_count,omitempty"`
+	ActiveLayers           []string `json:"active_layers,omitempty"`
+	SemanticSaturationBand string   `json:"semantic_saturation_band,omitempty"`
+	OverlapSignals         []string `json:"overlap_signals,omitempty"`
+	OverConstraintRisk     string   `json:"over_constraint_risk,omitempty"`
+	TemporalComplexity     string   `json:"temporal_complexity,omitempty"`
+	SuggestedAbstractions  []string `json:"suggested_abstractions,omitempty"`
+	RuntimeInfluence       bool     `json:"runtime_influence"`
+	CacheSafe              bool     `json:"cache_safe"`
+}
+
 type GlobalDampingEnvelope struct {
 	State             string   `json:"state,omitempty"`
 	Factor            float64  `json:"factor,omitempty"`
@@ -240,6 +254,7 @@ func buildCompressionReport(st state, tr ExecutionTrace, learning SystemLearning
 	alignment := crossGraphAlignment(causal, memory)
 	dynamics := causalSignalDynamics(causal, alignment)
 	observer := observerLoopReport(st.CompressionReports, dynamics, policy, executionLatencyMs(tr))
+	layerCollapse := layerCollapseReport(causal, control, memory, alignment, dynamics, observer)
 	bias := CompressionBiasReport{
 		AnchorBudget:      maxCompressedCausalAnchors,
 		LongTailRetained:  len(causal.LongTailEdges),
@@ -264,6 +279,7 @@ func buildCompressionReport(st state, tr ExecutionTrace, learning SystemLearning
 		BiasCorrection:   bias,
 		Dynamics:         dynamics,
 		ObserverLoop:     observer,
+		LayerCollapse:    layerCollapse,
 		CompressionRatio: ratio,
 		CreatedAt:        now.UTC(),
 	}
@@ -652,6 +668,9 @@ func cloneCompressionReport(in *CompressionReport) *CompressionReport {
 	out.ObserverLoop.LongTailSafety.DecayedSignals = append([]string(nil), in.ObserverLoop.LongTailSafety.DecayedSignals...)
 	out.ObserverLoop.LongTailSafety.ProtectedSignals = append([]string(nil), in.ObserverLoop.LongTailSafety.ProtectedSignals...)
 	out.ObserverLoop.Damping.SuppressedSignals = append([]string(nil), in.ObserverLoop.Damping.SuppressedSignals...)
+	out.LayerCollapse.ActiveLayers = append([]string(nil), in.LayerCollapse.ActiveLayers...)
+	out.LayerCollapse.OverlapSignals = append([]string(nil), in.LayerCollapse.OverlapSignals...)
+	out.LayerCollapse.SuggestedAbstractions = append([]string(nil), in.LayerCollapse.SuggestedAbstractions...)
 	return &out
 }
 
@@ -1334,6 +1353,146 @@ func longTailSafetyCandidates(signals []string) []string {
 		out = append(out, signal)
 	}
 	return out
+}
+
+func layerCollapseReport(causal CausalGraphCompression, control ControlGraphCompression, memory MemoryGraphCompression, alignment CrossGraphAlignment, dynamics CausalSignalDynamics, observer ObserverLoopReport) LayerCollapseReport {
+	layers := activeSemanticLayers(causal, control, memory, alignment, dynamics, observer)
+	overlap := semanticOverlapSignals(causal, control, memory, alignment, dynamics, observer)
+	overConstraint := overConstraintRisk(observer)
+	temporal := temporalComplexity(observer)
+	suggestions := layerCollapseSuggestions(layers, overlap, overConstraint, temporal)
+	return LayerCollapseReport{
+		Mode:                   "v6_pre_layer_collapse_analyzer",
+		LayerCount:             len(layers),
+		ActiveLayers:           layers,
+		SemanticSaturationBand: semanticSaturationBand(len(layers), len(overlap)),
+		OverlapSignals:         overlap,
+		OverConstraintRisk:     overConstraint,
+		TemporalComplexity:     temporal,
+		SuggestedAbstractions:  suggestions,
+		RuntimeInfluence:       false,
+		CacheSafe:              true,
+	}
+}
+
+func activeSemanticLayers(causal CausalGraphCompression, control ControlGraphCompression, memory MemoryGraphCompression, alignment CrossGraphAlignment, dynamics CausalSignalDynamics, observer ObserverLoopReport) []string {
+	layers := []string{}
+	if causal.TotalEdges > 0 || causal.RetainedEdges > 0 {
+		layers = append(layers, "causal")
+	}
+	if control.Controller != "" || control.Mode != "" || len(control.TopSignals) > 0 {
+		layers = append(layers, "control")
+	}
+	if control.EquilibriumState != "" || len(control.EquilibriumActions) > 0 {
+		layers = append(layers, "equilibrium")
+	}
+	if memory.NodesFolded > 0 || memory.EdgesFolded > 0 || len(memory.AnchorNodes) > 0 {
+		layers = append(layers, "memory")
+	}
+	if alignment.Status != "" || alignment.AbstractionLevel != "" {
+		layers = append(layers, "alignment")
+	}
+	if dynamics.EntropyBand != "" || dynamics.AmplitudeBand != "" || dynamics.OverRegularized {
+		layers = append(layers, "compression_dynamics")
+	}
+	if observer.ShadowObserver.Mode != "" || observer.AdvisoryBridge.Mode != "" || len(observer.SignalBacklog.PendingSignals) > 0 {
+		layers = append(layers, "prediction")
+	}
+	if observer.PredictionBias.Mode != "" || len(observer.PredictionBias.CounterfactualChecks) > 0 {
+		layers = append(layers, "counterfactual")
+	}
+	if observer.TemporalSync.Clock != "" || observer.TemporalVariance.Mode != "" {
+		layers = append(layers, "temporal")
+	}
+	if observer.LongTailSafety.Mode != "" || len(observer.Damping.SuppressedSignals) > 0 {
+		layers = append(layers, "safety")
+	}
+	return limitStrings(canonicalStrings(layers), maxCompressionStrings)
+}
+
+func semanticOverlapSignals(causal CausalGraphCompression, control ControlGraphCompression, memory MemoryGraphCompression, alignment CrossGraphAlignment, dynamics CausalSignalDynamics, observer ObserverLoopReport) []string {
+	signals := []string{}
+	if control.Controller != "" && (control.EquilibriumState != "" || len(control.EquilibriumActions) > 0) {
+		signals = append(signals, "control_equilibrium_overlap")
+	}
+	if observer.AdvisoryBridge.AdvisoryEligible && observer.PredictionBias.Mode != "" {
+		signals = append(signals, "prediction_counterfactual_overlap")
+	}
+	if observer.TemporalSync.Clock != "" && observer.TemporalVariance.Mode != "" {
+		signals = append(signals, "logical_physical_time_overlap")
+	}
+	if alignment.Status != "" && dynamics.CouplingStrength > 0 {
+		signals = append(signals, "alignment_dynamics_overlap")
+	}
+	if causal.TotalEdges > 0 && len(memory.AnchorNodes) > 0 && alignment.Status != "empty" {
+		signals = append(signals, "memory_causal_alignment_overlap")
+	}
+	if observer.LongTailSafety.LongTailPreserved && observer.AdvisoryBridge.AdvisoryEligible {
+		signals = append(signals, "prediction_safety_overlap")
+	}
+	if memory.ConflictCount > 0 && control.OscillationBand != "none" {
+		signals = append(signals, "memory_control_stability_overlap")
+	}
+	return limitStrings(canonicalStrings(signals), maxCompressionStrings)
+}
+
+func overConstraintRisk(observer ObserverLoopReport) string {
+	switch {
+	case observer.AdvisoryBridge.AdvisoryEligible && !observer.PredictionBias.ExplorationPreserved:
+		return "high"
+	case observer.AdvisoryBridge.AdvisoryEligible && len(observer.PredictionBias.CounterfactualChecks) >= 3:
+		return "medium"
+	case observer.PredictionBias.Mode != "":
+		return "low"
+	default:
+		return "none"
+	}
+}
+
+func temporalComplexity(observer ObserverLoopReport) string {
+	switch {
+	case observer.TemporalVariance.VarianceBand == "high" || observer.TemporalSync.Status == "desynchronized":
+		return "high"
+	case observer.TemporalVariance.Mode != "" || observer.TemporalSync.Status == "bounded_desync":
+		return "medium"
+	case observer.TemporalSync.Clock != "":
+		return "low"
+	default:
+		return "none"
+	}
+}
+
+func semanticSaturationBand(layerCount, overlapCount int) string {
+	switch {
+	case layerCount >= 8 || overlapCount >= 4:
+		return "high"
+	case layerCount >= 5 || overlapCount >= 2:
+		return "medium"
+	case layerCount > 0 || overlapCount > 0:
+		return "low"
+	default:
+		return "none"
+	}
+}
+
+func layerCollapseSuggestions(layers, overlap []string, overConstraintRisk, temporalComplexity string) []string {
+	suggestions := []string{}
+	if len(layers) >= 8 || len(overlap) >= 4 {
+		suggestions = append(suggestions, "evaluate_causal_field_model")
+	}
+	if containsString(overlap, "control_equilibrium_overlap") || containsString(overlap, "prediction_counterfactual_overlap") {
+		suggestions = append(suggestions, "unify_control_equilibrium_prediction")
+	}
+	if overConstraintRisk == "high" || overConstraintRisk == "medium" {
+		suggestions = append(suggestions, "tune_counterfactual_guard_gain")
+	}
+	if temporalComplexity == "high" || temporalComplexity == "medium" {
+		suggestions = append(suggestions, "fold_dual_clock_into_causal_time")
+	}
+	if len(suggestions) == 0 {
+		suggestions = append(suggestions, "keep_layered_v5_runtime")
+	}
+	return limitStrings(canonicalStrings(suggestions), maxCompressionStrings)
 }
 
 func prioritizedPredictiveSignals(signals []string, limit int) []string {
