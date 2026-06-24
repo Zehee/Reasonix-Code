@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	runtimecanary "reasonix/internal/runtime/canary"
+	runtimeresource "reasonix/internal/runtime/resource"
 	runtimesnapshot "reasonix/internal/runtime/snapshot"
 )
 
@@ -935,6 +937,96 @@ func TestProductionHardeningBlocksUnreservedToolCallGrowth(t *testing.T) {
 	}
 }
 
+func TestProductionHardeningConsumesCoordinatorReservation(t *testing.T) {
+	dir := t.TempDir()
+	rt := New(dir)
+	now := time.Now().UTC()
+	st := state{Production: normalizeProductionState(ProductionState{}), NoisyRefs: map[string]int{}}
+	ir := PlannerIR{
+		Version:        version,
+		Goal:           "fix a bug",
+		SourceEvent:    "fix a bug",
+		Constraints:    []Constraint{{Type: "must_use", Text: "stay inside budget", Source: "test"}},
+		ExecutionSteps: []Step{{ID: "one", Action: "Run one tool"}},
+	}
+	hardening := rt.hardeningTraceForStart(context.Background(), ir, "fix a bug", st, now, "trace-coordinator")
+	if hardening.ResourceReservation.ID != "trace-coordinator" {
+		t.Fatalf("reservation id = %q", hardening.ResourceReservation.ID)
+	}
+	if got := budgetCoordinatorForDir(dir).Snapshot(now).ActiveReservations; got != 1 {
+		t.Fatalf("active reservations = %d, want 1", got)
+	}
+	tr := ExecutionTrace{
+		ID:                  "trace-coordinator",
+		IRVersion:           version,
+		Goal:                "fix a bug",
+		Steps:               ir.ExecutionSteps,
+		Outcome:             "success",
+		Cost:                CostMetrics{EstimatedInputTokens: 5, EstimatedCompiledTokens: 5, ToolCalls: 1},
+		ProductionHardening: hardening,
+		StartedAt:           now,
+		CompletedAt:         now.Add(time.Second),
+	}
+	_, tr = rt.applyProductionHardening(st, tr, defaultControlPolicy(), now)
+	if tr.ProductionHardening == nil || !tr.ProductionHardening.ResourceDecision.Allowed {
+		t.Fatalf("coordinated reservation was not committed: %+v", tr.ProductionHardening)
+	}
+	if got := budgetCoordinatorForDir(dir).Snapshot(now).ActiveReservations; got != 0 {
+		t.Fatalf("active reservations after commit = %d, want 0", got)
+	}
+	ghost := commitProductionBudget(budgetCoordinatorForDir(dir), hardening.ResourceReservation, runtimeresource.Usage{Tokens: 10, ToolCalls: 1, MemoryNodes: 0}, now.Add(time.Second))
+	if ghost.Allowed || !strings.Contains(strings.Join(ghost.Reasons, "\n"), "reservation not found") {
+		t.Fatalf("duplicate reservation commit was not rejected: %+v", ghost)
+	}
+}
+
+func TestProductionHardeningCanaryDiffAddsCausalAttribution(t *testing.T) {
+	now := time.Now().UTC()
+	rt := New(t.TempDir())
+	st := state{
+		Production: normalizeProductionState(ProductionState{
+			Canary: runtimecanary.Policy{Mode: runtimecanary.CanaryMode, TrafficPercent: 100, MinStableRuns: 1},
+			CanaryBaseline: runtimecanary.BehaviorSample{
+				Decision: "production_hardening",
+				Strategy: "general",
+				Outcome:  "success",
+				Steps:    []string{"baseline"},
+			},
+		}),
+		NoisyRefs: map[string]int{},
+	}
+	ir := PlannerIR{
+		Version:        version,
+		Goal:           "fix a bug",
+		SourceEvent:    "fix a bug",
+		Constraints:    []Constraint{{Type: "must_use", Text: "stay inside budget", Source: "test"}},
+		ExecutionSteps: []Step{{ID: "current", Action: "Run one tool"}},
+	}
+	hardening := rt.hardeningTraceForStart(context.Background(), ir, "fix a bug", st, now, "trace-canary")
+	tr := ExecutionTrace{
+		ID:                  "trace-canary",
+		IRVersion:           version,
+		Goal:                "fix a bug",
+		Steps:               ir.ExecutionSteps,
+		Outcome:             "partial_success",
+		StrategyUsed:        []string{"bugfix"},
+		Cost:                CostMetrics{EstimatedInputTokens: 5, EstimatedCompiledTokens: 5, ToolCalls: 1},
+		ProductionHardening: hardening,
+		StartedAt:           now,
+		CompletedAt:         now.Add(time.Second),
+	}
+	_, tr = rt.applyProductionHardening(st, tr, defaultControlPolicy(), now)
+	if tr.ProductionHardening == nil || !tr.ProductionHardening.CanaryDiff.Diverged {
+		t.Fatalf("missing canary divergence: %+v", tr.ProductionHardening)
+	}
+	if tr.ProductionHardening.CanaryDiff.Attribution.PrimaryCause == "" {
+		t.Fatalf("missing canary attribution: %+v", tr.ProductionHardening.CanaryDiff)
+	}
+	assertCausalEdge(t, tr.CausalEdges, func(edge CausalEdge) bool {
+		return strings.HasPrefix(edge.From, "canary:trace-canary:") && edge.To == "outcome:trace-canary" && edge.Relation == "explains_divergence"
+	}, "canary divergence causal edge")
+}
+
 func readState(t *testing.T, dir string) state {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(dir, stateFile))
@@ -990,6 +1082,16 @@ func assertNode(t *testing.T, nodes []MemoryNode, pred func(MemoryNode) bool, de
 		}
 	}
 	t.Fatalf("missing node: %s\nnodes=%+v", desc, nodes)
+}
+
+func assertCausalEdge(t *testing.T, edges []CausalEdge, pred func(CausalEdge) bool, desc string) {
+	t.Helper()
+	for _, e := range edges {
+		if pred(e) {
+			return
+		}
+	}
+	t.Fatalf("missing causal edge: %s\nedges=%+v", desc, edges)
 }
 
 func assertEdge(t *testing.T, edges []MemoryEdge, relation string) {

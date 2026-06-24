@@ -27,15 +27,29 @@ type Evaluation struct {
 }
 
 type BehaviorSample struct {
-	Decision string   `json:"decision,omitempty"`
-	Strategy string   `json:"strategy,omitempty"`
-	Outcome  string   `json:"outcome,omitempty"`
-	Steps    []string `json:"steps,omitempty"`
+	Decision        string   `json:"decision,omitempty"`
+	Strategy        string   `json:"strategy,omitempty"`
+	Outcome         string   `json:"outcome,omitempty"`
+	Steps           []string `json:"steps,omitempty"`
+	DecisionReasons []string `json:"decision_reasons,omitempty"`
 }
 
 type BehaviorDiff struct {
-	Diverged bool     `json:"diverged"`
-	Reasons  []string `json:"reasons,omitempty"`
+	Diverged    bool              `json:"diverged"`
+	Reasons     []string          `json:"reasons,omitempty"`
+	Attribution CausalAttribution `json:"attribution,omitempty"`
+}
+
+type CausalAttribution struct {
+	PrimaryCause string         `json:"primary_cause,omitempty"`
+	Factors      []CausalFactor `json:"factors,omitempty"`
+}
+
+type CausalFactor struct {
+	Layer    string `json:"layer"`
+	Cause    string `json:"cause"`
+	Evidence string `json:"evidence"`
+	Severity string `json:"severity"`
 }
 
 func DefaultPolicy() Policy {
@@ -116,29 +130,105 @@ func Normalize(policy Policy) Policy {
 
 func CompareBehavior(canary, baseline BehaviorSample) BehaviorDiff {
 	if baseline.Decision == "" && baseline.Strategy == "" && baseline.Outcome == "" && len(baseline.Steps) == 0 {
-		return BehaviorDiff{Reasons: []string{"baseline unavailable"}}
+		return BehaviorDiff{
+			Reasons: []string{"baseline unavailable"},
+			Attribution: CausalAttribution{
+				PrimaryCause: "baseline_unavailable",
+				Factors: []CausalFactor{{
+					Layer:    "canary",
+					Cause:    "missing_baseline",
+					Evidence: "no baseline behavior sample is available for comparison",
+					Severity: "low",
+				}},
+			},
+		}
 	}
 	diff := BehaviorDiff{}
 	if strings.TrimSpace(canary.Decision) != strings.TrimSpace(baseline.Decision) {
 		diff.Diverged = true
 		diff.Reasons = append(diff.Reasons, "decision diverged")
+		diff.Attribution.Factors = append(diff.Attribution.Factors, CausalFactor{
+			Layer:    "control",
+			Cause:    "decision_changed",
+			Evidence: compareEvidence(canary.Decision, baseline.Decision),
+			Severity: "high",
+		})
 	}
 	if strings.TrimSpace(canary.Strategy) != strings.TrimSpace(baseline.Strategy) {
 		diff.Diverged = true
 		diff.Reasons = append(diff.Reasons, "strategy diverged")
+		diff.Attribution.Factors = append(diff.Attribution.Factors, CausalFactor{
+			Layer:    "strategy",
+			Cause:    "strategy_changed",
+			Evidence: compareEvidence(canary.Strategy, baseline.Strategy),
+			Severity: "medium",
+		})
 	}
 	if strings.TrimSpace(canary.Outcome) != strings.TrimSpace(baseline.Outcome) {
 		diff.Diverged = true
 		diff.Reasons = append(diff.Reasons, "outcome diverged")
+		diff.Attribution.Factors = append(diff.Attribution.Factors, CausalFactor{
+			Layer:    "execution",
+			Cause:    "outcome_changed",
+			Evidence: compareEvidence(canary.Outcome, baseline.Outcome),
+			Severity: "high",
+		})
 	}
 	if strings.Join(canary.Steps, "\x00") != strings.Join(baseline.Steps, "\x00") {
 		diff.Diverged = true
 		diff.Reasons = append(diff.Reasons, "execution steps diverged")
+		diff.Attribution.Factors = append(diff.Attribution.Factors, CausalFactor{
+			Layer:    "execution_plan",
+			Cause:    "steps_changed",
+			Evidence: compareEvidence(strings.Join(canary.Steps, ","), strings.Join(baseline.Steps, ",")),
+			Severity: "medium",
+		})
 	}
 	if len(diff.Reasons) == 0 {
 		diff.Reasons = []string{"behavior matches baseline"}
+		diff.Attribution.PrimaryCause = "none"
+	} else {
+		diff.Attribution.PrimaryCause = primaryCause(diff.Attribution.Factors)
+		for _, reason := range canary.DecisionReasons {
+			reason = strings.TrimSpace(reason)
+			if reason == "" {
+				continue
+			}
+			diff.Attribution.Factors = append(diff.Attribution.Factors, CausalFactor{
+				Layer:    "runtime",
+				Cause:    "decision_reason",
+				Evidence: reason,
+				Severity: "low",
+			})
+			if len(diff.Attribution.Factors) >= 6 {
+				break
+			}
+		}
 	}
 	return diff
+}
+
+func primaryCause(factors []CausalFactor) string {
+	for _, severity := range []string{"high", "medium", "low"} {
+		for _, factor := range factors {
+			if factor.Severity == severity && factor.Cause != "" {
+				return factor.Cause
+			}
+		}
+	}
+	return "unknown"
+}
+
+func compareEvidence(current, baseline string) string {
+	current = strings.TrimSpace(current)
+	baseline = strings.TrimSpace(baseline)
+	if current == "" {
+		current = "<empty>"
+	}
+	if baseline == "" {
+		baseline = "<empty>"
+	}
+	return "current=" + current + " baseline=" + baseline
 }
 
 func bucket(key string) int {

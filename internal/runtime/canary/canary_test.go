@@ -50,4 +50,32 @@ func TestCompareBehaviorDetectsDecisionLevelDivergence(t *testing.T) {
 			t.Fatalf("missing %q in reasons: %+v", want, diff.Reasons)
 		}
 	}
+	if diff.Attribution.PrimaryCause == "" || len(diff.Attribution.Factors) == 0 {
+		t.Fatalf("missing causal attribution: %+v", diff.Attribution)
+	}
+	if diff.Attribution.PrimaryCause != "strategy_changed" {
+		t.Fatalf("primary cause = %q, want strategy_changed", diff.Attribution.PrimaryCause)
+	}
+}
+
+func TestCompareBehaviorExplainsDecisionAndOutcomeDivergence(t *testing.T) {
+	diff := CompareBehavior(
+		BehaviorSample{Decision: "production_hardening", Strategy: "bugfix", Outcome: "partial_success", Steps: []string{"a"}, DecisionReasons: []string{"budget blocked"}},
+		BehaviorSample{Decision: "baseline", Strategy: "bugfix", Outcome: "success", Steps: []string{"a"}},
+	)
+	if !diff.Diverged {
+		t.Fatalf("expected divergence: %+v", diff)
+	}
+	if diff.Attribution.PrimaryCause != "decision_changed" {
+		t.Fatalf("primary cause = %q, want decision_changed", diff.Attribution.PrimaryCause)
+	}
+	got := ""
+	for _, factor := range diff.Attribution.Factors {
+		got += factor.Layer + ":" + factor.Cause + "\n"
+	}
+	for _, want := range []string{"control:decision_changed", "execution:outcome_changed", "runtime:decision_reason"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing attribution %q in %+v", want, diff.Attribution.Factors)
+		}
+	}
 }

@@ -119,6 +119,7 @@ type IsolationPolicy struct {
 	GoroutineContainment  bool `json:"goroutine_containment"`
 	StrictContextClone    bool `json:"strict_context_clone"`
 	NoSharedPointerEscape bool `json:"no_shared_pointer_escape"`
+	OSProcessIsolation    bool `json:"os_process_isolation,omitempty"`
 }
 
 type IsolationSnapshot struct {
@@ -127,6 +128,18 @@ type IsolationSnapshot struct {
 	TimedOut      bool            `json:"timed_out,omitempty"`
 	Panic         string          `json:"panic,omitempty"`
 	PotentialLeak bool            `json:"potential_leak,omitempty"`
+	EscapeReport  EscapeReport    `json:"escape_report,omitempty"`
+}
+
+type EscapeReport struct {
+	Active        []EscapeFinding `json:"active,omitempty"`
+	ResidualRisks []EscapeFinding `json:"residual_risks,omitempty"`
+}
+
+type EscapeFinding struct {
+	Class    string `json:"class"`
+	Severity string `json:"severity"`
+	Evidence string `json:"evidence"`
 }
 
 func DefaultIsolationPolicy() IsolationPolicy {
@@ -134,6 +147,7 @@ func DefaultIsolationPolicy() IsolationPolicy {
 		GoroutineContainment:  true,
 		StrictContextClone:    true,
 		NoSharedPointerEscape: true,
+		OSProcessIsolation:    false,
 	}
 }
 
@@ -184,9 +198,47 @@ func RunIsolated(parent context.Context, cfg SandboxContext, now time.Time, fn f
 		isolation.Panic = err.Error()
 		exec.Kill("panic", time.Now().UTC())
 	}
+	isolation.EscapeReport = ClassifyEscapeRisks(isolation)
 	snap := exec.Snapshot()
 	snap.Isolation = isolation
 	return snap, err
+}
+
+func ClassifyEscapeRisks(isolation IsolationSnapshot) EscapeReport {
+	report := EscapeReport{}
+	if isolation.PotentialLeak {
+		report.Active = append(report.Active, EscapeFinding{
+			Class:    "goroutine_leak",
+			Severity: "high",
+			Evidence: "isolated execution did not terminate after cancellation",
+		})
+	}
+	if isolation.Panic != "" {
+		report.Active = append(report.Active, EscapeFinding{
+			Class:    "panic_escape",
+			Severity: "high",
+			Evidence: isolation.Panic,
+		})
+	}
+	if isolation.TimedOut {
+		report.Active = append(report.Active, EscapeFinding{
+			Class:    "deadline_escape",
+			Severity: "medium",
+			Evidence: "isolated execution reached sandbox deadline",
+		})
+	}
+	if !isolation.Policy.OSProcessIsolation {
+		report.ResidualRisks = append(report.ResidualRisks, EscapeFinding{
+			Class:    "process_boundary_absent",
+			Severity: "medium",
+			Evidence: "sandbox is enforced inside the Go runtime, not an OS process boundary",
+		})
+	}
+	return report
+}
+
+func HasActiveEscape(report EscapeReport) bool {
+	return len(report.Active) > 0
 }
 
 func isolatedContext(parent context.Context, cfg SandboxContext, now time.Time) (context.Context, context.CancelFunc) {

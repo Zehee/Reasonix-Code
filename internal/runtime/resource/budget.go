@@ -1,6 +1,11 @@
 package resource
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+	"sync"
+	"time"
+)
 
 type ResourceBudget struct {
 	MaxTokens      int `json:"max_tokens"`
@@ -22,10 +27,23 @@ type Decision struct {
 }
 
 type Reservation struct {
-	Allowed  bool           `json:"allowed"`
-	Reasons  []string       `json:"reasons,omitempty"`
-	Budget   ResourceBudget `json:"budget"`
-	Reserved Usage          `json:"reserved"`
+	ID        string         `json:"id,omitempty"`
+	Allowed   bool           `json:"allowed"`
+	Reasons   []string       `json:"reasons,omitempty"`
+	Budget    ResourceBudget `json:"budget"`
+	Reserved  Usage          `json:"reserved"`
+	CreatedAt time.Time      `json:"created_at,omitempty"`
+	ExpiresAt time.Time      `json:"expires_at,omitempty"`
+}
+
+type Coordinator struct {
+	mu     sync.Mutex
+	active map[string]Reservation
+}
+
+type CoordinatorSnapshot struct {
+	ActiveReservations int   `json:"active_reservations"`
+	Reserved           Usage `json:"reserved"`
 }
 
 func DefaultBudget() ResourceBudget {
@@ -34,6 +52,10 @@ func DefaultBudget() ResourceBudget {
 		MaxToolCalls:   20,
 		MaxMemoryNodes: 300,
 	}
+}
+
+func NewCoordinator() *Coordinator {
+	return &Coordinator{active: map[string]Reservation{}}
 }
 
 func Enforce(budget ResourceBudget, usage Usage) Decision {
@@ -61,6 +83,113 @@ func Reserve(budget ResourceBudget, usage Usage) Reservation {
 		Reasons:  append([]string(nil), decision.Reasons...),
 		Budget:   decision.Budget,
 		Reserved: decision.Usage,
+	}
+}
+
+func (c *Coordinator) Reserve(id string, budget ResourceBudget, usage Usage, now time.Time, ttl time.Duration) Reservation {
+	if c == nil {
+		reservation := Reserve(budget, usage)
+		reservation.ID = id
+		return reservation
+	}
+	budget = Normalize(budget)
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	if ttl <= 0 {
+		ttl = time.Minute
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		id = fmt.Sprintf("reservation-%d", now.UnixNano())
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.releaseExpiredLocked(now)
+	if _, exists := c.active[id]; exists {
+		return Reservation{
+			ID:        id,
+			Allowed:   false,
+			Reasons:   []string{"reservation already active"},
+			Budget:    budget,
+			Reserved:  usage,
+			CreatedAt: now.UTC(),
+			ExpiresAt: now.Add(ttl).UTC(),
+		}
+	}
+	projected := combineReservationUsage(c.reservedLocked(), usage)
+	decision := Enforce(budget, projected)
+	reservation := Reserve(budget, usage)
+	reservation.ID = id
+	reservation.CreatedAt = now.UTC()
+	reservation.ExpiresAt = now.Add(ttl).UTC()
+	if !decision.Allowed {
+		reservation.Allowed = false
+		for _, reason := range decision.Reasons {
+			reservation.Reasons = append(reservation.Reasons, "global reservation "+reason)
+		}
+		reservation.Reasons = dedupeStrings(reservation.Reasons)
+		return reservation
+	}
+	if reservation.Allowed {
+		c.active[id] = reservation
+	}
+	return reservation
+}
+
+func (c *Coordinator) Commit(id string, actual Usage, now time.Time) Decision {
+	id = strings.TrimSpace(id)
+	if c == nil || id == "" {
+		return Reservation{}.Commit(actual)
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	reservation, ok := c.active[id]
+	if !ok {
+		return Decision{
+			Allowed: false,
+			Reasons: []string{
+				"reservation not found or already committed",
+			},
+			Budget: Normalize(ResourceBudget{}),
+			Usage:  actual,
+		}
+	}
+	delete(c.active, id)
+	decision := reservation.Commit(actual)
+	if !reservation.ExpiresAt.IsZero() && now.After(reservation.ExpiresAt) {
+		decision.Allowed = false
+		decision.Reasons = append(decision.Reasons, "reservation expired before commit")
+	}
+	decision.Reasons = dedupeStrings(decision.Reasons)
+	return decision
+}
+
+func (c *Coordinator) Release(id string) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.active, strings.TrimSpace(id))
+}
+
+func (c *Coordinator) Snapshot(now time.Time) CoordinatorSnapshot {
+	if c == nil {
+		return CoordinatorSnapshot{}
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.releaseExpiredLocked(now)
+	return CoordinatorSnapshot{
+		ActiveReservations: len(c.active),
+		Reserved:           c.reservedLocked(),
 	}
 }
 
@@ -129,6 +258,34 @@ func ScaleForCanary(budget ResourceBudget, percent int) ResourceBudget {
 		MaxTokens:      scale(budget.MaxTokens),
 		MaxToolCalls:   scale(budget.MaxToolCalls),
 		MaxMemoryNodes: budget.MaxMemoryNodes,
+	}
+}
+
+func (c *Coordinator) releaseExpiredLocked(now time.Time) {
+	for id, reservation := range c.active {
+		if !reservation.ExpiresAt.IsZero() && now.After(reservation.ExpiresAt) {
+			delete(c.active, id)
+		}
+	}
+}
+
+func (c *Coordinator) reservedLocked() Usage {
+	total := Usage{}
+	for _, reservation := range c.active {
+		total = combineReservationUsage(total, reservation.Reserved)
+	}
+	return total
+}
+
+func combineReservationUsage(a, b Usage) Usage {
+	memoryNodes := a.MemoryNodes
+	if b.MemoryNodes > memoryNodes {
+		memoryNodes = b.MemoryNodes
+	}
+	return Usage{
+		Tokens:      a.Tokens + b.Tokens,
+		ToolCalls:   a.ToolCalls + b.ToolCalls,
+		MemoryNodes: memoryNodes,
 	}
 }
 

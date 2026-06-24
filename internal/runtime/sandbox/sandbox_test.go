@@ -63,4 +63,24 @@ func TestRunIsolatedClonesContextAndDetectsLeaks(t *testing.T) {
 	if !snap.Isolation.TimedOut || !snap.Isolation.PotentialLeak {
 		t.Fatalf("leaking goroutine was not detected: %+v", snap.Isolation)
 	}
+	if !HasActiveEscape(snap.Isolation.EscapeReport) {
+		t.Fatalf("leaking goroutine did not create active escape report: %+v", snap.Isolation.EscapeReport)
+	}
+	got := snap.Isolation.EscapeReport.Active[0]
+	if got.Class != "goroutine_leak" || got.Severity != "high" {
+		t.Fatalf("unexpected escape finding: %+v", got)
+	}
+	if len(snap.Isolation.EscapeReport.ResidualRisks) == 0 {
+		t.Fatalf("missing residual process-boundary risk: %+v", snap.Isolation.EscapeReport)
+	}
+}
+
+func TestClassifyEscapeRisksSeparatesResidualProcessRisk(t *testing.T) {
+	report := ClassifyEscapeRisks(IsolationSnapshot{Policy: DefaultIsolationPolicy(), Completed: true})
+	if HasActiveEscape(report) {
+		t.Fatalf("residual process boundary risk should not be active: %+v", report)
+	}
+	if len(report.ResidualRisks) != 1 || report.ResidualRisks[0].Class != "process_boundary_absent" {
+		t.Fatalf("missing residual process boundary risk: %+v", report)
+	}
 }
