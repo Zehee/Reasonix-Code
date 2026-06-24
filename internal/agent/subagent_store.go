@@ -62,9 +62,10 @@ type SubagentSpec struct {
 
 // SubagentRun is a prepared transcript run. Call Release exactly once.
 type SubagentRun struct {
-	Ref     string
-	Session *Session
-	Meta    SubagentMeta
+	Ref        string
+	Session    *Session
+	Meta       SubagentMeta
+	ForkedFrom string
 
 	store   *SubagentStore
 	release func()
@@ -301,9 +302,14 @@ func (s *SubagentStore) prepareContinueFromAncestor(sourceRef string, spec Subag
 	}
 	switch len(copies) {
 	case 0:
-		return s.PrepareFork(sourceRef, spec)
+		return s.prepareFork(sourceRef, spec)
 	case 1:
-		return s.PrepareContinue(copies[0].Ref, spec)
+		run, err := s.PrepareContinue(copies[0].Ref, spec)
+		if err != nil {
+			return nil, err
+		}
+		run.ForkedFrom = sourceRef
+		return run, nil
 	default:
 		return nil, fmt.Errorf("subagent reference %q has multiple copied transcripts in current parent session %q", sourceRef, spec.ParentSession)
 	}
@@ -409,7 +415,7 @@ func (s *SubagentStore) compatibleCopiesFromSource(sourceRef string, spec Subage
 	return copies, nil
 }
 
-func (s *SubagentStore) PrepareFork(ref string, spec SubagentSpec) (*SubagentRun, error) {
+func (s *SubagentStore) prepareFork(ref string, spec SubagentSpec) (*SubagentRun, error) {
 	if s == nil {
 		return nil, fmt.Errorf("subagent continuation is not available in this session")
 	}
@@ -418,7 +424,7 @@ func (s *SubagentStore) PrepareFork(ref string, spec SubagentSpec) (*SubagentRun
 	}
 	sourceRef := strings.TrimSpace(ref)
 	if sourceRef == "" {
-		return nil, fmt.Errorf("fork_from requires a subagent reference")
+		return nil, fmt.Errorf("subagent copy requires a source reference")
 	}
 	sourceRelease, err := s.lock(sourceRef)
 	if err != nil {
@@ -458,7 +464,7 @@ func (s *SubagentStore) PrepareFork(ref string, spec SubagentSpec) (*SubagentRun
 	now := time.Now().UTC()
 	newMeta := metaFromSpec(newRef, SubagentRunning, now, now, spec)
 	newMeta.ForkedFrom = sourceRef
-	return &SubagentRun{Ref: newRef, Session: sess, Meta: newMeta, store: s, release: newRelease}, nil
+	return &SubagentRun{Ref: newRef, Session: sess, Meta: newMeta, ForkedFrom: sourceRef, store: s, release: newRelease}, nil
 }
 
 func (s *SubagentStore) MarkRunning(run *SubagentRun) error {
@@ -590,7 +596,7 @@ func validateContinueOwner(meta SubagentMeta, spec SubagentSpec) error {
 	if owner == "" {
 		return fmt.Errorf("subagent reference %q has no parent session; run a fresh subagent instead", meta.Ref)
 	}
-	return fmt.Errorf("subagent reference %q belongs to parent session %q, current parent session is %q; use fork_from to copy it into this session", meta.Ref, owner, current)
+	return fmt.Errorf("subagent reference %q belongs to parent session %q, current parent session is %q", meta.Ref, owner, current)
 }
 
 func (s *SubagentStore) validateForkOwner(meta SubagentMeta, spec SubagentSpec) error {

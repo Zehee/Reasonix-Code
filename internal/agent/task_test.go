@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -35,6 +36,9 @@ func TestTaskToolReturnsSubAgentFinalAnswer(t *testing.T) {
 	if !strings.Contains(out, "found 3 callers of Foo") {
 		t.Errorf("got %q, want sub-agent final answer", out)
 	}
+	if !strings.Contains(out, "To continue this same subagent transcript in a later call, pass this ref as `continue_from`. Start a fresh subagent when the next task is independent.") {
+		t.Errorf("got %q, want continuation guidance", out)
+	}
 
 	// The sub-agent must have received the prompt as its user message and
 	// the configured system prompt at the top — proving the session was
@@ -44,6 +48,26 @@ func TestTaskToolReturnsSubAgentFinalAnswer(t *testing.T) {
 	}
 	if got := lastUser(sub.lastReq); got != "find callers of Foo" {
 		t.Errorf("sub-agent user = %q, want the prompt verbatim", got)
+	}
+}
+
+func TestTaskToolSchemaExposesOnlyContinueFromForPersistence(t *testing.T) {
+	task := NewTaskTool(&mockProvider{name: "sub"}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil)
+	schema := string(task.Schema())
+	if !strings.Contains(schema, `"continue_from"`) {
+		t.Fatalf("task schema = %s, want continue_from", schema)
+	}
+	if strings.Contains(schema, "fork_from") {
+		t.Fatalf("task schema = %s, want no fork_from", schema)
+	}
+}
+
+func TestParallelTasksSchemaDoesNotExposePersistentContinuation(t *testing.T) {
+	task := NewTaskTool(&mockProvider{name: "sub"}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil)
+	parallel := NewParallelTasksTool(task, tool.NewRegistry())
+	schema := string(parallel.Schema())
+	if strings.Contains(schema, "continue_from") || strings.Contains(schema, "fork_from") {
+		t.Fatalf("parallel_tasks schema = %s, want no persistent continuation fields", schema)
 	}
 }
 
@@ -268,6 +292,58 @@ func TestTaskToolPersistsAndContinuesTranscript(t *testing.T) {
 	}
 	if msgs[1].Content != "first task" || msgs[2].Content != "first answer" || lastUser(sub.requests[1]) != "second task" {
 		t.Fatalf("continued request messages = %+v, want first task/answer then second task", msgs)
+	}
+}
+
+func TestTaskToolContinueFromAncestorReturnsCopiedReferenceGuidance(t *testing.T) {
+	sub := &mockProvider{name: "sub", streams: [][]provider.Chunk{
+		{
+			{Type: provider.ChunkText, Text: "root answer"},
+			{Type: provider.ChunkDone},
+		},
+		{
+			{Type: provider.ChunkText, Text: "child answer"},
+			{Type: provider.ChunkDone},
+		},
+	}}
+	sessionDir := t.TempDir()
+	store := NewSubagentStore(filepath.Join(sessionDir, "subagents"))
+	reg := tool.NewRegistry()
+	reg.Add(fakeTool{name: "read_file", readOnly: true})
+	task := NewTaskTool(sub, nil, reg, 20, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
+		WithTranscripts(store, t.TempDir(), "base-model", "base-effort")
+
+	rootCtx := WithParentSession(context.Background(), "root")
+	first, err := task.Execute(rootCtx, []byte(`{"prompt":"root task"}`))
+	if err != nil {
+		t.Fatalf("first Execute: %v", err)
+	}
+	rootRef := subagentRefFromOutput(t, first)
+
+	if err := SaveBranchMeta(filepath.Join(sessionDir, "root.jsonl"), BranchMeta{}); err != nil {
+		t.Fatalf("SaveBranchMeta root: %v", err)
+	}
+	if err := SaveBranchMeta(filepath.Join(sessionDir, "child.jsonl"), BranchMeta{ParentID: "root"}); err != nil {
+		t.Fatalf("SaveBranchMeta child: %v", err)
+	}
+
+	childCtx := WithParentSession(context.Background(), "child")
+	second, err := task.Execute(childCtx, []byte(`{"prompt":"child task","continue_from":"`+rootRef+`"}`))
+	if err != nil {
+		t.Fatalf("second Execute: %v", err)
+	}
+	childRef := subagentRefFromOutput(t, second)
+	if childRef == rootRef {
+		t.Fatalf("child ref = source ref %q, want copied ref", childRef)
+	}
+	if !strings.Contains(second, "Forked from: "+rootRef) {
+		t.Fatalf("second output = %q, want Forked from source ref", second)
+	}
+	if !strings.Contains(second, "The requested ref resolves to an ancestor conversation transcript") {
+		t.Fatalf("second output = %q, want ancestor-copy guidance", second)
+	}
+	if !strings.Contains(second, "Final answer:\nchild answer") {
+		t.Fatalf("second output = %q, want final answer", second)
 	}
 }
 

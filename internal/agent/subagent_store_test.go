@@ -50,7 +50,7 @@ func TestSubagentStoreForkCreatesIndependentReference(t *testing.T) {
 	}
 	run.Release()
 
-	forked, err := store.PrepareFork(run.Ref, spec)
+	forked, err := store.prepareFork(run.Ref, spec)
 	if err != nil {
 		t.Fatalf("PrepareFork: %v", err)
 	}
@@ -327,7 +327,7 @@ func TestSubagentStoreForkFromAncestorSessionCreatesCurrentOwner(t *testing.T) {
 	saveTestBranchMeta(t, sessionDir, "child", "root")
 	other := spec
 	other.ParentSession = "child"
-	forked, err := store.PrepareFork(run.Ref, other)
+	forked, err := store.prepareFork(run.Ref, other)
 	if err != nil {
 		t.Fatalf("PrepareFork: %v", err)
 	}
@@ -353,7 +353,7 @@ func TestSubagentStoreRejectsForkWhenSourceOwnerMetaMissing(t *testing.T) {
 
 	other := spec
 	other.ParentSession = "child"
-	if _, err := store.PrepareFork(ref, other); err == nil || !strings.Contains(err.Error(), "lineage could not be verified") {
+	if _, err := store.prepareFork(ref, other); err == nil || !strings.Contains(err.Error(), "lineage could not be verified") {
 		t.Fatalf("PrepareFork error = %v, want unverified lineage rejection", err)
 	}
 }
@@ -367,7 +367,7 @@ func TestSubagentStoreRejectsForkWhenSourceOwnerMetaCorrupt(t *testing.T) {
 
 	other := spec
 	other.ParentSession = "child"
-	if _, err := store.PrepareFork(ref, other); err == nil || !strings.Contains(err.Error(), "lineage could not be verified") {
+	if _, err := store.prepareFork(ref, other); err == nil || !strings.Contains(err.Error(), "lineage could not be verified") {
 		t.Fatalf("PrepareFork error = %v, want unverified lineage rejection", err)
 	}
 }
@@ -381,7 +381,7 @@ func TestSubagentStoreRejectsForkWhenSourceOwnerMetaIDDiffers(t *testing.T) {
 
 	other := spec
 	other.ParentSession = "child"
-	if _, err := store.PrepareFork(ref, other); err == nil || !strings.Contains(err.Error(), "lineage could not be verified") {
+	if _, err := store.prepareFork(ref, other); err == nil || !strings.Contains(err.Error(), "lineage could not be verified") {
 		t.Fatalf("PrepareFork error = %v, want unverified lineage rejection", err)
 	}
 }
@@ -405,7 +405,7 @@ func TestSubagentStoreRejectsForkFromSiblingSession(t *testing.T) {
 	saveTestBranchMeta(t, sessionDir, "right", "root")
 	other := spec
 	other.ParentSession = "right"
-	if _, err := store.PrepareFork(run.Ref, other); err == nil || !strings.Contains(err.Error(), "not in current parent session") {
+	if _, err := store.prepareFork(run.Ref, other); err == nil || !strings.Contains(err.Error(), "not in current parent session") {
 		t.Fatalf("PrepareFork error = %v, want lineage rejection", err)
 	}
 }
@@ -428,7 +428,7 @@ func TestSubagentStoreRejectsForkFromUnrelatedSession(t *testing.T) {
 	saveTestBranchMeta(t, sessionDir, "current", "root")
 	other := spec
 	other.ParentSession = "current"
-	if _, err := store.PrepareFork(run.Ref, other); err == nil || !strings.Contains(err.Error(), "not in current parent session") {
+	if _, err := store.prepareFork(run.Ref, other); err == nil || !strings.Contains(err.Error(), "not in current parent session") {
 		t.Fatalf("PrepareFork error = %v, want unrelated session rejection", err)
 	}
 }
@@ -449,7 +449,7 @@ func TestSubagentStoreRejectsForkWhenLineageCannotBeProven(t *testing.T) {
 
 	other := spec
 	other.ParentSession = "child"
-	if _, err := store.PrepareFork(run.Ref, other); err == nil || !strings.Contains(err.Error(), "lineage could not be verified") {
+	if _, err := store.prepareFork(run.Ref, other); err == nil || !strings.Contains(err.Error(), "lineage could not be verified") {
 		t.Fatalf("PrepareFork error = %v, want unverified lineage rejection", err)
 	}
 }
@@ -467,7 +467,7 @@ func TestSubagentStoreForkReleasesSourceLockAfterCopy(t *testing.T) {
 	}
 	run.Release()
 
-	forked, err := store.PrepareFork(run.Ref, spec)
+	forked, err := store.prepareFork(run.Ref, spec)
 	if err != nil {
 		t.Fatalf("PrepareFork: %v", err)
 	}
@@ -550,7 +550,7 @@ func TestSubagentStoreSaveFailedPersistsTranscriptAndRejectsReuse(t *testing.T) 
 	if _, err := store.PrepareContinue(run.Ref, spec); err == nil || !strings.Contains(err.Error(), "failed and cannot be continued") {
 		t.Fatalf("PrepareContinue error = %v, want failed ref rejection", err)
 	}
-	if _, err := store.PrepareFork(run.Ref, spec); err == nil || !strings.Contains(err.Error(), "failed and cannot be continued") {
+	if _, err := store.prepareFork(run.Ref, spec); err == nil || !strings.Contains(err.Error(), "failed and cannot be continued") {
 		t.Fatalf("PrepareFork error = %v, want failed ref rejection", err)
 	}
 }
@@ -586,7 +586,7 @@ func TestSubagentStoreCleanupStaleRunningMarksInterrupted(t *testing.T) {
 	if _, err := store.PrepareContinue(ref, spec); err == nil || !strings.Contains(err.Error(), "interrupted by a previous shutdown or crash") {
 		t.Fatalf("PrepareContinue error = %v, want interrupted rejection", err)
 	}
-	if _, err := store.PrepareFork(ref, spec); err == nil || !strings.Contains(err.Error(), "cannot be continued or forked") {
+	if _, err := store.prepareFork(ref, spec); err == nil || !strings.Contains(err.Error(), "cannot be continued or forked") {
 		t.Fatalf("PrepareFork error = %v, want interrupted fork rejection", err)
 	}
 }

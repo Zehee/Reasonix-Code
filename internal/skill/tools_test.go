@@ -161,8 +161,30 @@ func TestBuiltinSubagentToolsPassContinuationOptions(t *testing.T) {
 	if _, err := review.Execute(context.Background(), json.RawMessage(`{"task":"again","continue_from":"sa_prev"}`)); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	if got.ContinueFrom != "sa_prev" || got.ForkFrom != "" {
+	if got.ContinueFrom != "sa_prev" {
 		t.Fatalf("continuation opts = %+v, want continue_from sa_prev", got)
+	}
+}
+
+func TestSubagentSkillSchemasExposeOnlyContinueFromForPersistence(t *testing.T) {
+	runSkill := NewRunSkillTool(New(Options{HomeDir: t.TempDir(), DisableBuiltins: true}), nil)
+	runSchema := string(runSkill.Schema())
+	if !strings.Contains(runSchema, `"continue_from"`) {
+		t.Fatalf("run_skill schema = %s, want continue_from", runSchema)
+	}
+	if strings.Contains(runSchema, "fork_from") {
+		t.Fatalf("run_skill schema = %s, want no fork_from", runSchema)
+	}
+
+	tools := BuiltinSubagentTools(New(Options{HomeDir: t.TempDir()}), nil)
+	for _, tl := range tools {
+		schema := string(tl.Schema())
+		if !strings.Contains(schema, `"continue_from"`) {
+			t.Fatalf("%s schema = %s, want continue_from", tl.Name(), schema)
+		}
+		if strings.Contains(schema, "fork_from") {
+			t.Fatalf("%s schema = %s, want no fork_from", tl.Name(), schema)
+		}
 	}
 }
 

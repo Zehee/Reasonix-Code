@@ -200,8 +200,7 @@ func (t *TaskTool) Schema() json.RawMessage {
   "run_in_background":{"type":"boolean","description":"Run the sub-agent asynchronously: returns a job id immediately and keeps working across turns. Collect its final answer with wait, and you'll be notified when it finishes. Use for long, independent sub-tasks you don't need to block on right now."},
   "model":{"type":"string","description":"Optional model override for the sub-agent (a configured provider/model name)."},
   "effort":{"type":"string","description":"Optional reasoning effort for the sub-agent (e.g. high, max)."},
-  "continue_from":{"type":"string","description":"Resume a prior subagent run in place: the subagent retains its context from the previous run; use in iterative loops (e.g. review -> fix -> review again) by passing only the 'sa_...' value from the prior result's 'Subagent reference: ...' line. Requires a compatible subagent identity, including tools, model, effort, and workspace."},
-  "fork_from":{"type":"string","description":"Fork a prior subagent run: copies its transcript, leaves the source unchanged, and continues independently. Use only when you need an independent branch; for iterative continuation on the same thread, use continue_from. Pass the 'sa_...' value from the prior result's 'Subagent reference: ...' line. Requires a compatible subagent identity, including tools, model, effort, and workspace. Mutually exclusive with continue_from."}
+  "continue_from":{"type":"string","description":"Continue a prior compatible subagent transcript in the current conversation context. Pass only the 'sa_...' value from the prior result's 'Subagent reference: ...' line. If the ref belongs to an ancestor conversation, the framework continues a current-conversation copy."}
 },
 "required":["prompt"]
 }`)
@@ -250,7 +249,6 @@ func (t *TaskTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 		Model           string   `json:"model"`
 		Effort          string   `json:"effort"`
 		ContinueFrom    string   `json:"continue_from"`
-		ForkFrom        string   `json:"fork_from"`
 	}
 	if err := json.Unmarshal(args, &p); err != nil {
 		return "", fmt.Errorf("invalid args: %w", err)
@@ -277,7 +275,7 @@ func (t *TaskTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 	subReg := t.buildSubReg(p.Tools)
 	modelRef, effortRef := t.effectiveProfile(p.Model, p.Effort)
 	parentID, parent, _, _ := CallContext(ctx)
-	run, err := t.prepareTranscriptRun(subReg, modelRef, effortRef, ParentSession(ctx), parentID, p.ContinueFrom, p.ForkFrom)
+	run, err := t.prepareTranscriptRun(subReg, modelRef, effortRef, ParentSession(ctx), parentID, p.ContinueFrom)
 	if err != nil {
 		return "", err
 	}
@@ -315,21 +313,21 @@ func (t *TaskTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 			defer func() {
 				if r := recover(); r != nil {
 					panicErr := fmt.Errorf("internal error: panic: %v\n%s", r, debug.Stack())
-					result = FormatSubagentResult("", run.Ref, true)
+					result = FormatSubagentRunResult("", run, true)
 					err = errors.Join(panicErr, t.transcripts.SaveFailed(run))
 				}
 			}()
 			answer, err := t.runSubSession(jobCtx, p.Prompt, subReg, nested, maxSteps, prov, pricing, ctxWin, run.Session)
 			if err != nil {
-				return FormatSubagentResult("", run.Ref, true), errors.Join(err, t.transcripts.SaveFailed(run))
+				return FormatSubagentRunResult("", run, true), errors.Join(err, t.transcripts.SaveFailed(run))
 			}
 			if err := t.transcripts.SaveCompleted(run); err != nil {
-				return FormatSubagentResult("", run.Ref, true), errors.Join(err, t.transcripts.SaveFailed(run))
+				return FormatSubagentRunResult("", run, true), errors.Join(err, t.transcripts.SaveFailed(run))
 			}
-			return FormatSubagentResult(answer, run.Ref, false), nil
+			return FormatSubagentRunResult(answer, run, false), nil
 		})
 		if run != nil && run.Ref != "" {
-			return fmt.Sprintf("Started background task %q (%s).\nSubagent reference: %s\nIt runs across turns; collect its final answer with wait (or wait will return it once done), and you'll be notified when it finishes.", job.ID, label, run.Ref), nil
+			return fmt.Sprintf("Started background task %q (%s).\n%s\nIt runs across turns; collect its final answer with wait (or wait will return it once done), and you'll be notified when it finishes.", job.ID, label, FormatSubagentReference(run)), nil
 		}
 		return fmt.Sprintf("Started background task %q (%s). It runs across turns; collect its final answer with wait (or wait will return it once done), and you'll be notified when it finishes.", job.ID, label), nil
 	}
@@ -344,18 +342,14 @@ func (t *TaskTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 		if err := t.transcripts.SaveCompleted(run); err != nil {
 			return "", errors.Join(err, t.transcripts.SaveFailed(run))
 		}
-		return FormatSubagentResult(answer, run.Ref, false), nil
+		return FormatSubagentRunResult(answer, run, false), nil
 	}
 	return answer, nil
 }
 
-func (t *TaskTool) prepareTranscriptRun(subReg *tool.Registry, modelRef, effortRef, parentSession, parentID, continueFrom, forkFrom string) (*SubagentRun, error) {
+func (t *TaskTool) prepareTranscriptRun(subReg *tool.Registry, modelRef, effortRef, parentSession, parentID, continueFrom string) (*SubagentRun, error) {
 	continueFrom = strings.TrimSpace(continueFrom)
-	forkFrom = strings.TrimSpace(forkFrom)
 	parentSession = strings.TrimSpace(parentSession)
-	if continueFrom != "" && forkFrom != "" {
-		return nil, fmt.Errorf("continue_from and fork_from are mutually exclusive")
-	}
 	if t.transcripts == nil {
 		return nil, fmt.Errorf("subagent transcript store is required")
 	}
@@ -364,8 +358,8 @@ func (t *TaskTool) prepareTranscriptRun(subReg *tool.Registry, modelRef, effortR
 	// exactly as before persisted transcripts existed — instead of failing the
 	// call. Continuation/fork need a persisted owner, so they error here.
 	if parentSession == "" {
-		if continueFrom != "" || forkFrom != "" {
-			return nil, fmt.Errorf("continue_from/fork_from require a persisted session; none is active in this run")
+		if continueFrom != "" {
+			return nil, fmt.Errorf("continue_from requires a persisted session; none is active in this run")
 		}
 		return EphemeralSubagentRun(t.sysPrompt), nil
 	}
@@ -381,11 +375,8 @@ func (t *TaskTool) prepareTranscriptRun(subReg *tool.Registry, modelRef, effortR
 		Model:            identityModel,
 		Effort:           identityEffort,
 	}
-	if continueFrom != "" || forkFrom != "" {
-		if continueFrom != "" {
-			return t.transcripts.PrepareContinue(continueFrom, spec)
-		}
-		return t.transcripts.PrepareFork(forkFrom, spec)
+	if continueFrom != "" {
+		return t.transcripts.PrepareContinue(continueFrom, spec)
 	}
 	return t.transcripts.PrepareFresh(spec)
 }
@@ -518,17 +509,34 @@ func (t *TaskTool) runSubSession(ctx context.Context, prompt string, subReg *too
 	}, sink)
 }
 
-func FormatSubagentResult(answer, ref string, failed bool) string {
-	if ref == "" {
+func FormatSubagentReference(run *SubagentRun) string {
+	if run == nil || run.Ref == "" {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Subagent reference: %s\n", run.Ref)
+	if strings.TrimSpace(run.ForkedFrom) != "" {
+		fmt.Fprintf(&b, "Forked from: %s\n", strings.TrimSpace(run.ForkedFrom))
+		b.WriteString("The requested ref resolves to an ancestor conversation transcript, so the framework continues a copy owned by the current conversation. To continue this copied subagent transcript in a later call, pass ")
+		b.WriteString(run.Ref)
+		b.WriteString(" as `continue_from`. Start a fresh subagent when the next task is independent.")
+		return b.String()
+	}
+	b.WriteString("To continue this same subagent transcript in a later call, pass this ref as `continue_from`. Start a fresh subagent when the next task is independent.")
+	return b.String()
+}
+
+func FormatSubagentRunResult(answer string, run *SubagentRun, failed bool) string {
+	if run == nil || run.Ref == "" {
 		return answer
 	}
 	if failed {
 		if answer == "" {
-			return "Subagent reference (failed): " + ref
+			return "Subagent reference (failed): " + run.Ref
 		}
-		return "Subagent reference (failed): " + ref + "\n\nFinal answer:\n" + answer
+		return "Subagent reference (failed): " + run.Ref + "\n\nFinal answer:\n" + answer
 	}
-	return "Subagent reference: " + ref + "\n\nFinal answer:\n" + answer
+	return FormatSubagentReference(run) + "\n\nFinal answer:\n" + answer
 }
 
 // RunSubAgentWithSession continues an existing sub-agent session with prompt and
