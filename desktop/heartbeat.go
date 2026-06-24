@@ -28,19 +28,20 @@ import (
 
 // HeartbeatTask defines a single scheduled prompt.
 type HeartbeatTask struct {
-	ID              string `json:"id"`
-	Title           string `json:"title"`    // user-visible label
-	Prompt          string `json:"prompt"`   // the prompt to submit
-	Interval        string `json:"interval"` // e.g. "5m", "1h", "30s"
-	Enabled         bool   `json:"enabled"`
-	Scope           string `json:"scope,omitempty"`         // "global" or "project"
-	WorkspaceRoot   string `json:"workspaceRoot,omitempty"` // project root path when scope="project"
-	TopicID         string `json:"topicId,omitempty"`       // created topic, reused on re-run
-	LastRunAt       int64  `json:"lastRunAt,omitempty"`     // unix millis
-	CreatedAt       int64  `json:"createdAt,omitempty"`
-	ApprovalMode    string `json:"approvalMode"`              // "ask" | "auto" | "yolo"; empty defaults to "yolo"
-	TimeWindowStart string `json:"timeWindowStart,omitempty"` // "HH:MM" — interval tasks only run after this time (inclusive)
-	TimeWindowEnd   string `json:"timeWindowEnd,omitempty"`   // "HH:MM" — interval tasks only run before this time (exclusive)
+	ID                     string `json:"id"`
+	Title                  string `json:"title"`    // user-visible label
+	Prompt                 string `json:"prompt"`   // the prompt to submit
+	Interval               string `json:"interval"` // e.g. "5m", "1h", "30s"
+	Enabled                bool   `json:"enabled"`
+	Scope                  string `json:"scope,omitempty"`                  // "global" or "project"
+	WorkspaceRoot          string `json:"workspaceRoot,omitempty"`          // project root path when scope="project"
+	TopicID                string `json:"topicId,omitempty"`                // created topic, reused on re-run
+	LastRunAt              int64  `json:"lastRunAt,omitempty"`              // unix millis
+	NewConversationEachRun bool   `json:"newConversationEachRun,omitempty"` // true = create new topic every run
+	CreatedAt              int64  `json:"createdAt,omitempty"`
+	ApprovalMode           string `json:"approvalMode"`              // "ask" | "auto" | "yolo"; empty defaults to "yolo"
+	TimeWindowStart        string `json:"timeWindowStart,omitempty"` // "HH:MM" — interval tasks only run after this time (inclusive)
+	TimeWindowEnd          string `json:"timeWindowEnd,omitempty"`   // "HH:MM" — interval tasks only run before this time (exclusive)
 }
 
 // heartbeatConfig is the on-disk format.
@@ -211,8 +212,12 @@ func (e *HeartbeatEngine) executeTask(t HeartbeatTask) HeartbeatTask {
 		scope = "global"
 	}
 
-	// If we already have a topicID, reuse it; otherwise create a new topic.
+	// If newConversationEachRun is set, always create a fresh topic.
+	// Otherwise reuse the existing topicID if available.
 	var topicID = t.TopicID
+	if t.NewConversationEachRun {
+		topicID = "" // clear so a new topic is always created
+	}
 	if topicID == "" {
 		meta, err := e.app.CreateTopic(scope, workspaceRoot, title)
 		if err != nil {
