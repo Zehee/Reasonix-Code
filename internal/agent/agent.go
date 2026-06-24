@@ -311,9 +311,9 @@ type Agent struct {
 	// session without touching the cache-stable prefix. Set via SetMemoryQueue.
 	memQueue memory.Queue
 
-	// memoryCompiler, when non-nil, records execution traces and may inject a
-	// compact Planner IR into the turn tail. It never mutates the stable system
-	// prompt or tool schema.
+	// memoryCompiler, when non-nil, records execution traces and may compile the
+	// user turn into a compact execution contract. It never mutates the stable
+	// system prompt or tool schema.
 	memoryCompiler *memorycompiler.Runtime
 	compilerTurn   *memorycompiler.Turn
 
@@ -592,8 +592,8 @@ type Options struct {
 	// tool invocation is safe in a read-only context (e.g. bash for git status).
 	PlanModeAllowedTools []string
 
-	// MemoryCompiler enables Memory v5 execution trace writeback and Planner IR
-	// turn-tail injection.
+	// MemoryCompiler enables Memory v5 execution trace writeback and cache-safe
+	// execution-contract compilation.
 	MemoryCompiler *memorycompiler.Runtime
 }
 
@@ -695,7 +695,7 @@ func (a *Agent) Run(ctx context.Context, input string) (runErr error) {
 	a.sink.Emit(event.Event{Kind: event.TurnStarted})
 	input = a.withReasoningLanguage(input)
 	if a.memoryCompiler != nil {
-		if irContext, turn := a.memoryCompiler.StartTurn(ctx, input, a.session.Snapshot()); turn != nil {
+		if compiledInput, turn := a.memoryCompiler.StartTurn(ctx, input, a.session.Snapshot()); turn != nil {
 			a.compilerTurn = turn
 			defer func() {
 				turn.Finish(runErr)
@@ -703,8 +703,8 @@ func (a *Agent) Run(ctx context.Context, input string) (runErr error) {
 					a.compilerTurn = nil
 				}
 			}()
-			if strings.TrimSpace(irContext) != "" {
-				input = strings.TrimRight(input, "\n") + "\n\n" + irContext
+			if strings.TrimSpace(compiledInput) != "" {
+				input = compiledInput
 			}
 		}
 	}

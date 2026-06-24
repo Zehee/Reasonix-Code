@@ -33,8 +33,14 @@ func TestFailureTraceCreatesConstraintIR(t *testing.T) {
 	turn.Finish(nil)
 
 	ctx, _ := rt.StartTurn(context.Background(), "continue", nil)
-	if !strings.Contains(ctx, "<memory-compiler-ir>") {
+	if !strings.Contains(ctx, "<memory-compiler-execution>") {
 		t.Fatalf("expected learned IR context, got:\n%s", ctx)
+	}
+	if !strings.Contains(ctx, "memory_v5_execution_contract") {
+		t.Fatalf("expected compiled execution contract, got:\n%s", ctx)
+	}
+	if !strings.Contains(ctx, `"source_event":"continue"`) {
+		t.Fatalf("expected source event to be compiled into the contract, got:\n%s", ctx)
 	}
 	if !strings.Contains(ctx, "avoid repeating bash") {
 		t.Fatalf("expected repeated-error constraint, got:\n%s", ctx)
@@ -49,6 +55,9 @@ func TestFailureTraceCreatesConstraintIR(t *testing.T) {
 	}
 	if len(st.Mutations) == 0 {
 		t.Fatal("expected structured compiler mutations")
+	}
+	if st.Mutations[0].Status != "testing" || !st.Mutations[0].Applied {
+		t.Fatalf("mutation = %+v, want applied testing mutation", st.Mutations[0])
 	}
 	if len(st.NoisyRefs) == 0 {
 		t.Fatal("expected noisy memory pattern to be tracked")
@@ -66,6 +75,14 @@ func TestFailureTraceCreatesConstraintIR(t *testing.T) {
 		return n.Quality == QualityCorrupted && strings.HasPrefix(n.ID, "noise:")
 	}, "corrupted noise node")
 	assertEdge(t, st.Edges, "contradicts")
+	traces := readTraces(t, dir)
+	last := traces[len(traces)-1]
+	if len(last.CausalEdges) == 0 {
+		t.Fatalf("expected causal trace edges, got %+v", last)
+	}
+	if last.Cost.ToolCalls != 2 || last.Cost.ToolErrors != 2 {
+		t.Fatalf("cost metrics = %+v, want two tool calls and errors", last.Cost)
+	}
 }
 
 func TestSuccessTraceFeedsReusableStrategyAndGraph(t *testing.T) {
@@ -127,7 +144,7 @@ func TestGraphTraversalFiltersCorruptedMemoryAndExpandsConnectedNodes(t *testing
 		Edges: []MemoryEdge{{From: "seed", To: "connected", Relation: "supports"}},
 	}
 
-	ir := buildIR("fix a bug", st)
+	ir := buildIR("fix a bug", "fix a bug", st)
 	got, err := json.Marshal(ir)
 	if err != nil {
 		t.Fatal(err)
@@ -138,6 +155,74 @@ func TestGraphTraversalFiltersCorruptedMemoryAndExpandsConnectedNodes(t *testing
 	}
 	if strings.Contains(text, "must never appear") || strings.Contains(text, "bad constraint") {
 		t.Fatalf("corrupted memory leaked into IR:\n%s", text)
+	}
+}
+
+func TestMutationEvaluationLoopAcceptsAppliedMutation(t *testing.T) {
+	dir := t.TempDir()
+	rt := New(dir)
+	_, turn := rt.StartTurn(context.Background(), "fix a bug", nil)
+	turn.RecordToolResults([]ToolRecord{
+		{Name: "bash", Error: "exit status 1"},
+		{Name: "bash", Error: "exit status 1"},
+	})
+	turn.Finish(nil)
+
+	ctx, turn := rt.StartTurn(context.Background(), "fix a bug", nil)
+	if !strings.Contains(ctx, "avoid repeating bash") {
+		t.Fatalf("expected mutation to affect next compiled contract, got:\n%s", ctx)
+	}
+	turn.RecordToolResults([]ToolRecord{{Name: "go test", Output: "ok"}})
+	turn.Finish(nil)
+
+	st := readState(t, dir)
+	found := false
+	for _, m := range st.Mutations {
+		if strings.Contains(m.Reason, "avoid repeating bash") {
+			found = true
+			if m.Status != "accepted" {
+				t.Fatalf("mutation status = %q, want accepted: %+v", m.Status, m)
+			}
+			if len(m.EvaluationTraceIDs) == 0 {
+				t.Fatalf("mutation missing evaluation trace: %+v", m)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("missing repeated bash mutation: %+v", st.Mutations)
+	}
+	traces := readTraces(t, dir)
+	last := traces[len(traces)-1]
+	if len(last.MutationEvaluations) == 0 {
+		t.Fatalf("expected mutation evaluation in trace: %+v", last)
+	}
+}
+
+func TestCompilerContractOrderingIsStable(t *testing.T) {
+	st := state{
+		NoisyRefs: map[string]int{
+			"z-noise": 2,
+			"a-noise": 2,
+		},
+		Mutations: []CompilerMutation{
+			{Target: "noise_filter", Change: "quarantine_pattern", Reason: "noise mutation", Applied: true, Status: "accepted"},
+		},
+	}
+	ir1 := buildIR("fix a bug", "fix a bug", st)
+	ir2 := buildIR("fix a bug", "fix a bug", st)
+	got1, err := compileExecutionContract(ir1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got2, err := compileExecutionContract(ir2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got1 != got2 {
+		t.Fatalf("compiled contract is not stable:\n%s\n---\n%s", got1, got2)
+	}
+	if strings.Index(got1, "a-noise") > strings.Index(got1, "z-noise") {
+		t.Fatalf("noisy refs were not emitted in stable order:\n%s", got1)
 	}
 }
 
@@ -177,6 +262,23 @@ func readState(t *testing.T, dir string) state {
 		t.Fatal(err)
 	}
 	return st
+}
+
+func readTraces(t *testing.T, dir string) []ExecutionTrace {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(dir, tracesFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var traces []ExecutionTrace
+	for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		var tr ExecutionTrace
+		if err := json.Unmarshal([]byte(line), &tr); err != nil {
+			t.Fatal(err)
+		}
+		traces = append(traces, tr)
+	}
+	return traces
 }
 
 func assertNode(t *testing.T, nodes []MemoryNode, pred func(MemoryNode) bool, desc string) {

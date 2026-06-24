@@ -40,12 +40,15 @@ func New(dir string) *Runtime {
 	return &Runtime{dir: dir}
 }
 
-// PlannerIR is the memory-compiled execution plan language injected at the turn
-// tail when there is useful learned state.
+// PlannerIR is the memory-compiled execution plan language embedded in the
+// cache-safe execution contract when there is useful learned state.
 type PlannerIR struct {
 	Version             string        `json:"version"`
 	Goal                string        `json:"goal"`
+	SourceEvent         string        `json:"source_event,omitempty"`
+	RuntimeMode         string        `json:"runtime_mode,omitempty"`
 	Constraints         []Constraint  `json:"constraints,omitempty"`
+	StrategySelection   *StrategyPick `json:"strategy_selection,omitempty"`
 	AvailableStrategies []StrategyRef `json:"available_strategies,omitempty"`
 	MemoryReferences    []MemoryRef   `json:"memory_references,omitempty"`
 	ExecutionSteps      []Step        `json:"execution_steps,omitempty"`
@@ -62,12 +65,28 @@ type StrategyRef struct {
 	ID          string  `json:"id"`
 	SuccessRate float64 `json:"success_rate"`
 	Samples     int     `json:"samples"`
+	Score       float64 `json:"score,omitempty"`
+	Reason      string  `json:"reason,omitempty"`
+}
+
+type StrategyPick struct {
+	Selected string             `json:"selected"`
+	Reason   string             `json:"reason"`
+	Score    float64            `json:"score"`
+	Rejected []RejectedStrategy `json:"rejected,omitempty"`
+}
+
+type RejectedStrategy struct {
+	ID     string  `json:"id"`
+	Reason string  `json:"reason"`
+	Score  float64 `json:"score"`
 }
 
 type MemoryRef struct {
-	ID      string `json:"id"`
-	Content string `json:"content"`
-	Quality string `json:"quality,omitempty"`
+	ID        string `json:"id"`
+	Content   string `json:"content"`
+	Quality   string `json:"quality,omitempty"`
+	Influence string `json:"influence,omitempty"`
 }
 
 type Step struct {
@@ -87,26 +106,70 @@ type ToolRecord struct {
 }
 
 type ExecutionTrace struct {
-	ID                  string       `json:"id"`
-	IRVersion           string       `json:"ir_version"`
-	Goal                string       `json:"goal"`
-	Steps               []Step       `json:"steps,omitempty"`
-	Outcome             string       `json:"outcome"`
-	EfficiencyScore     float64      `json:"efficiency_score"`
-	MemoryEffectiveness float64      `json:"memory_effectiveness"`
-	StrategyUsed        []string     `json:"strategy_used,omitempty"`
-	FailureReason       string       `json:"failure_reason,omitempty"`
-	ToolResults         []ToolRecord `json:"tool_results,omitempty"`
-	StartedAt           time.Time    `json:"started_at"`
-	CompletedAt         time.Time    `json:"completed_at"`
+	ID                  string               `json:"id"`
+	IRVersion           string               `json:"ir_version"`
+	Goal                string               `json:"goal"`
+	Steps               []Step               `json:"steps,omitempty"`
+	Outcome             string               `json:"outcome"`
+	EfficiencyScore     float64              `json:"efficiency_score"`
+	MemoryEffectiveness float64              `json:"memory_effectiveness"`
+	StrategyUsed        []string             `json:"strategy_used,omitempty"`
+	MemoryUsed          []string             `json:"memory_used,omitempty"`
+	DecisionBranches    []DecisionBranch     `json:"decision_branches,omitempty"`
+	CausalEdges         []CausalEdge         `json:"causal_edges,omitempty"`
+	Cost                CostMetrics          `json:"cost,omitempty"`
+	MutationEvaluations []MutationEvaluation `json:"mutation_evaluations,omitempty"`
+	FailureReason       string               `json:"failure_reason,omitempty"`
+	ToolResults         []ToolRecord         `json:"tool_results,omitempty"`
+	StartedAt           time.Time            `json:"started_at"`
+	CompletedAt         time.Time            `json:"completed_at"`
+}
+
+type DecisionBranch struct {
+	Question        string   `json:"question"`
+	Selected        string   `json:"selected"`
+	Rejected        []string `json:"rejected,omitempty"`
+	SelectionReason string   `json:"selection_reason,omitempty"`
+}
+
+type CausalEdge struct {
+	From     string `json:"from"`
+	To       string `json:"to"`
+	Relation string `json:"relation"`
+}
+
+type CostMetrics struct {
+	EstimatedInputTokens      int   `json:"estimated_input_tokens,omitempty"`
+	EstimatedCompiledTokens   int   `json:"estimated_compiled_tokens,omitempty"`
+	EstimatedIROverheadTokens int   `json:"estimated_ir_overhead_tokens,omitempty"`
+	LatencyMs                 int64 `json:"latency_ms,omitempty"`
+	ToolCalls                 int   `json:"tool_calls,omitempty"`
+	ToolErrors                int   `json:"tool_errors,omitempty"`
+	TruncatedToolResults      int   `json:"truncated_tool_results,omitempty"`
 }
 
 type CompilerMutation struct {
-	Target           string   `json:"target"`
-	Change           string   `json:"change"`
-	Reason           string   `json:"reason"`
-	EvidenceTraceIDs []string `json:"evidence_trace_ids,omitempty"`
-	Applied          bool     `json:"applied"`
+	Target             string    `json:"target"`
+	Change             string    `json:"change"`
+	Reason             string    `json:"reason"`
+	EvidenceTraceIDs   []string  `json:"evidence_trace_ids,omitempty"`
+	Status             string    `json:"status,omitempty"`
+	BaselineScore      float64   `json:"baseline_score,omitempty"`
+	EvaluationTraceIDs []string  `json:"evaluation_trace_ids,omitempty"`
+	EvaluationScore    float64   `json:"evaluation_score,omitempty"`
+	EvaluationReason   string    `json:"evaluation_reason,omitempty"`
+	Applied            bool      `json:"applied"`
+	CreatedAt          time.Time `json:"created_at,omitempty"`
+	UpdatedAt          time.Time `json:"updated_at,omitempty"`
+}
+
+type MutationEvaluation struct {
+	Target   string  `json:"target"`
+	Change   string  `json:"change"`
+	Reason   string  `json:"reason"`
+	Decision string  `json:"decision"`
+	Score    float64 `json:"score"`
+	Baseline float64 `json:"baseline"`
 }
 
 type MemoryQuality string
@@ -158,6 +221,7 @@ type SystemLearning struct {
 	BadStrategies        []string  `json:"bad_strategies,omitempty"`
 	GoodPatterns         []string  `json:"good_patterns,omitempty"`
 	MemoryNoisePatterns  []string  `json:"memory_noise_patterns,omitempty"`
+	CausalFindings       []string  `json:"causal_findings,omitempty"`
 	CompilerImprovements []string  `json:"compiler_improvements,omitempty"`
 	CreatedAt            time.Time `json:"created_at"`
 }
@@ -200,45 +264,66 @@ type Turn struct {
 	strategy string
 }
 
-// StartTurn builds a Planner IR from prior learned state. It returns an empty
-// context until the runtime has enough signal to influence the next turn.
+// StartTurn builds a cache-safe execution contract from prior learned state. It
+// returns an empty compiled input until the runtime has enough signal to
+// influence the next turn; when non-empty, callers should use the returned value
+// as the whole user turn instead of appending it as side context.
 func (r *Runtime) StartTurn(ctx context.Context, input string, _ []provider.Message) (string, *Turn) {
 	if r == nil {
 		return "", nil
 	}
 	goal := summarizeGoal(input)
 	st := r.loadState()
-	ir := buildIR(goal, st)
+	ir := buildIR(goal, input, st)
+	now := time.Now().UTC()
 	t := &Turn{
 		rt: r,
 		trace: ExecutionTrace{
-			ID:        traceID(time.Now()),
-			IRVersion: version,
-			Goal:      goal,
-			Steps:     ir.ExecutionSteps,
-			StartedAt: time.Now().UTC(),
+			ID:               traceID(now),
+			IRVersion:        version,
+			Goal:             goal,
+			Steps:            ir.ExecutionSteps,
+			MemoryUsed:       memoryRefIDs(ir.MemoryReferences),
+			DecisionBranches: decisionBranches(ir),
+			StartedAt:        now,
+			Cost: CostMetrics{
+				EstimatedInputTokens: estimateTokens(input),
+			},
 		},
 	}
-	if len(ir.AvailableStrategies) > 0 {
-		t.strategy = ir.AvailableStrategies[0].ID
+	if ir.StrategySelection != nil {
+		t.strategy = ir.StrategySelection.Selected
 		t.trace.StrategyUsed = []string{t.strategy}
 	}
+	t.trace.CausalEdges = causalEdgesForIR(t.trace.ID, ir)
 	if !hasUsefulIR(ir) {
 		return "", t
 	}
-	body, err := json.MarshalIndent(ir, "", "  ")
+	compiled, err := compileExecutionContract(ir)
 	if err != nil {
 		return "", t
 	}
 	if err := ctx.Err(); err != nil {
 		return "", t
 	}
-	return "<memory-compiler-ir>\n" + string(body) + "\n</memory-compiler-ir>", t
+	t.trace.Cost.EstimatedCompiledTokens = estimateTokens(compiled)
+	if t.trace.Cost.EstimatedCompiledTokens > t.trace.Cost.EstimatedInputTokens {
+		t.trace.Cost.EstimatedIROverheadTokens = t.trace.Cost.EstimatedCompiledTokens - t.trace.Cost.EstimatedInputTokens
+	}
+	return compiled, t
 }
 
-func buildIR(goal string, st state) PlannerIR {
-	ir := PlannerIR{Version: version, Goal: goal}
+func buildIR(goal, sourceEvent string, st state) PlannerIR {
+	ir := PlannerIR{
+		Version:     version,
+		Goal:        goal,
+		SourceEvent: sourceEvent,
+		RuntimeMode: "control",
+	}
 	st.Strategies = ensureBuiltInStrategies(st.Strategies)
+	rankedStrategies := rankStrategies(goal, st.Strategies)
+	strategyPick := selectStrategy(rankedStrategies)
+	ir.StrategySelection = &strategyPick
 	for _, c := range st.ExecutionState.ActiveConstraints {
 		ir.Constraints = appendConstraint(ir.Constraints, c)
 	}
@@ -247,7 +332,8 @@ func buildIR(goal string, st state) PlannerIR {
 			ir.RiskNotes = append(ir.RiskNotes, "avoid previously failed strategy "+failed)
 		}
 	}
-	for ref, count := range st.NoisyRefs {
+	for _, noisy := range sortedNoisyRefs(st.NoisyRefs) {
+		ref, count := noisy.ref, noisy.count
 		if count >= 2 {
 			ir.RiskNotes = append(ir.RiskNotes, "quarantined noisy memory pattern "+ref)
 		}
@@ -258,9 +344,10 @@ func buildIR(goal string, st state) PlannerIR {
 		}
 		if node.Quality == QualityHighSignal || node.Type == "tool_result" {
 			ir.MemoryReferences = append(ir.MemoryReferences, MemoryRef{
-				ID:      node.ID,
-				Content: node.Content,
-				Quality: string(node.Quality),
+				ID:        node.ID,
+				Content:   node.Content,
+				Quality:   string(node.Quality),
+				Influence: influenceForNode(node),
 			})
 			if len(ir.MemoryReferences) >= 5 {
 				break
@@ -280,21 +367,13 @@ func buildIR(goal string, st state) PlannerIR {
 			ir.Constraints = appendConstraint(ir.Constraints, Constraint{Type: "reference", Text: m.Reason, Source: m.Target})
 		}
 	}
-	sort.Slice(st.Strategies, func(i, j int) bool {
-		left := strategyScore(goal, st.Strategies[i])
-		right := strategyScore(goal, st.Strategies[j])
-		if left == right {
-			return st.Strategies[i].ID < st.Strategies[j].ID
-		}
-		return left > right
-	})
-	for _, s := range st.Strategies {
-		if s.Samples() == 0 {
-			continue
-		}
-		ref := StrategyRef{ID: s.ID, SuccessRate: s.SuccessRate(), Samples: s.Samples()}
-		if s.SuccessRate() < 0.34 && s.Failures >= 2 {
-			ir.RiskNotes = append(ir.RiskNotes, "avoid low-success strategy "+s.ID)
+	for _, candidate := range rankedStrategies {
+		s := candidate.strategy
+		ref := StrategyRef{ID: s.ID, SuccessRate: s.SuccessRate(), Samples: s.Samples(), Score: candidate.score, Reason: candidate.reason}
+		if lowSuccessStrategy(s) {
+			if s.Samples() > 0 {
+				ir.RiskNotes = append(ir.RiskNotes, "avoid low-success strategy "+s.ID)
+			}
 			continue
 		}
 		ir.AvailableStrategies = append(ir.AvailableStrategies, ref)
@@ -302,8 +381,8 @@ func buildIR(goal string, st state) PlannerIR {
 			break
 		}
 	}
-	if len(ir.AvailableStrategies) > 0 {
-		if plan := strategyPlan(st.Strategies, ir.AvailableStrategies[0].ID); len(plan) > 0 {
+	if ir.StrategySelection != nil && ir.StrategySelection.Selected != "" {
+		if plan := strategyPlan(st.Strategies, ir.StrategySelection.Selected); len(plan) > 0 {
 			ir.ExecutionSteps = plan
 		}
 	}
@@ -326,6 +405,23 @@ func buildIR(goal string, st state) PlannerIR {
 
 func hasUsefulIR(ir PlannerIR) bool {
 	return len(ir.Constraints) > 0 || len(ir.MemoryReferences) > 0 || len(ir.RiskNotes) > 0
+}
+
+func compileExecutionContract(ir PlannerIR) (string, error) {
+	contract := struct {
+		Type        string    `json:"type"`
+		Instruction string    `json:"instruction"`
+		PlannerIR   PlannerIR `json:"planner_ir"`
+	}{
+		Type:        "memory_v5_execution_contract",
+		Instruction: "Execute source_event through planner_ir. Treat constraints, risk_notes, strategy_selection, and execution_steps as the controlling plan for this turn. Do not bypass contradictory or quarantined memory outside this IR.",
+		PlannerIR:   ir,
+	}
+	body, err := json.Marshal(contract)
+	if err != nil {
+		return "", err
+	}
+	return "<memory-compiler-execution>\n" + string(body) + "\n</memory-compiler-execution>", nil
 }
 
 func appendConstraint(existing []Constraint, next Constraint) []Constraint {
@@ -356,6 +452,9 @@ func usableNodes(nodes []MemoryNode, now time.Time) []MemoryNode {
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Confidence == out[j].Confidence {
+			if out[i].Timestamp.Equal(out[j].Timestamp) {
+				return out[i].ID < out[j].ID
+			}
 			return out[i].Timestamp.After(out[j].Timestamp)
 		}
 		return out[i].Confidence > out[j].Confidence
@@ -426,6 +525,39 @@ func traversableRelation(relation string) bool {
 	}
 }
 
+type noisyRefCount struct {
+	ref   string
+	count int
+}
+
+func sortedNoisyRefs(noisy map[string]int) []noisyRefCount {
+	out := make([]noisyRefCount, 0, len(noisy))
+	for ref, count := range noisy {
+		out = append(out, noisyRefCount{ref: ref, count: count})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].count == out[j].count {
+			return out[i].ref < out[j].ref
+		}
+		return out[i].count > out[j].count
+	})
+	return out
+}
+
+func influenceForNode(node MemoryNode) string {
+	if node.Constraint != nil {
+		return node.Constraint.Type
+	}
+	switch node.Type {
+	case "tool_result":
+		return "evidence"
+	case "decision":
+		return "decision_history"
+	default:
+		return "reference"
+	}
+}
+
 func decayedConfidence(node MemoryNode, now time.Time) float64 {
 	if node.TruthLocked || node.Timestamp.IsZero() {
 		return node.Confidence
@@ -451,6 +583,58 @@ func strategyPlan(strategies []Strategy, id string) []Step {
 	return nil
 }
 
+type scoredStrategy struct {
+	strategy Strategy
+	score    float64
+	reason   string
+}
+
+func rankStrategies(goal string, strategies []Strategy) []scoredStrategy {
+	out := make([]scoredStrategy, 0, len(strategies))
+	for _, s := range strategies {
+		score, reason := strategyScoreWithReason(goal, s)
+		out = append(out, scoredStrategy{strategy: s, score: score, reason: reason})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].score == out[j].score {
+			return out[i].strategy.ID < out[j].strategy.ID
+		}
+		return out[i].score > out[j].score
+	})
+	return out
+}
+
+func selectStrategy(ranked []scoredStrategy) StrategyPick {
+	pick := StrategyPick{Selected: "general", Reason: "default strategy", Score: 0}
+	for _, candidate := range ranked {
+		if lowSuccessStrategy(candidate.strategy) {
+			continue
+		}
+		pick.Selected = candidate.strategy.ID
+		pick.Reason = candidate.reason
+		pick.Score = candidate.score
+		break
+	}
+	for _, candidate := range ranked {
+		if candidate.strategy.ID == pick.Selected {
+			continue
+		}
+		reason := candidate.reason
+		if lowSuccessStrategy(candidate.strategy) {
+			reason = "rejected because prior success rate is below the risk threshold"
+		}
+		pick.Rejected = append(pick.Rejected, RejectedStrategy{
+			ID:     candidate.strategy.ID,
+			Reason: reason,
+			Score:  candidate.score,
+		})
+		if len(pick.Rejected) >= 3 {
+			break
+		}
+	}
+	return pick
+}
+
 func bestStrategyID(goal string, strategies []Strategy) string {
 	bestID := "general"
 	bestScore := -1.0
@@ -465,24 +649,105 @@ func bestStrategyID(goal string, strategies []Strategy) string {
 }
 
 func strategyScore(goal string, s Strategy) float64 {
+	score, _ := strategyScoreWithReason(goal, s)
+	return score
+}
+
+func strategyScoreWithReason(goal string, s Strategy) (float64, string) {
 	score := s.SuccessRate()
+	reasons := []string{}
 	if s.Samples() == 0 {
 		score = 0.5
+		reasons = append(reasons, "neutral prior")
+	} else {
+		reasons = append(reasons, fmt.Sprintf("%.0f%% prior success", s.SuccessRate()*100))
 	}
 	lowerGoal := strings.ToLower(goal)
 	for _, p := range s.Preconditions {
 		p = strings.ToLower(strings.TrimSpace(p))
 		if p != "" && strings.Contains(lowerGoal, p) {
 			score += 0.75
+			reasons = append(reasons, "matched precondition "+p)
 		}
 	}
 	if s.ID == classifyStrategy(goal) {
 		score += 0.5
+		reasons = append(reasons, "matched goal classifier")
 	}
-	if s.Failures >= 2 && s.SuccessRate() < 0.34 {
+	if lowSuccessStrategy(s) {
 		score -= 1.0
+		reasons = append(reasons, "low success history")
 	}
-	return score
+	return score, strings.Join(reasons, "; ")
+}
+
+func lowSuccessStrategy(s Strategy) bool {
+	return s.Failures >= 2 && s.SuccessRate() < 0.34
+}
+
+func memoryRefIDs(refs []MemoryRef) []string {
+	out := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		if strings.TrimSpace(ref.ID) != "" {
+			out = append(out, ref.ID)
+		}
+	}
+	return out
+}
+
+func decisionBranches(ir PlannerIR) []DecisionBranch {
+	if ir.StrategySelection == nil || ir.StrategySelection.Selected == "" {
+		return nil
+	}
+	rejected := make([]string, 0, len(ir.StrategySelection.Rejected))
+	for _, r := range ir.StrategySelection.Rejected {
+		rejected = append(rejected, r.ID)
+	}
+	return []DecisionBranch{{
+		Question:        "Which strategy should control this turn?",
+		Selected:        ir.StrategySelection.Selected,
+		Rejected:        rejected,
+		SelectionReason: ir.StrategySelection.Reason,
+	}}
+}
+
+func causalEdgesForIR(traceID string, ir PlannerIR) []CausalEdge {
+	decisionID := "decision:" + traceID
+	outcomeID := "outcome:" + traceID
+	edges := make([]CausalEdge, 0, len(ir.MemoryReferences)+len(ir.Constraints)+1)
+	for _, ref := range ir.MemoryReferences {
+		edges = appendCausalEdge(edges, CausalEdge{From: ref.ID, To: decisionID, Relation: "influenced"})
+	}
+	for _, c := range ir.Constraints {
+		if c.Source != "" {
+			edges = appendCausalEdge(edges, CausalEdge{From: c.Source, To: decisionID, Relation: "constrained"})
+		}
+	}
+	if ir.StrategySelection != nil && ir.StrategySelection.Selected != "" {
+		edges = appendCausalEdge(edges, CausalEdge{From: decisionID, To: outcomeID, Relation: "selected_strategy:" + ir.StrategySelection.Selected})
+	}
+	return edges
+}
+
+func appendCausalEdge(edges []CausalEdge, next CausalEdge) []CausalEdge {
+	if next.From == "" || next.To == "" || next.Relation == "" {
+		return edges
+	}
+	for _, e := range edges {
+		if e == next {
+			return edges
+		}
+	}
+	return append(edges, next)
+}
+
+func estimateTokens(s string) int {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0
+	}
+	// Cheap conservative estimate used only for local learning, not billing.
+	return (len([]rune(s)) + 3) / 4
 }
 
 func (t *Turn) RecordToolResults(records []ToolRecord) {
@@ -500,6 +765,19 @@ func (t *Turn) Finish(err error) {
 	t.trace.Outcome = outcomeFor(t.trace.ToolResults, err)
 	if err != nil {
 		t.trace.FailureReason = firstLine(err.Error())
+	}
+	t.trace.Cost = finishCostMetrics(t.trace.Cost, t.trace.ToolResults, t.trace.StartedAt, t.trace.CompletedAt)
+	for i, rec := range t.trace.ToolResults {
+		toolID := fmt.Sprintf("tool:%s:%d", t.trace.ID, i)
+		relation := "supported_outcome"
+		if strings.TrimSpace(rec.Error) != "" {
+			relation = "weakened_outcome"
+		}
+		t.trace.CausalEdges = appendCausalEdge(t.trace.CausalEdges, CausalEdge{
+			From:     toolID,
+			To:       "outcome:" + t.trace.ID,
+			Relation: relation,
+		})
 	}
 	t.trace.EfficiencyScore = efficiencyScore(t.trace.ToolResults, t.trace.StartedAt, t.trace.CompletedAt)
 	t.trace.MemoryEffectiveness = memoryEffectiveness(t.trace)
@@ -537,7 +815,7 @@ func efficiencyScore(records []ToolRecord, start, end time.Time) float64 {
 }
 
 func memoryEffectiveness(tr ExecutionTrace) float64 {
-	if len(tr.StrategyUsed) == 0 && len(tr.Steps) == 0 {
+	if len(tr.MemoryUsed) == 0 && len(tr.StrategyUsed) == 0 && len(tr.Steps) == 0 {
 		return 0
 	}
 	switch tr.Outcome {
@@ -550,18 +828,35 @@ func memoryEffectiveness(tr ExecutionTrace) float64 {
 	}
 }
 
+func finishCostMetrics(cost CostMetrics, records []ToolRecord, start, end time.Time) CostMetrics {
+	cost.LatencyMs = end.Sub(start).Milliseconds()
+	cost.ToolCalls = len(records)
+	for _, rec := range records {
+		if strings.TrimSpace(rec.Error) != "" {
+			cost.ToolErrors++
+		}
+		if rec.Truncated {
+			cost.TruncatedToolResults++
+		}
+	}
+	return cost
+}
+
 func (r *Runtime) writeTraceAndLearn(tr ExecutionTrace, strategyID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := os.MkdirAll(r.dir, 0o755); err != nil {
 		return
 	}
-	_ = appendJSONL(filepath.Join(r.dir, tracesFile), tr)
 	st := r.loadStateLocked()
 	st.Strategies = ensureBuiltInStrategies(st.Strategies)
 	if strategyID == "" {
 		strategyID = classifyStrategy(tr.Goal)
 	}
+	var evaluations []MutationEvaluation
+	st.Mutations, evaluations = evaluateMutations(st.Mutations, tr)
+	tr.MutationEvaluations = evaluations
+	baseline := baselineScore(st, strategyID)
 	st.Strategies = updateStrategy(st.Strategies, strategyID, tr.Outcome)
 	learning := analyzeTrace(tr, strategyID)
 	if hasLearning(learning) {
@@ -570,8 +865,9 @@ func (r *Runtime) writeTraceAndLearn(tr ExecutionTrace, strategyID string) {
 	st.Nodes, st.Edges, st.Decisions = updateGraph(st.Nodes, st.Edges, st.Decisions, tr, learning)
 	st.ExecutionState = updateExecutionState(st.ExecutionState, tr, learning)
 	st.NoisyRefs = updateNoisyRefs(st.NoisyRefs, learning)
-	st.Mutations = mergeMutations(st.Mutations, mutationsFromLearning(learning)...)
+	st.Mutations = mergeMutations(st.Mutations, mutationsFromLearning(learning, baseline)...)
 	st.UpdatedAt = time.Now().UTC()
+	_ = appendJSONL(filepath.Join(r.dir, tracesFile), tr)
 	_ = writeJSON(filepath.Join(r.dir, stateFile), st)
 }
 
@@ -596,27 +892,50 @@ func analyzeTrace(tr ExecutionTrace, strategyID string) SystemLearning {
 	if tr.Outcome == "failure" {
 		learning.BadStrategies = append(learning.BadStrategies, strategyID)
 		learning.CompilerImprovements = append(learning.CompilerImprovements, "previous execution failed; require source-of-truth verification before acting")
+		for _, memoryID := range tr.MemoryUsed {
+			learning.CausalFindings = append(learning.CausalFindings, "memory "+memoryID+" participated in failed outcome")
+		}
 	}
 	if tr.Outcome == "success" {
 		learning.GoodPatterns = append(learning.GoodPatterns, strategyID)
+		for _, memoryID := range tr.MemoryUsed {
+			learning.CausalFindings = append(learning.CausalFindings, "memory "+memoryID+" supported successful outcome")
+		}
+	}
+	if tr.Cost.ToolCalls > len(tr.Steps)+3 && tr.Cost.ToolCalls >= 6 {
+		learning.CompilerImprovements = append(learning.CompilerImprovements, "tool call count exceeded plan shape; prefer tighter execution steps")
+	}
+	if tr.Cost.EstimatedIROverheadTokens > 800 {
+		learning.CompilerImprovements = append(learning.CompilerImprovements, "compiled IR overhead exceeded budget; reduce memory references before injection")
 	}
 	return dedupeLearning(learning)
 }
 
-func mutationsFromLearning(learning SystemLearning) []CompilerMutation {
+func mutationsFromLearning(learning SystemLearning, baseline float64) []CompilerMutation {
 	var out []CompilerMutation
+	now := time.Now().UTC()
 	for _, reason := range learning.CompilerImprovements {
 		target := "strategy_selector"
 		change := "add_constraint"
 		if strings.Contains(reason, "source-of-truth") {
 			target = "ir_builder"
+		} else if strings.Contains(reason, "tool call count") {
+			target = "strategy_selector"
+			change = "decrease_k"
+		} else if strings.Contains(reason, "IR overhead") {
+			target = "memory_router"
+			change = "decrease_k"
 		}
 		out = append(out, CompilerMutation{
 			Target:           target,
 			Change:           change,
 			Reason:           reason,
 			EvidenceTraceIDs: []string{learning.TraceID},
+			Status:           "testing",
+			BaselineScore:    baseline,
 			Applied:          true,
+			CreatedAt:        now,
+			UpdatedAt:        now,
 		})
 	}
 	for _, pattern := range learning.MemoryNoisePatterns {
@@ -625,10 +944,91 @@ func mutationsFromLearning(learning SystemLearning) []CompilerMutation {
 			Change:           "quarantine_pattern",
 			Reason:           pattern,
 			EvidenceTraceIDs: []string{learning.TraceID},
+			Status:           "testing",
+			BaselineScore:    baseline,
 			Applied:          true,
+			CreatedAt:        now,
+			UpdatedAt:        now,
 		})
 	}
 	return out
+}
+
+func evaluateMutations(existing []CompilerMutation, tr ExecutionTrace) ([]CompilerMutation, []MutationEvaluation) {
+	if len(existing) == 0 {
+		return existing, nil
+	}
+	now := time.Now().UTC()
+	score := traceQualityScore(tr)
+	evaluations := []MutationEvaluation{}
+	for i := range existing {
+		m := &existing[i]
+		if !m.Applied || m.Status == "accepted" || m.Status == "rejected" {
+			continue
+		}
+		if m.Status == "" {
+			m.Status = "testing"
+		}
+		if containsString(m.EvaluationTraceIDs, tr.ID) || containsString(m.EvidenceTraceIDs, tr.ID) {
+			continue
+		}
+		m.EvaluationTraceIDs = append(m.EvaluationTraceIDs, tr.ID)
+		m.EvaluationScore = score
+		m.UpdatedAt = now
+		decision := "accepted"
+		if score+0.05 < m.BaselineScore {
+			decision = "rejected"
+			m.Applied = false
+			m.Status = "rejected"
+			m.EvaluationReason = "evaluation trace scored below mutation baseline"
+		} else {
+			m.Applied = true
+			m.Status = "accepted"
+			m.EvaluationReason = "evaluation trace matched or improved the mutation baseline"
+		}
+		evaluations = append(evaluations, MutationEvaluation{
+			Target:   m.Target,
+			Change:   m.Change,
+			Reason:   m.Reason,
+			Decision: decision,
+			Score:    score,
+			Baseline: m.BaselineScore,
+		})
+	}
+	return existing, evaluations
+}
+
+func traceQualityScore(tr ExecutionTrace) float64 {
+	score := 0.0
+	switch tr.Outcome {
+	case "success":
+		score += 0.7
+	case "partial_success":
+		score += 0.4
+	default:
+		score += 0.1
+	}
+	score += tr.EfficiencyScore * 0.2
+	score += tr.MemoryEffectiveness * 0.1
+	if tr.Cost.ToolCalls > 0 {
+		score -= float64(tr.Cost.ToolErrors) / float64(tr.Cost.ToolCalls) * 0.2
+	}
+	if score < 0 {
+		return 0
+	}
+	if score > 1 {
+		return 1
+	}
+	return score
+}
+
+func baselineScore(st state, strategyID string) float64 {
+	for _, s := range st.Strategies {
+		if s.ID == strategyID && s.Samples() > 0 {
+			return 0.2 + s.SuccessRate()*0.6
+		}
+	}
+	return 0.5
 }
 
 func mergeMutations(existing []CompilerMutation, next ...CompilerMutation) []CompilerMutation {
@@ -657,7 +1057,7 @@ func mergeMutations(existing []CompilerMutation, next ...CompilerMutation) []Com
 }
 
 func hasLearning(l SystemLearning) bool {
-	return len(l.BadStrategies) > 0 || len(l.GoodPatterns) > 0 || len(l.MemoryNoisePatterns) > 0 || len(l.CompilerImprovements) > 0
+	return len(l.BadStrategies) > 0 || len(l.GoodPatterns) > 0 || len(l.MemoryNoisePatterns) > 0 || len(l.CausalFindings) > 0 || len(l.CompilerImprovements) > 0
 }
 
 func appendLearning(existing []SystemLearning, learning SystemLearning) []SystemLearning {
@@ -691,6 +1091,7 @@ func dedupeLearning(l SystemLearning) SystemLearning {
 	l.BadStrategies = dedupeStrings(l.BadStrategies)
 	l.GoodPatterns = dedupeStrings(l.GoodPatterns)
 	l.MemoryNoisePatterns = dedupeStrings(l.MemoryNoisePatterns)
+	l.CausalFindings = dedupeStrings(l.CausalFindings)
 	l.CompilerImprovements = dedupeStrings(l.CompilerImprovements)
 	return l
 }
@@ -709,6 +1110,15 @@ func dedupeStrings(in []string) []string {
 	return out
 }
 
+func containsString(ss []string, target string) bool {
+	for _, s := range ss {
+		if s == target {
+			return true
+		}
+	}
+	return false
+}
+
 func updateGraph(nodes []MemoryNode, edges []MemoryEdge, decisions []DecisionNode, tr ExecutionTrace, learning SystemLearning) ([]MemoryNode, []MemoryEdge, []DecisionNode) {
 	now := time.Now().UTC()
 	traceNode := MemoryNode{
@@ -722,11 +1132,12 @@ func updateGraph(nodes []MemoryNode, edges []MemoryEdge, decisions []DecisionNod
 	}
 	nodes = upsertNode(nodes, traceNode)
 	decision := DecisionNode{
-		ID:             "decision:" + tr.ID,
-		Question:       "Which execution strategy should guide this turn?",
-		SelectedOption: firstNonEmpty(tr.StrategyUsed, classifyStrategy(tr.Goal)),
-		Reasoning:      "Selected by Memory v5 strategy registry from goal classification and prior outcomes.",
-		Timestamp:      now,
+		ID:              "decision:" + tr.ID,
+		Question:        "Which execution strategy should guide this turn?",
+		SelectedOption:  firstNonEmpty(tr.StrategyUsed, classifyStrategy(tr.Goal)),
+		RejectedOptions: rejectedOptions(tr.DecisionBranches),
+		Reasoning:       "Selected by Memory v5 strategy registry from goal classification and prior outcomes.",
+		Timestamp:       now,
 	}
 	decisions = appendDecision(decisions, decision)
 	nodes = upsertNode(nodes, MemoryNode{
@@ -762,6 +1173,17 @@ func updateGraph(nodes []MemoryNode, edges []MemoryEdge, decisions []DecisionNod
 			TruthLocked: true,
 		})
 		edges = appendEdge(edges, MemoryEdge{From: id, To: traceNode.ID, Relation: "derived_from"})
+	}
+	for _, causal := range tr.CausalEdges {
+		relation := graphRelation(causal.Relation)
+		if relation == "" {
+			continue
+		}
+		to := causal.To
+		if strings.HasPrefix(to, "outcome:") {
+			to = traceNode.ID
+		}
+		edges = appendEdge(edges, MemoryEdge{From: causal.From, To: to, Relation: relation})
 	}
 	for i, reason := range learning.CompilerImprovements {
 		id := fmt.Sprintf("learning:%s:%d", tr.ID, i)
@@ -801,6 +1223,30 @@ func updateGraph(nodes []MemoryNode, edges []MemoryEdge, decisions []DecisionNod
 		decisions = decisions[len(decisions)-100:]
 	}
 	return nodes, edges, decisions
+}
+
+func rejectedOptions(branches []DecisionBranch) []string {
+	for _, branch := range branches {
+		if branch.Question == "Which strategy should control this turn?" {
+			return append([]string(nil), branch.Rejected...)
+		}
+	}
+	return nil
+}
+
+func graphRelation(relation string) string {
+	switch {
+	case relation == "influenced", relation == "supported_outcome":
+		return "supports"
+	case relation == "constrained":
+		return "depends_on"
+	case relation == "weakened_outcome":
+		return "contradicts"
+	case strings.HasPrefix(relation, "selected_strategy:"):
+		return "causes"
+	default:
+		return ""
+	}
 }
 
 func updateExecutionState(prev ExecutionState, tr ExecutionTrace, learning SystemLearning) ExecutionState {
