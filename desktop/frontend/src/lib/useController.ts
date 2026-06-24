@@ -914,66 +914,51 @@ export function useController() {
       addBreadcrumb("tab.hydrate", `${label} failed ${tabId}: ${errorMessage(err)}`);
     };
 
-    const metaTask = app.MetaForTab(tabId)
-      .then((meta) => {
-        if (stillCurrent()) dispatchTo(tabId, { type: "meta", meta });
-      })
-      .catch((err) => noteFailure("meta", err));
-    const effortTask = app.EffortForTab(tabId)
-      .then((effort) => {
-        if (stillCurrent()) dispatchTo(tabId, { type: "effort", effort });
-      })
-      .catch((err) => noteFailure("effort", err));
-    const jobsTask = app.JobsForTab(tabId)
-      .then((jobs) => {
-        if (stillCurrent()) dispatchTo(tabId, { type: "jobs", jobs: asArray(jobs) });
-      })
-      .catch((err) => noteFailure("jobs", err));
-
     const historyStartedAt = Date.now();
-    const historyTask = options.skipHistory
-      ? Promise.resolve().then(() => {
-        addBreadcrumb("tab.hydrate", `history skipped ${tabId} reason=cached-live-turn`);
-        if (reason === "switch-tab") {
-          addBreadcrumb("tab.switch", `history-done ${tabId} skipped ms=${Date.now() - historyStartedAt}`);
-        }
-      })
-      : app.HistoryForTab(tabId)
-        .then((history) => {
-          if (!stillCurrent()) return;
-          const messages = asArray(history);
-          const reduceStartedAt = Date.now();
-          if (messages.length) dispatchTo(tabId, { type: "history", messages });
-          addBreadcrumb(
-            "tab.hydrate",
-            `history done ${tabId} count=${messages.length} apiMs=${Date.now() - historyStartedAt} reduceMs=${Date.now() - reduceStartedAt}`,
-          );
-          if (reason === "switch-tab") {
-            addBreadcrumb(
-              "tab.switch",
-              `history-done ${tabId} count=${messages.length} ms=${Date.now() - historyStartedAt}`,
-            );
-          }
-        })
-        .catch((err) => noteFailure("history", err));
-    const checkpointsTask = app.CheckpointsForTab(tabId)
-      .then((checkpoints) => {
-        if (stillCurrent()) dispatchTo(tabId, { type: "checkpoints", checkpoints: asArray(checkpoints) });
-      })
-      .catch((err) => noteFailure("checkpoints", err));
-    const contextTask = app.ContextUsageForTab(tabId)
-      .then((context) => {
-        if (stillCurrent()) dispatchTo(tabId, { type: "context", context });
-      })
-      .catch((err) => noteFailure("context", err));
-    const balanceTask = app.BalanceForTab(tabId)
-      .then((balance) => {
-        if (stillCurrent()) dispatchTo(tabId, { type: "balance", balance });
-      })
-      .catch((err) => noteFailure("balance", err));
 
-    await Promise.all([metaTask, effortTask, jobsTask, historyTask, checkpointsTask, contextTask, balanceTask]);
+    // Collect all backend results first, then batch-dispatched atomically.
+    // This avoids 7+ independent bump() re-renders as each IPC resolves.
+    const [meta, effort, jobs, history, checkpoints, context, balance] = await Promise.all([
+      app.MetaForTab(tabId).catch((err) => { noteFailure("meta", err); return undefined; }),
+      app.EffortForTab(tabId).catch((err) => { noteFailure("effort", err); return undefined; }),
+      app.JobsForTab(tabId).catch((err) => { noteFailure("jobs", err); return undefined; }),
+      options.skipHistory
+        ? Promise.resolve(undefined)
+        : app.HistoryForTab(tabId).catch((err) => { noteFailure("history", err); return undefined; }),
+      app.CheckpointsForTab(tabId).catch((err) => { noteFailure("checkpoints", err); return undefined; }),
+      app.ContextUsageForTab(tabId).catch((err) => { noteFailure("context", err); return undefined; }),
+      app.BalanceForTab(tabId).catch((err) => { noteFailure("balance", err); return undefined; }),
+    ]);
     if (!stillCurrent()) return;
+
+    // Batch all dispatches — React 18 merges synchronous setState calls
+    // within the same microtask into a single re-render.
+    if (meta !== undefined) dispatchTo(tabId, { type: "meta", meta });
+    if (effort !== undefined) dispatchTo(tabId, { type: "effort", effort });
+    if (jobs !== undefined) dispatchTo(tabId, { type: "jobs", jobs: asArray(jobs) });
+    if (!options.skipHistory && history !== undefined) {
+      const messages = asArray(history);
+      if (messages.length) dispatchTo(tabId, { type: "history", messages });
+      addBreadcrumb(
+        "tab.hydrate",
+        `history done ${tabId} count=${messages.length} ms=${Date.now() - historyStartedAt}`,
+      );
+      if (reason === "switch-tab") {
+        addBreadcrumb(
+          "tab.switch",
+          `history-done ${tabId} count=${messages.length} ms=${Date.now() - historyStartedAt}`,
+        );
+      }
+    } else if (options.skipHistory) {
+      addBreadcrumb("tab.hydrate", `history skipped ${tabId} reason=cached-live-turn`);
+      if (reason === "switch-tab") {
+        addBreadcrumb("tab.switch", `history-done ${tabId} skipped ms=${Date.now() - historyStartedAt}`);
+      }
+    }
+    if (checkpoints !== undefined) dispatchTo(tabId, { type: "checkpoints", checkpoints: asArray(checkpoints) });
+    if (context !== undefined) dispatchTo(tabId, { type: "context", context });
+    if (balance !== undefined) dispatchTo(tabId, { type: "balance", balance });
+
     dispatchTo(tabId, { type: "hydrate_done" });
     addBreadcrumb("tab.hydrate", `done ${reason} ${tabId} ms=${Date.now() - hydrateStartedAt}`);
   }, [bumpSessionLoadSeq, dispatchTo, sessionLoadCurrent]);
