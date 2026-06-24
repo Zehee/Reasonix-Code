@@ -328,7 +328,14 @@ func decideBash(args json.RawMessage) Decision {
 		if !bashMatchesSafePrefix(lower, safe) {
 			continue
 		}
-		if arg := unsafeSafeCommandArg(cmd, safe); arg != "" {
+		arg, err := unsafeSafeCommandArg(cmd, safe)
+		if err != "" {
+			return Decision{
+				Blocked: true,
+				Message: fmt.Sprintf("blocked: bash command in plan mode has malformed shell quoting (%s). Use a simple read-only command while planning.", err),
+			}
+		}
+		if arg != "" {
 			return Decision{
 				Blocked: true,
 				Message: fmt.Sprintf("blocked: bash command in plan mode uses a write-capable argument (%q). Use a read-only command while planning.", arg),
@@ -354,11 +361,14 @@ func bashMatchesSafePrefix(lower, safe string) bool {
 	return unicode.IsSpace(r)
 }
 
-func unsafeSafeCommandArg(cmd, safe string) string {
-	fields := strings.Fields(cmd)
+func unsafeSafeCommandArg(cmd, safe string) (string, string) {
+	fields, err := shellFields(cmd)
+	if err != "" {
+		return "", err
+	}
 	base := strings.Fields(safe)
 	if len(fields) <= len(base) {
-		return ""
+		return "", ""
 	}
 	args := fields[len(base):]
 	lowerArgs := make([]string, len(args))
@@ -368,7 +378,7 @@ func unsafeSafeCommandArg(cmd, safe string) string {
 	if strings.HasPrefix(safe, "git ") {
 		for _, arg := range lowerArgs {
 			if arg == "--output" || strings.HasPrefix(arg, "--output=") || arg == "--ext-diff" {
-				return arg
+				return arg, ""
 			}
 		}
 	}
@@ -377,21 +387,93 @@ func unsafeSafeCommandArg(cmd, safe string) string {
 		for i, arg := range args {
 			lowerArg := lowerArgs[i]
 			if arg == "-O" || strings.HasPrefix(arg, "-O") || strings.HasPrefix(lowerArg, "--open-files-in-pager") {
-				return arg
+				return arg, ""
 			}
 		}
 	case "find":
 		for _, arg := range lowerArgs {
 			if findWriteArgs[arg] {
-				return arg
+				return arg, ""
 			}
 		}
 	case "go list", "go vet":
 		for _, arg := range lowerArgs {
 			if goWriteOrExecArgs[arg] || strings.HasPrefix(arg, "-mod=mod") || strings.HasPrefix(arg, "-modfile=") || strings.HasPrefix(arg, "-toolexec=") || strings.HasPrefix(arg, "-vettool=") {
-				return arg
+				return arg, ""
 			}
 		}
 	}
-	return ""
+	return "", ""
+}
+
+func shellFields(s string) ([]string, string) {
+	var fields []string
+	var b strings.Builder
+	inSingle := false
+	inDouble := false
+	escaped := false
+	haveField := false
+	flush := func() {
+		if haveField {
+			fields = append(fields, b.String())
+			b.Reset()
+			haveField = false
+		}
+	}
+	for _, r := range s {
+		if escaped {
+			b.WriteRune(r)
+			haveField = true
+			escaped = false
+			continue
+		}
+		if inSingle {
+			if r == '\'' {
+				inSingle = false
+				continue
+			}
+			b.WriteRune(r)
+			haveField = true
+			continue
+		}
+		if inDouble {
+			switch r {
+			case '"':
+				inDouble = false
+			case '\\':
+				escaped = true
+			default:
+				b.WriteRune(r)
+				haveField = true
+			}
+			continue
+		}
+		switch {
+		case unicode.IsSpace(r):
+			flush()
+		case r == '\'':
+			inSingle = true
+			haveField = true
+		case r == '"':
+			inDouble = true
+			haveField = true
+		case r == '\\':
+			escaped = true
+			haveField = true
+		default:
+			b.WriteRune(r)
+			haveField = true
+		}
+	}
+	if escaped {
+		return nil, "dangling escape"
+	}
+	if inSingle {
+		return nil, "unterminated single quote"
+	}
+	if inDouble {
+		return nil, "unterminated double quote"
+	}
+	flush()
+	return fields, ""
 }

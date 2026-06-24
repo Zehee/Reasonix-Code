@@ -784,6 +784,11 @@ func TestStripComposePrefixes(t *testing.T) {
 			want:  "explain this function",
 		},
 		{
+			name:  "legacy plan mode marker stripped",
+			input: legacyPlanModeMarker + "\n\nexplain this function",
+			want:  "explain this function",
+		},
+		{
 			name:  "plan mode marker without trailing newlines",
 			input: PlanModeMarker,
 			want:  "",

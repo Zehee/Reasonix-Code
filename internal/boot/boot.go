@@ -922,7 +922,8 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 				}
 				return fmt.Sprintf("enabled MCP server %q tools: %s.", spec.Name, strings.Join(names, ", ")), nil
 			},
-			mcpNames: onDemandMCPNames,
+			mcpNames:             onDemandMCPNames,
+			planModeAllowedTools: cfg.Agent.PlanModeAllowedTools,
 		})
 	}
 

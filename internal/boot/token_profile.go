@@ -10,6 +10,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/planmode"
+	"reasonix/internal/plugin"
 	"reasonix/internal/tool"
 )
 
@@ -80,6 +81,8 @@ type toolSourceConnector struct {
 	lsp           func(context.Context) (string, error)
 	mcp           func(context.Context, string) (string, error)
 	mcpNames      []string
+
+	planModeAllowedTools []string
 }
 
 func (*toolSourceConnector) Name() string { return "connect_tool_source" }
@@ -113,11 +116,12 @@ func (t *toolSourceConnector) Execute(ctx context.Context, args json.RawMessage)
 	if source == "" {
 		return "", fmt.Errorf("unknown tool source %q; available: %s", p.Source, strings.Join(t.availableSources(), ", "))
 	}
+	name := strings.TrimSpace(p.Name)
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	if blocked, msg := planModeSourceBlocked(ctx, source); blocked {
+	if blocked, msg := t.planModeSourceBlocked(ctx, source, name); blocked {
 		return msg, nil
 	}
 
@@ -137,7 +141,6 @@ func (t *toolSourceConnector) Execute(ctx context.Context, args json.RawMessage)
 	case "lsp":
 		return runSourceInstaller(ctx, "lsp", t.lsp)
 	case "mcp":
-		name := strings.TrimSpace(p.Name)
 		if name == "" {
 			if len(t.mcpNames) == 0 {
 				return "No configured MCP servers are available in this session.", nil
@@ -155,9 +158,15 @@ func (t *toolSourceConnector) Execute(ctx context.Context, args json.RawMessage)
 	}
 }
 
-func planModeSourceBlocked(ctx context.Context, source string) (bool, string) {
+func (t *toolSourceConnector) planModeSourceBlocked(ctx context.Context, source, name string) (bool, string) {
 	if !agent.PlanModeFromContext(ctx) {
 		return false, ""
+	}
+	if source == "mcp" {
+		if name == "" || planModeAllowsMCPServer(t.planModeAllowedTools, name) {
+			return false, ""
+		}
+		return true, fmt.Sprintf("blocked: MCP source %q is not available in plan mode unless plan_mode_allowed_tools declares at least one concrete tool with prefix %q. Keep exploring with read-only tools, then write your plan for approval before using this MCP server.", name, plugin.ToolPrefix(name))
 	}
 	// Sources are read-only iff they expose only read-only research surfaces; the
 	// moderate plan-mode gate then trusts that ReadOnly flag (step 6), while any
@@ -165,6 +174,17 @@ func planModeSourceBlocked(ctx context.Context, source string) (bool, string) {
 	readOnlySource := source == "web_fetch" || source == "lsp" || source == "read_only_task" || source == "read_only_skill"
 	decision := planmode.Policy{}.Decide(planmode.Call{Name: source, ReadOnly: readOnlySource})
 	return decision.Blocked, decision.Message
+}
+
+func planModeAllowsMCPServer(allowedTools []string, server string) bool {
+	prefix := plugin.ToolPrefix(server)
+	for _, name := range allowedTools {
+		name = strings.TrimSpace(name)
+		if strings.HasPrefix(name, prefix) && len(name) > len(prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeToolSource(source string) string {

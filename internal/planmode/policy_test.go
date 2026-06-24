@@ -120,6 +120,56 @@ func TestDecideStillValidatesBashArgumentsWhenOverridden(t *testing.T) {
 	}
 }
 
+func TestDecideBlocksQuotedBashWriteArguments(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		want    string
+	}{
+		{
+			name:    "single quoted find delete",
+			command: "find . -name scratch '-delete'",
+			want:    "-delete",
+		},
+		{
+			name:    "backslash escaped find delete",
+			command: `find . -name scratch \-delete`,
+			want:    "-delete",
+		},
+		{
+			name:    "single quoted git pager",
+			command: `git grep foo '--open-files-in-pager=sh -c echo'`,
+			want:    "--open-files-in-pager=sh -c echo",
+		},
+		{
+			name:    "single quoted go mod write mode",
+			command: "go list ./... '-mod=mod'",
+			want:    "-mod=mod",
+		},
+		{
+			name:    "unterminated quote fails closed",
+			command: "find . '-delete",
+			want:    "malformed shell quoting",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args, err := json.Marshal(map[string]any{"command": tt.command})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			decision := (Policy{}).Decide(Call{Name: "bash", ReadOnly: false, Args: args})
+			if !decision.Blocked {
+				t.Fatalf("bash command %q should be blocked in plan mode", tt.command)
+			}
+			if !strings.Contains(decision.Message, tt.want) {
+				t.Fatalf("blocked message = %q, want to mention %q", decision.Message, tt.want)
+			}
+		})
+	}
+}
+
 func TestDecideBlocksBashProcessControlArguments(t *testing.T) {
 	tests := []struct {
 		name string

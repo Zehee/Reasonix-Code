@@ -1360,6 +1360,76 @@ READ ONLY SKILL BODY`)
 	}
 }
 
+func TestBuildTokenEconomyPlanModeCanConnectAllowedMCPSource(t *testing.T) {
+	isolateConfigHome(t)
+	dir := robustTempDir(t)
+	t.Chdir(dir)
+
+	registerBootTokenProfileTestProvider()
+	prov := testutil.NewMock("token-economy",
+		testutil.Turn{ToolCalls: []provider.ToolCall{
+			{ID: "source-1", Name: "connect_tool_source", Arguments: `{"source":"mcp","name":"mockmcp"}`},
+		}},
+		testutil.Turn{Text: "done"},
+	)
+	setBootTokenProfileTestProvider(t, prov)
+	writeFile(t, dir, "reasonix.toml", fmt.Sprintf(`
+default_model = "test-model"
+
+[agent]
+system_prompt = "BASE"
+plan_mode_allowed_tools = ["mcp__mockmcp__echo"]
+
+[[providers]]
+name = "test-model"
+kind = "boot-token-profile-test"
+model = "x"
+
+[[plugins]]
+name = "mockmcp"
+command = %q
+args = ["-test.run=TestHelperProcess", "--"]
+env = { GO_WANT_HELPER_PROCESS = "1" }
+`, os.Args[0]))
+
+	ctrl, err := Build(context.Background(), Options{Sink: event.Discard, TokenMode: TokenModeEconomy})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	defer ctrl.Close()
+	ctrl.SetPlanMode(true)
+	if err := ctrl.Run(context.Background(), "connect allowed mcp while planning"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	reqs := prov.Requests()
+	if len(reqs) != 2 {
+		t.Fatalf("requests = %d, want 2", len(reqs))
+	}
+	if !requestHasTool(reqs[1], "mcp__mockmcp__echo") {
+		t.Fatalf("second request should expose allowed MCP source in plan economy mode; tools=%v", toolSchemaNames(reqs[1].Tools))
+	}
+	for _, msg := range ctrl.History() {
+		if msg.Role == provider.RoleTool && msg.Name == "connect_tool_source" {
+			if strings.Contains(msg.Content, "blocked:") {
+				t.Fatalf("connect_tool_source should not block allowed MCP in plan mode, got:\n%s", msg.Content)
+			}
+			if !strings.Contains(msg.Content, `enabled MCP server "mockmcp" tools: mcp__mockmcp__echo`) {
+				t.Fatalf("connect_tool_source should report enabled MCP tools, got:\n%s", msg.Content)
+			}
+		}
+	}
+}
+
+func TestPlanModeAllowsMCPServerRequiresConcreteToolName(t *testing.T) {
+	if planModeAllowsMCPServer([]string{"mcp__mockmcp__"}, "mockmcp") {
+		t.Fatal("bare MCP namespace prefix should not allow a server in plan mode")
+	}
+	if !planModeAllowsMCPServer([]string{"mcp__mockmcp__echo"}, "mockmcp") {
+		t.Fatal("concrete MCP tool name should allow its server in plan mode")
+	}
+}
+
 func TestBuildTokenEconomyPlanModeBlocksSourcesWithPolicy(t *testing.T) {
 	tests := []struct {
 		source          string
