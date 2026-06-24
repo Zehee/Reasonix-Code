@@ -18,6 +18,7 @@ type Result struct {
 	Gain                   float64
 	TotalWeight            float64
 	Signals                []controlgraph.ControlSignal
+	NodeInfluence          []controlgraph.NodeInfluence
 }
 
 func Aggregate(signals []controlgraph.ControlSignal, edges []controlgraph.ControlEdge) Result {
@@ -69,6 +70,20 @@ func Aggregate(signals []controlgraph.ControlSignal, edges []controlgraph.Contro
 		if score/result.TotalWeight > result.ConsensusScore {
 			result.ConsensusScore = score / result.TotalWeight
 		}
+	}
+	for i, sig := range ordered {
+		w := weights[i]
+		if w <= 0 {
+			continue
+		}
+		result.NodeInfluence = append(result.NodeInfluence, controlgraph.NodeInfluence{
+			NodeID:      sig.NodeID,
+			Type:        sig.Type,
+			Action:      sig.Action,
+			Share:       w / result.TotalWeight,
+			Weight:      sig.Weight,
+			Reliability: sig.Reliability,
+		})
 	}
 	return result
 }

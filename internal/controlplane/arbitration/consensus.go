@@ -25,6 +25,7 @@ func Arbitrate(graph controlgraph.ControlGraph, st controlgraph.SystemState, sig
 		Gain:                   round(result.Gain),
 		Controller:             "distributed-control-plane",
 		SemanticShift:          append([]string(nil), st.SemanticShift...),
+		NodeInfluence:          append([]controlgraph.NodeInfluence(nil), result.NodeInfluence...),
 		Signals:                signalSummaries(result.Signals),
 		Reasons:                dominantReasons(result.Signals, action),
 	}

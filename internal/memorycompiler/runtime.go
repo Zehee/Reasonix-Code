@@ -19,6 +19,7 @@ import (
 
 	"reasonix/internal/controlplane"
 	controlgraph "reasonix/internal/controlplane/control_graph"
+	globalstate "reasonix/internal/equilibrium/global_state"
 	"reasonix/internal/fileutil"
 	"reasonix/internal/provider"
 )
@@ -29,7 +30,7 @@ const (
 	learningTracesFile = "learning_traces.jsonl"
 	debugTracesFile    = "debug_traces.jsonl"
 	debugTraceEnv      = "REASONIX_MEMORY_COMPILER_DEBUG_TRACE"
-	version            = "v5.6"
+	version            = "v5.7"
 
 	explorationRatePercent    = 10
 	minExplorationRatePercent = 3
@@ -151,6 +152,7 @@ type ExecutionTrace struct {
 	ControlMode         string               `json:"control_mode,omitempty"`
 	ControlGain         float64              `json:"control_gain,omitempty"`
 	ControlSignals      []string             `json:"control_signals,omitempty"`
+	EquilibriumTrace    *EquilibriumTrace    `json:"equilibrium_trace,omitempty"`
 	Cost                CostMetrics          `json:"cost,omitempty"`
 	MutationEvaluations []MutationEvaluation `json:"mutation_evaluations,omitempty"`
 	FailureReason       string               `json:"failure_reason,omitempty"`
@@ -180,6 +182,15 @@ type CostMetrics struct {
 	ToolCalls                 int   `json:"tool_calls,omitempty"`
 	ToolErrors                int   `json:"tool_errors,omitempty"`
 	TruncatedToolResults      int   `json:"truncated_tool_results,omitempty"`
+}
+
+type EquilibriumTrace struct {
+	State                string   `json:"state,omitempty"`
+	ControlGraphEntropy  float64  `json:"control_graph_entropy,omitempty"`
+	SystemStabilityScore float64  `json:"system_stability_score,omitempty"`
+	ConvergenceVelocity  float64  `json:"convergence_velocity,omitempty"`
+	OscillationIndex     float64  `json:"oscillation_index,omitempty"`
+	Actions              []string `json:"actions,omitempty"`
 }
 
 type CompilerMutation struct {
@@ -229,6 +240,12 @@ type ControlPolicy struct {
 	Gain                   float64       `json:"gain"`
 	ConsensusScore         float64       `json:"consensus_score,omitempty"`
 	Variance               float64       `json:"variance,omitempty"`
+	EquilibriumState       string        `json:"equilibrium_state,omitempty"`
+	EquilibriumActions     []string      `json:"equilibrium_actions,omitempty"`
+	ControlGraphEntropy    float64       `json:"control_graph_entropy,omitempty"`
+	SystemStabilityScore   float64       `json:"system_stability_score,omitempty"`
+	ConvergenceVelocity    float64       `json:"convergence_velocity,omitempty"`
+	OscillationIndex       float64       `json:"oscillation_index,omitempty"`
 	MutationCooldown       time.Duration `json:"-"`
 	MutationCooldownMs     int64         `json:"mutation_cooldown_ms"`
 	SemanticShift          []string      `json:"semantic_shift,omitempty"`
@@ -243,6 +260,12 @@ type ControlReport struct {
 	Gain                   float64   `json:"gain"`
 	ConsensusScore         float64   `json:"consensus_score,omitempty"`
 	Variance               float64   `json:"variance,omitempty"`
+	EquilibriumState       string    `json:"equilibrium_state,omitempty"`
+	EquilibriumActions     []string  `json:"equilibrium_actions,omitempty"`
+	ControlGraphEntropy    float64   `json:"control_graph_entropy,omitempty"`
+	SystemStabilityScore   float64   `json:"system_stability_score,omitempty"`
+	ConvergenceVelocity    float64   `json:"convergence_velocity,omitempty"`
+	OscillationIndex       float64   `json:"oscillation_index,omitempty"`
 	MutationCooldownMs     int64     `json:"mutation_cooldown_ms"`
 	SemanticShift          []string  `json:"semantic_shift,omitempty"`
 	Reasons                []string  `json:"reasons,omitempty"`
@@ -271,6 +294,7 @@ type LearningTrace struct {
 	ControlMode          string               `json:"control_mode,omitempty"`
 	ControlGain          float64              `json:"control_gain,omitempty"`
 	ControlSignals       []string             `json:"control_signals,omitempty"`
+	EquilibriumTrace     *EquilibriumTrace    `json:"equilibrium_trace,omitempty"`
 	CausalFindings       []string             `json:"causal_findings,omitempty"`
 	CompilerImprovements []string             `json:"compiler_improvements,omitempty"`
 	MutationEvaluations  []MutationEvaluation `json:"mutation_evaluations,omitempty"`
@@ -410,6 +434,7 @@ func (r *Runtime) StartTurn(ctx context.Context, input string, _ []provider.Mess
 			ControlMode:      policy.Mode,
 			ControlGain:      policy.Gain,
 			ControlSignals:   append([]string(nil), policy.Reasons...),
+			EquilibriumTrace: equilibriumTraceForPolicy(policy),
 			Cost: CostMetrics{
 				EstimatedInputTokens: estimateTokens(input),
 			},
@@ -1176,7 +1201,7 @@ func equilibriumExplorationRatePercent(st state, drift DriftReport) int {
 }
 
 func controlPolicyForState(st state, drift DriftReport) ControlPolicy {
-	decision := controlplane.Decide(controlPlaneSystemState(st, drift))
+	decision := controlplane.DecideWithHistory(controlPlaneSystemState(st, drift), controlReportSamples(st.ControlReports))
 	policy := ControlPolicy{
 		Version:                version,
 		Mode:                   string(decision.Action),
@@ -1185,16 +1210,74 @@ func controlPolicyForState(st state, drift DriftReport) ControlPolicy {
 		Gain:                   decision.Gain,
 		ConsensusScore:         decision.ConsensusScore,
 		Variance:               decision.Variance,
+		EquilibriumState:       decision.EquilibriumState,
+		EquilibriumActions:     append([]string(nil), decision.EquilibriumActions...),
+		ControlGraphEntropy:    decision.ControlGraphEntropy,
+		SystemStabilityScore:   decision.SystemStabilityScore,
+		ConvergenceVelocity:    decision.ConvergenceVelocity,
+		OscillationIndex:       decision.OscillationIndex,
 		SemanticShift:          append([]string(nil), decision.SemanticShift...),
-		Reasons:                append(append([]string(nil), decision.Signals...), decision.Reasons...),
+		Reasons:                append(append(append([]string(nil), decision.Signals...), decision.Reasons...), decision.EquilibriumActions...),
 	}
 	policy.ExplorationRatePercent = clampExplorationRatePercent(policy.ExplorationRatePercent)
 	policy.Gain = roundScore(policy.Gain)
 	policy.MutationCooldown = controlMutationCooldown(policy.Gain)
 	policy.MutationCooldownMs = policy.MutationCooldown.Milliseconds()
+	policy.EquilibriumActions = limitStrings(canonicalStrings(policy.EquilibriumActions), 6)
 	policy.SemanticShift = limitStrings(canonicalStrings(policy.SemanticShift), 5)
 	policy.Reasons = limitStrings(canonicalStrings(policy.Reasons), 5)
 	return policy
+}
+
+func controlReportSamples(reports []ControlReport) []globalstate.DecisionSample {
+	if len(reports) == 0 {
+		return nil
+	}
+	if len(reports) > 8 {
+		reports = reports[len(reports)-8:]
+	}
+	out := make([]globalstate.DecisionSample, 0, len(reports))
+	for _, report := range reports {
+		action := controlActionForMode(report.Mode)
+		out = append(out, globalstate.DecisionSample{
+			Action:                 action,
+			ExplorationRatePercent: report.ExplorationRatePercent,
+			Gain:                   report.Gain,
+			ConsensusScore:         report.ConsensusScore,
+			Variance:               report.Variance,
+			ControlGraphEntropy:    report.ControlGraphEntropy,
+			SystemStabilityScore:   report.SystemStabilityScore,
+			ConvergenceVelocity:    report.ConvergenceVelocity,
+			OscillationIndex:       report.OscillationIndex,
+		})
+	}
+	return out
+}
+
+func controlActionForMode(mode string) controlgraph.Action {
+	switch controlgraph.Action(strings.TrimSpace(mode)) {
+	case controlgraph.ActionSafeMode:
+		return controlgraph.ActionSafeMode
+	case controlgraph.ActionStabilize:
+		return controlgraph.ActionStabilize
+	case controlgraph.ActionDampen:
+		return controlgraph.ActionDampen
+	case controlgraph.ActionExplore:
+		return controlgraph.ActionExplore
+	default:
+		return controlgraph.ActionBalanced
+	}
+}
+
+func equilibriumTraceForPolicy(policy ControlPolicy) *EquilibriumTrace {
+	return &EquilibriumTrace{
+		State:                policy.EquilibriumState,
+		ControlGraphEntropy:  policy.ControlGraphEntropy,
+		SystemStabilityScore: policy.SystemStabilityScore,
+		ConvergenceVelocity:  policy.ConvergenceVelocity,
+		OscillationIndex:     policy.OscillationIndex,
+		Actions:              append([]string(nil), policy.EquilibriumActions...),
+	}
 }
 
 func controlPlaneSystemState(st state, drift DriftReport) controlgraph.SystemState {
@@ -1699,6 +1782,7 @@ func (r *Runtime) writeTraceAndLearn(tr ExecutionTrace, strategyID string) {
 	tr.ControlMode = policy.Mode
 	tr.ControlGain = policy.Gain
 	tr.ControlSignals = append([]string(nil), policy.Reasons...)
+	tr.EquilibriumTrace = equilibriumTraceForPolicy(policy)
 	if hasDrift(drift) {
 		st.DriftReports = appendDriftReport(st.DriftReports, drift)
 	}
@@ -1743,6 +1827,7 @@ func executionTraceProjection(tr ExecutionTrace) ExecutionTrace {
 		SemanticDriftSoft:   append([]string(nil), tr.SemanticDriftSoft...),
 		ControlMode:         tr.ControlMode,
 		ControlGain:         tr.ControlGain,
+		EquilibriumTrace:    cloneEquilibriumTrace(tr.EquilibriumTrace),
 		Cost:                tr.Cost,
 		FailureReason:       tr.FailureReason,
 		StartedAt:           tr.StartedAt,
@@ -1770,12 +1855,22 @@ func learningTraceFor(tr ExecutionTrace, learning SystemLearning) (LearningTrace
 		ControlMode:          tr.ControlMode,
 		ControlGain:          tr.ControlGain,
 		ControlSignals:       append([]string(nil), tr.ControlSignals...),
+		EquilibriumTrace:     cloneEquilibriumTrace(tr.EquilibriumTrace),
 		CausalFindings:       append([]string(nil), learning.CausalFindings...),
 		CompilerImprovements: append([]string(nil), learning.CompilerImprovements...),
 		MutationEvaluations:  append([]MutationEvaluation(nil), tr.MutationEvaluations...),
 		Cost:                 tr.Cost,
 		CreatedAt:            time.Now().UTC(),
 	}, true
+}
+
+func cloneEquilibriumTrace(in *EquilibriumTrace) *EquilibriumTrace {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.Actions = append([]string(nil), in.Actions...)
+	return &out
 }
 
 func debugTraceEnabled() bool {
@@ -2009,6 +2104,10 @@ func defaultControlPolicy() ControlPolicy {
 		Controller:             "distributed-control-plane",
 		ExplorationRatePercent: explorationRatePercent,
 		Gain:                   1.0,
+		EquilibriumState:       "stable",
+		EquilibriumActions:     []string{"maintain global equilibrium"},
+		ControlGraphEntropy:    1,
+		SystemStabilityScore:   1,
 		MutationCooldown:       mutationFeedbackCooldown,
 		MutationCooldownMs:     mutationFeedbackCooldown.Milliseconds(),
 		Reasons:                []string{"balanced distributed control policy"},
@@ -2057,6 +2156,12 @@ func controlReportForTrace(traceID string, policy ControlPolicy, now time.Time) 
 		Gain:                   policy.Gain,
 		ConsensusScore:         policy.ConsensusScore,
 		Variance:               policy.Variance,
+		EquilibriumState:       policy.EquilibriumState,
+		EquilibriumActions:     append([]string(nil), policy.EquilibriumActions...),
+		ControlGraphEntropy:    policy.ControlGraphEntropy,
+		SystemStabilityScore:   policy.SystemStabilityScore,
+		ConvergenceVelocity:    policy.ConvergenceVelocity,
+		OscillationIndex:       policy.OscillationIndex,
 		MutationCooldownMs:     policy.MutationCooldownMs,
 		SemanticShift:          append([]string(nil), policy.SemanticShift...),
 		Reasons:                append([]string(nil), policy.Reasons...),

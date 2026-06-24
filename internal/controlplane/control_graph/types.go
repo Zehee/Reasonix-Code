@@ -76,6 +76,15 @@ type ControlEdge struct {
 	Influence Influence
 }
 
+type NodeInfluence struct {
+	NodeID      string
+	Type        NodeType
+	Action      Action
+	Share       float64
+	Weight      float64
+	Reliability float64
+}
+
 type ControlGraph struct {
 	Nodes []ControlNode
 	Edges []ControlEdge
@@ -90,8 +99,15 @@ type ControlDecision struct {
 	Gain                   float64
 	Controller             string
 	SemanticShift          []string
+	NodeInfluence          []NodeInfluence
 	Signals                []string
 	Reasons                []string
+	EquilibriumState       string
+	EquilibriumActions     []string
+	ControlGraphEntropy    float64
+	SystemStabilityScore   float64
+	ConvergenceVelocity    float64
+	OscillationIndex       float64
 	SafeMode               bool
 }
 

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	controlgraph "reasonix/internal/controlplane/control_graph"
+	globalstate "reasonix/internal/equilibrium/global_state"
 )
 
 func TestDistributedControlWorksWithoutAnySingleController(t *testing.T) {
@@ -72,5 +73,66 @@ func TestDistributedControlConsensusStaysBounded(t *testing.T) {
 	}
 	if decision.Variance > 0.12 {
 		t.Fatalf("stable consensus variance too high: %+v", decision)
+	}
+}
+
+func TestDistributedControlAppliesGlobalEquilibriumWindow(t *testing.T) {
+	history := []globalstate.DecisionSample{
+		{Action: controlgraph.ActionExplore, ExplorationRatePercent: 12, Gain: 1.1},
+		{Action: controlgraph.ActionDampen, ExplorationRatePercent: 3, Gain: 0.6},
+		{Action: controlgraph.ActionExplore, ExplorationRatePercent: 12, Gain: 1.1},
+		{Action: controlgraph.ActionDampen, ExplorationRatePercent: 3, Gain: 0.6},
+	}
+	decision := DecideWithHistory(controlgraph.SystemState{Stable: true, RecentSuccesses: 4}, history)
+	if decision.Action != controlgraph.ActionDampen {
+		t.Fatalf("global equilibrium should damp oscillating policy window, got %+v", decision)
+	}
+	if decision.EquilibriumState != "damping" {
+		t.Fatalf("equilibrium state = %q, want damping: %+v", decision.EquilibriumState, decision)
+	}
+	if decision.OscillationIndex < 0.7 {
+		t.Fatalf("oscillation index = %.3f, want high", decision.OscillationIndex)
+	}
+}
+
+func TestCollectSignalsCapsActiveNodes(t *testing.T) {
+	var nodes []controlgraph.ControlNode
+	for i := 0; i < 20; i++ {
+		nodes = append(nodes, testControlNode{
+			id:          string(rune('a' + i)),
+			weight:      1 + float64(i)/100,
+			reliability: 0.9,
+			action:      controlgraph.ActionBalanced,
+		})
+	}
+	signals := CollectSignals(controlgraph.ControlGraph{Nodes: nodes}, controlgraph.SystemState{})
+	if len(signals) != maxActiveControlNodes {
+		t.Fatalf("signals = %d, want cap %d", len(signals), maxActiveControlNodes)
+	}
+}
+
+type testControlNode struct {
+	id          string
+	weight      float64
+	reliability float64
+	action      controlgraph.Action
+}
+
+func (n testControlNode) ID() string                  { return n.id }
+func (n testControlNode) Type() controlgraph.NodeType { return controlgraph.NodeStability }
+func (n testControlNode) Weight() float64             { return n.weight }
+func (n testControlNode) Reliability() float64        { return n.reliability }
+func (n testControlNode) Signal(controlgraph.SystemState) controlgraph.ControlSignal {
+	return controlgraph.ControlSignal{
+		NodeID:                 n.id,
+		Type:                   n.Type(),
+		Action:                 n.action,
+		Strength:               0.5,
+		Confidence:             0.8,
+		Weight:                 n.weight,
+		Reliability:            n.reliability,
+		ExplorationRatePercent: controlgraph.DefaultExplorationRatePercent,
+		Gain:                   1,
+		Reason:                 "test node",
 	}
 }
