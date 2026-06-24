@@ -471,7 +471,8 @@ feeds workspace-scoped, non-provider `${VAR}` expansion for MCP/plugin settings
 without importing provider keys or Reasonix control variables. Step-limit
 preferences belong in the user config.
 Project `reasonix.toml` does not override `agent.max_steps` or
-`agent.planner_max_steps`.
+`agent.planner_max_steps`, and it does not override the user-level Memory v5
+compiler switch.
 
 ```toml
 default_model = "deepseek"   # provider name (→ its default model) or "provider/model"
@@ -482,6 +483,7 @@ system_prompt = "You are Reasonix, a coding agent..."  # or system_prompt_file =
 max_steps         = 0    # user/global only; executor tool-call rounds; 0 = no limit
 planner_max_steps = 0    # user/global only; planner read-only tool-call rounds; 0 = no limit
 temperature       = 0.0
+memory_compiler = { enabled = true }   # user/global only; Memory v5 execution compiler; CLI: reasonix config memory-v5 off|on|status
 reasoning_language = "auto"       # visible reasoning text: auto|zh|en
 # plan_mode_allowed_tools = ["custom_reader"]   # extra read-only declarations for custom tools;
 #                                                # cannot unlock known blocked tools or unsafe bash
