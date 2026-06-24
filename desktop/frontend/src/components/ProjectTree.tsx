@@ -488,6 +488,7 @@ export function ProjectTree({
   const visibleTopicsCollectorRef = useRef<TopicShortcutEntry[]>([]);
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const creatingRef = useRef(false);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manuallyCollapsedRef = useRef(manuallyCollapsed);
 
   const closeMenu = useCallback(() => {
@@ -1079,9 +1080,16 @@ export function ProjectTree({
             className="project-tree__topic-main"
             title={title}
             style={{ paddingLeft: 14 + depth * 16 }}
-            onClick={(event) => {
-              if (creationTopics && event.detail > 1) return;
-              if (openRequest) onOpenTopic(openRequest.scope, openRequest.workspaceRoot, openRequest.topicId, openRequest.sessionPath);
+            onClick={() => {
+              if (clickTimerRef.current !== null) {
+                clearTimeout(clickTimerRef.current);
+                clickTimerRef.current = null;
+                return;
+              }
+              clickTimerRef.current = setTimeout(() => {
+                clickTimerRef.current = null;
+                if (openRequest) onOpenTopic(openRequest.scope, openRequest.workspaceRoot, openRequest.topicId, openRequest.sessionPath);
+              }, 200);
             }}
             onKeyDown={(event) => {
               if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
@@ -1091,6 +1099,10 @@ export function ProjectTree({
             onDoubleClick={(event) => {
               if (isSessionNode) return;
               event.stopPropagation();
+              if (clickTimerRef.current !== null) {
+                clearTimeout(clickTimerRef.current);
+                clickTimerRef.current = null;
+              }
               startRenameTopic(node, label);
             }}
           >
