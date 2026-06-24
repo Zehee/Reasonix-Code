@@ -21,22 +21,26 @@ import (
 	"time"
 
 	"reasonix/internal/config"
+	"reasonix/internal/control"
 )
 
 // ── Data model ──────────────────────────────────────────────────────────────
 
 // HeartbeatTask defines a single scheduled prompt.
 type HeartbeatTask struct {
-	ID            string `json:"id"`
-	Title         string `json:"title"`    // user-visible label
-	Prompt        string `json:"prompt"`   // the prompt to submit
-	Interval      string `json:"interval"` // e.g. "5m", "1h", "30s"
-	Enabled       bool   `json:"enabled"`
-	Scope         string `json:"scope,omitempty"`         // "global" or "project"
-	WorkspaceRoot string `json:"workspaceRoot,omitempty"` // project root path when scope="project"
-	TopicID       string `json:"topicId,omitempty"`       // created topic, reused on re-run
-	LastRunAt     int64  `json:"lastRunAt,omitempty"`     // unix millis
-	CreatedAt     int64  `json:"createdAt,omitempty"`
+	ID              string `json:"id"`
+	Title           string `json:"title"`    // user-visible label
+	Prompt          string `json:"prompt"`   // the prompt to submit
+	Interval        string `json:"interval"` // e.g. "5m", "1h", "30s"
+	Enabled         bool   `json:"enabled"`
+	Scope           string `json:"scope,omitempty"`         // "global" or "project"
+	WorkspaceRoot   string `json:"workspaceRoot,omitempty"` // project root path when scope="project"
+	TopicID         string `json:"topicId,omitempty"`       // created topic, reused on re-run
+	LastRunAt       int64  `json:"lastRunAt,omitempty"`     // unix millis
+	CreatedAt       int64  `json:"createdAt,omitempty"`
+	ApprovalMode    string `json:"approvalMode"`              // "ask" | "auto" | "yolo"; empty defaults to "yolo"
+	TimeWindowStart string `json:"timeWindowStart,omitempty"` // "HH:MM" — interval tasks only run after this time (inclusive)
+	TimeWindowEnd   string `json:"timeWindowEnd,omitempty"`   // "HH:MM" — interval tasks only run before this time (exclusive)
 }
 
 // heartbeatConfig is the on-disk format.
@@ -173,6 +177,28 @@ func (e *HeartbeatEngine) tick() {
 	e.mu.Unlock()
 }
 
+// normalizeHeartbeatApprovalMode returns a valid approval mode for the task.
+// Empty or unknown values default to "yolo" so that scheduled tasks run
+// without interrupting the user for permission prompts.
+func normalizeHeartbeatApprovalMode(mode string) string {
+	normalized := strings.ToLower(strings.TrimSpace(mode))
+	switch normalized {
+	case "ask", "auto", "yolo":
+		return normalized
+	default:
+		return "yolo"
+	}
+}
+
+type heartbeatRuntimeStatus interface {
+	RuntimeStatus() control.RuntimeStatus
+}
+
+func heartbeatControllerBusy(ctrl heartbeatRuntimeStatus) bool {
+	status := ctrl.RuntimeStatus()
+	return status.Running || status.PendingPrompt
+}
+
 // executeTask runs one heartbeat: creates/opens topic, submits prompt.
 // Returns the updated task (topicId and LastRunAt may change).
 // On controller failure the task is returned WITHOUT updating LastRunAt,
@@ -215,18 +241,30 @@ func (e *HeartbeatEngine) executeTask(t HeartbeatTask) HeartbeatTask {
 
 	// Wait for the tab's controller to be built (it's started
 	// asynchronously in a goroutine by openTopicTab).
-	controllerReady := false
+	var ctrl heartbeatRuntimeStatus
 	for i := 0; i < 40; i++ {
-		if ctrl := e.app.ctrlByTabID(tabMeta.ID); ctrl != nil {
-			controllerReady = true
+		if candidate := e.app.ctrlByTabID(tabMeta.ID); candidate != nil {
+			ctrl = candidate
 			break
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
-	if !controllerReady {
+	if ctrl == nil {
 		log.Printf("[heartbeat] controller not ready for %q, skipping", t.Title)
 		return t // don't update LastRunAt — retry next tick
 	}
+	if heartbeatControllerBusy(ctrl) {
+		log.Printf("[heartbeat] controller busy for %q, skipping", t.Title)
+		return t // don't change approval mode for an existing turn — retry next tick
+	}
+
+	// Set the task's approval mode only after confirming the controller is idle.
+	// SetToolApprovalModeForTab may drain pending approvals for auto/yolo modes,
+	// so applying it to a busy reused topic would accidentally approve a previous
+	// turn instead of preparing this heartbeat prompt.
+	mode := normalizeHeartbeatApprovalMode(t.ApprovalMode)
+	t.ApprovalMode = mode
+	e.app.SetToolApprovalModeForTab(tabMeta.ID, mode)
 
 	// Submit as a plain user turn so scheduled prompts cannot invoke desktop
 	// shell or slash-command handlers such as "!cmd", "/clear", or "/compact".
@@ -353,10 +391,59 @@ func heartbeatTaskDueAt(t HeartbeatTask, now time.Time) bool {
 	if baseMillis == 0 {
 		baseMillis = t.CreatedAt
 	}
+	hasTimeWindow := t.TimeWindowStart != "" || t.TimeWindowEnd != ""
 	if baseMillis == 0 {
+		if hasTimeWindow {
+			return heartbeatWithinTimeWindow(t, now)
+		}
 		return true
 	}
-	return now.Sub(time.UnixMilli(baseMillis)) >= d
+	if now.Sub(time.UnixMilli(baseMillis)) < d {
+		return false
+	}
+
+	// For interval-based tasks with a time window, check if current time
+	// falls within the configured window. If outside, defer until the next
+	// tick that falls within the window.
+	if hasTimeWindow {
+		return heartbeatWithinTimeWindow(t, now)
+	}
+
+	return true
+}
+
+// heartbeatWithinTimeWindow returns true when now falls within the task's
+// configured time window. If the window is empty it returns true.
+// Format: "HH:MM" in 24-hour clock; start inclusive, end exclusive.
+func heartbeatWithinTimeWindow(t HeartbeatTask, now time.Time) bool {
+	startH, startM, startOK := parseHeartbeatClock(t.TimeWindowStart)
+	endH, endM, endOK := parseHeartbeatClock(t.TimeWindowEnd)
+
+	if !startOK && !endOK {
+		return true // no window configured
+	}
+
+	minutes := now.Hour()*60 + now.Minute()
+
+	// If only start is set: allow from start to end of day
+	if startOK && !endOK {
+		return minutes >= startH*60+startM
+	}
+
+	// If only end is set: allow from midnight to end
+	if !startOK && endOK {
+		return minutes < endH*60+endM
+	}
+
+	startMin := startH*60 + startM
+	endMin := endH*60 + endM
+
+	if startMin < endMin {
+		// Normal window: 09:00-17:00
+		return minutes >= startMin && minutes < endMin
+	}
+	// Cross-midnight window: 22:00-06:00
+	return minutes >= startMin || minutes < endMin
 }
 
 type heartbeatSchedule struct {
