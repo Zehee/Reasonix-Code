@@ -470,7 +470,7 @@ system_prompt = "You are Reasonix, a coding agent..."  # or system_prompt_file =
 max_steps         = 0    # user/global only; executor tool-call rounds; 0 = no limit
 planner_max_steps = 0    # user/global only; planner read-only tool-call rounds; 0 = no limit
 temperature       = 0.0
-memory_compiler = { enabled = true }   # user/global only; Memory v5 execution compiler
+memory_compiler = { enabled = true }   # user/global only; Memory v5 execution compiler; CLI: reasonix config memory-v5 off|on|status
 reasoning_language = "auto"       # visible reasoning text: auto|zh|en
 # planner_model = "deepseek-pro"   # optional: two-model collaboration (low-frequency planner)
 # subagent_model = "deepseek-pro"   # optional default for runAs=subagent skills
