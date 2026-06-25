@@ -1574,7 +1574,7 @@ export const en = {
   "updater.installNow": "Update now",
   "updater.goToDownload": "Go to download page",
   "updater.macHint": "Automatic install isn't available for this macOS build — please download and install manually.",
-  "updater.downloading": "Downloading… {done} / {total} ({pct}%)",
+  "updater.downloading": "Downloading… {done} MB / {total} MB ({pct}%)",
   "updater.verifying": "Verifying signature…",
   "updater.installing": "Installing — Reasonix will restart…",
   "updater.applying": "Installing…",

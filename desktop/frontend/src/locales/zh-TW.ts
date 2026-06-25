@@ -1009,7 +1009,7 @@ export const zhTW: Record<DictKey, string> = {
   "updater.installNow": "立即更新",
   "updater.goToDownload": "前往下載頁",
   "updater.macHint": "目前 macOS 建置暫不支援自動安裝，請前往下載頁手動安裝。",
-  "updater.downloading": "下載中… {done} / {total}（{pct}%）",
+  "updater.downloading": "下載中… {done} MB / {total} MB（{pct}%）",
   "updater.verifying": "正在驗證簽章…",
   "updater.installing": "正在安裝，應用程式即將重新啟動…",
   "updater.applying": "正在安裝…",
