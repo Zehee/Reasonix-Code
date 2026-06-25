@@ -11,6 +11,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
+	"reasonix/internal/evidence"
 	"reasonix/internal/hook"
 	"reasonix/internal/provider"
 	"reasonix/internal/tool"
@@ -329,11 +330,17 @@ func TestTurnOrchestratorCancelStripsIncompleteTurn(t *testing.T) {
 		err: context.Canceled,
 	}
 
-	c := New(Options{Runner: runner, Executor: agent.New(nil, nil, sess, agent.Options{}, event.Discard)})
+	ex := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
+	c := New(Options{Runner: runner, Executor: ex})
 	// Simulate a user-initiated cancel: set the cancelling flag.
 	c.mu.Lock()
 	c.canceling = true
 	c.mu.Unlock()
+
+	// Pre-seed todoState as if a successful todo_write from the cancelled turn
+	// had already updated it — this is the state the runner leaves behind before
+	// returning context.Canceled, and what RebuildTodoState must clear.
+	ex.ReplaceTodoState([]evidence.TodoItem{{Content: "add abc", Status: "in_progress"}})
 
 	o := newTurnOrchestrator(c)
 	err := o.runTurnWithRawDisplay(context.Background(), "add config file abc", "add config file abc", "")
@@ -346,6 +353,72 @@ func TestTurnOrchestratorCancelStripsIncompleteTurn(t *testing.T) {
 	msgs := sess.Messages
 	if len(msgs) != preCount {
 		t.Fatalf("session messages after cancel = %d, want pre-turn count %d: %+v", len(msgs), preCount, msgs)
+	}
+
+	// todoState must also be reset: the in_progress todo written by the
+	// cancelled turn must not survive the strip.
+	if todos := c.Todos(); len(todos) != 0 {
+		t.Fatalf("Todos() after cancel = %v, want empty — cancelled todo_write leaked into canonical state", todos)
+	}
+}
+
+// TestTurnOrchestratorCancelFlushesCleanTranscriptToDisk verifies that after a
+// user-cancel strip the cleaned transcript is written to disk, so a restart or
+// session resume does not reload the partial turn from a stale mid-turn
+// autosave.  See #5286.
+func TestTurnOrchestratorCancelFlushesCleanTranscriptToDisk(t *testing.T) {
+	sess := agent.NewSession("system")
+	sess.Add(provider.Message{Role: provider.RoleUser, Content: "earlier turn"})
+	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "done"})
+	// Count only non-system messages; the system prompt is not written to the
+	// .jsonl by Session.Save (it is reconstructed from the session options).
+	wantNonSystem := 0
+	for _, m := range sess.Messages {
+		if m.Role != provider.RoleSystem {
+			wantNonSystem++
+		}
+	}
+
+	runner := &cancelStrippingRunner{
+		session: sess,
+		add: []provider.Message{
+			{Role: provider.RoleAssistant, Content: "working…", ToolCalls: []provider.ToolCall{
+				{ID: "d1", Name: "todo_write", Arguments: `{"todos":[{"content":"task","status":"in_progress"}]}`},
+			}},
+			{Role: provider.RoleTool, Content: "Todos updated.", ToolCallID: "d1", Name: "todo_write"},
+		},
+		err: context.Canceled,
+	}
+
+	sessionPath := agent.NewSessionPath(t.TempDir(), "test-model")
+	c := New(Options{
+		Runner:      runner,
+		Executor:    agent.New(nil, nil, sess, agent.Options{}, event.Discard),
+		SessionPath: sessionPath,
+	})
+	c.mu.Lock()
+	c.canceling = true
+	c.mu.Unlock()
+
+	o := newTurnOrchestrator(c)
+	if err := o.runTurnWithRawDisplay(context.Background(), "do something", "do something", ""); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+
+	// Load the session file written after the strip and verify it contains only
+	// the pre-cancel messages — not the partial assistant/tool messages.
+	loaded, err := agent.LoadSession(sessionPath)
+	if err != nil {
+		t.Fatalf("LoadSession: %v", err)
+	}
+	nonSystem := 0
+	for _, m := range loaded.Messages {
+		if m.Role != provider.RoleSystem {
+			nonSystem++
+		}
+	}
+	if nonSystem != wantNonSystem {
+		t.Fatalf("on-disk message count (non-system) = %d, want %d — stale partial turn still on disk", nonSystem, wantNonSystem)
 	}
 }
 

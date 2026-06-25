@@ -2131,6 +2131,24 @@ func (c *Controller) stripTurnMessagesAfter(idx int) {
 		return
 	}
 	c.executor.Session().Replace(msgs[:idx])
+	// Rebuild canonical todo state from the truncated transcript so
+	// Controller.Todos(), goal readiness, and the task panel no longer see
+	// the in_progress items written by the cancelled turn.
+	c.executor.RebuildTodoState()
+	// The mid-turn autosave may have already written a partial transcript to
+	// disk.  snapshotActivityIfChanged skips the write when messageCount()
+	// returns to startMessages, so force a flush here to overwrite the stale
+	// file.  We call Session.Save directly to cover the edge case where the
+	// strip leaves only a system message (HasContent() == false), which would
+	// cause snapshot() to return early without writing.
+	c.mu.Lock()
+	path := c.sessionPath
+	c.mu.Unlock()
+	if path != "" {
+		if err := c.executor.Session().Save(path); err != nil {
+			slog.Warn("controller: post-cancel transcript flush", "err", err)
+		}
+	}
 }
 
 func (c *Controller) snapshotActivityIfChanged(startMessages int) {
