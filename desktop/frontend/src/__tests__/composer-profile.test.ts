@@ -145,6 +145,17 @@ console.log("\ncomposer profile");
 }
 
 {
+  let profiles: ComposerProfilesByTab = {};
+  profiles = hydrateComposerProfilesFromTabs(profiles, [tab({ toolApprovalMode: "auto" })]);
+  profiles = hydrateComposerProfilesFromTabs(profiles, [tab({ toolApprovalMode: "" })]);
+
+  eq(profiles["tab-1"].toolApprovalMode, "auto", "blank tab payload does not demote explicit auto approval mode to ask");
+
+  profiles = hydrateComposerProfileFromMeta(profiles, "tab-1", meta({ toolApprovalMode: "" }));
+  eq(profiles["tab-1"].toolApprovalMode, "auto", "blank meta payload does not demote explicit auto approval mode to ask");
+}
+
+{
   let intents: UserPlanModeIntents = {};
   intents = updateUserPlanModeIntent(intents, "tab-1", true);
   intents = updateUserPlanModeIntent(intents, "tab-2", false);

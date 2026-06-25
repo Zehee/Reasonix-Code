@@ -1198,14 +1198,19 @@ export default function App() {
           ? t("status.hydrateNewSession")
           : t("status.hydrateSync")
     : undefined;
+  const activeComposerProfile = activeTabId ? composerProfilesByTab[activeTabId] : undefined;
   const backendActiveComposerProfile = useMemo(() => {
     if (state.meta) {
-      return composerProfileFromMeta(state.meta, activeTab ? composerProfileMode(composerProfileFromTab(activeTab)) : undefined);
+      return composerProfileFromMeta(
+        state.meta,
+        activeTab ? composerProfileMode(composerProfileFromTab(activeTab, activeComposerProfile?.toolApprovalMode)) : undefined,
+        activeComposerProfile?.toolApprovalMode,
+      );
     }
-    return composerProfileFromTab(activeTab);
-  }, [activeTab, state.meta]);
+    return composerProfileFromTab(activeTab, activeComposerProfile?.toolApprovalMode);
+  }, [activeComposerProfile?.toolApprovalMode, activeTab, state.meta]);
   const composerProfile = activeTabId
-    ? composerProfilesByTab[activeTabId] ?? backendActiveComposerProfile
+    ? activeComposerProfile ?? backendActiveComposerProfile
     : defaultComposerProfile;
   const goal = composerProfile.goal;
   const collaborationMode = displayedComposerProfileCollaborationMode(composerProfile);

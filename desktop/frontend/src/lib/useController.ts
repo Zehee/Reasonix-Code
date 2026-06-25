@@ -11,7 +11,7 @@ import { invalidateCache } from "./composerHistory";
 import { createRafBatch } from "./rafBatch";
 import { t } from "./i18n";
 import { fileDiffFromWire, summarize, summarizeFileDiff, type ToolFileDiff } from "./tools";
-import { modeHasAutoApproveTools } from "./types";
+import { modeHasAutoApproveTools, normalizeMode, normalizeToolApprovalMode } from "./types";
 import type {
   BalanceInfo,
   CheckpointMeta,
@@ -167,9 +167,15 @@ function updatesContextGauge(usage?: WireUsage): boolean {
   return !source || source === "executor";
 }
 
-function metaFromTab(tab: TabMeta, existing?: Meta): Meta {
+export function metaFromTab(tab: TabMeta, existing?: Meta): Meta {
   const cwd = tab.cwd || tab.workspaceRoot || existing?.cwd || "";
-  const autoApproveTools = existing?.autoApproveTools ?? modeHasAutoApproveTools(tab.mode);
+  const toolApprovalMode = normalizeToolApprovalMode(
+    tab.toolApprovalMode,
+    normalizeMode(tab.mode),
+    modeHasAutoApproveTools(tab.mode),
+    (tab.toolApprovalMode ?? "").trim() === "" ? existing?.toolApprovalMode : undefined,
+  );
+  const autoApproveTools = toolApprovalMode === "yolo";
   return {
     label: tab.label || existing?.label || "",
     ready: tab.ready,
@@ -183,7 +189,7 @@ function metaFromTab(tab: TabMeta, existing?: Meta): Meta {
     autoApproveTools,
     bypass: autoApproveTools,
     collaborationMode: tab.collaborationMode ?? existing?.collaborationMode ?? "normal",
-    toolApprovalMode: tab.toolApprovalMode ?? existing?.toolApprovalMode ?? "ask",
+    toolApprovalMode,
     tokenMode: tab.tokenMode ?? existing?.tokenMode ?? "full",
     goal: tab.goal ?? existing?.goal,
     goalStatus: tab.goalStatus ?? existing?.goalStatus,
