@@ -73,3 +73,24 @@ export function buildTurnGroups(items: Item[]): TurnGroup[] {
   }
   return groups;
 }
+
+export function warmPagination({ turnCount, hotTurns, pageSize, coldPage }: {
+  turnCount: number;
+  hotTurns: number;
+  pageSize: number;
+  coldPage: number;
+}): { warmStartTurn: number; warmEndTurn: number; coldTurnCount: number } {
+  const safeTurnCount = Math.max(0, turnCount);
+  const safeHotTurns = Math.max(0, hotTurns);
+  const warmEndTurn = Math.max(0, safeTurnCount - Math.min(safeTurnCount, safeHotTurns));
+  if (warmEndTurn === 0) return { warmStartTurn: 0, warmEndTurn: 0, coldTurnCount: 0 };
+
+  const safePageSize = Math.max(0, pageSize);
+  const safeColdPage = Math.max(0, Math.floor(coldPage));
+  const shownWarmCount = Math.min(warmEndTurn, safePageSize * (safeColdPage + 1));
+  return {
+    warmStartTurn: warmEndTurn - shownWarmCount,
+    warmEndTurn,
+    coldTurnCount: warmEndTurn - shownWarmCount,
+  };
+}

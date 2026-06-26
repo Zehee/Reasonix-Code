@@ -14,7 +14,7 @@ import { isReadOnlyTool } from "../lib/useController";
 import { useGSAPCollapse } from "../lib/useGSAPCollapse";
 import { useEntranceAnimation } from "../lib/useEntranceAnimation";
 import { useScrollManager } from "../lib/useScrollManager";
-import { buildTurnGroups, compactQuestionText, questionAnchorId, scrollVersion, warmUserPreview, type QuestionAnchor, type TurnGroup } from "../lib/transcriptGrouping";
+import { buildTurnGroups, compactQuestionText, questionAnchorId, scrollVersion, warmPagination, warmUserPreview, type QuestionAnchor, type TurnGroup } from "../lib/transcriptGrouping";
 
 type ToolItem = Extract<Item, { kind: "tool" }>;
 type AssistantItem = Extract<Item, { kind: "assistant" }>;
@@ -271,9 +271,10 @@ export function Transcript({
   }, [items]);
 
   // How many turns are in the cold zone (not yet shown).
-  const warmTurnCount = turnGroups.length - Math.min(turnGroups.length, HOT_TURNS);
-  const shownWarmStart = Math.max(0, warmTurnCount - coldPage * WARM_PAGE_SIZE);
-  const coldTurnCount = shownWarmStart;
+  const { warmStartTurn, warmEndTurn, coldTurnCount } = useMemo(
+    () => warmPagination({ turnCount: turnGroups.length, hotTurns: HOT_TURNS, pageSize: WARM_PAGE_SIZE, coldPage }),
+    [coldPage, turnGroups.length],
+  );
 
   // ── The turn action menu ──────────────────────────────────────────────────
   const [openAction, setOpenAction] = useState<OpenTurnAction | null>(null);
@@ -609,7 +610,8 @@ export function Transcript({
             <WarmZone
               turnGroups={turnGroups}
               expandedWarmTurns={expandedWarmTurns}
-              shownWarmStart={shownWarmStart}
+              warmStartTurn={warmStartTurn}
+              warmEndTurn={warmEndTurn}
               coldTurnCount={coldTurnCount}
               scrollRef={scrollRef}
               warmItems={items}
@@ -667,7 +669,8 @@ export function Transcript({
 const WarmZone = memo(function WarmZone({
   turnGroups,
   expandedWarmTurns,
-  shownWarmStart,
+  warmStartTurn,
+  warmEndTurn,
   coldTurnCount,
   scrollRef,
   warmItems,
@@ -688,7 +691,8 @@ const WarmZone = memo(function WarmZone({
 }: {
   turnGroups: TurnGroup[];
   expandedWarmTurns: ReadonlySet<number>;
-  shownWarmStart: number;
+  warmStartTurn: number;
+  warmEndTurn: number;
   coldTurnCount: number;
   scrollRef: React.RefObject<HTMLDivElement | null>;
   warmItems: readonly Item[];
@@ -725,10 +729,8 @@ const WarmZone = memo(function WarmZone({
   }
 
   // 2. Warm zone: collapsed/expanded warm turn cards.
-  let warmStartTurn = 0;
   if (turnGroups.length > HOT_TURNS) {
-    warmStartTurn = turnGroups.length - HOT_TURNS - shownWarmStart;
-    for (let g = warmStartTurn; g < turnGroups.length - HOT_TURNS; g++) {
+    for (let g = warmStartTurn; g < warmEndTurn; g++) {
       const group = turnGroups[g];
       if (!group) continue;
       const expanded = expandedWarmTurns.has(g);

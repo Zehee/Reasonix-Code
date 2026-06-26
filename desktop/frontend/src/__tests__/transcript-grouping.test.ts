@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { buildTurnGroups } from "../lib/transcriptGrouping";
+import { buildTurnGroups, warmPagination } from "../lib/transcriptGrouping";
 import type { Item } from "../lib/useController";
 
 let passed = 0;
@@ -75,6 +75,23 @@ console.log("\ntranscript grouping contract");
   const elapsed = performance.now() - start;
   eq(groups.length, 10_000, "large transcript grouping keeps every turn");
   ok(elapsed < 50, `groups 10k turns in ${elapsed.toFixed(2)}ms`);
+}
+
+{
+  const firstPage = warmPagination({ turnCount: 100, hotTurns: 30, pageSize: 20, coldPage: 0 });
+  eq(firstPage.warmStartTurn, 50, "long transcripts initially render only the latest warm page");
+  eq(firstPage.warmEndTurn, 70, "warm page stops before the hot zone");
+  eq(firstPage.coldTurnCount, 50, "older cold turns stay hidden behind the load-more button");
+
+  const secondPage = warmPagination({ turnCount: 100, hotTurns: 30, pageSize: 20, coldPage: 1 });
+  eq(secondPage.warmStartTurn, 30, "loading earlier history adds one more warm page");
+  eq(secondPage.warmEndTurn, 70, "loading earlier history keeps the hot-zone boundary stable");
+  eq(secondPage.coldTurnCount, 30, "loading earlier history reduces the hidden cold count");
+
+  const shortTranscript = warmPagination({ turnCount: 25, hotTurns: 30, pageSize: 20, coldPage: 0 });
+  eq(shortTranscript.warmStartTurn, 0, "short transcripts have no warm zone");
+  eq(shortTranscript.warmEndTurn, 0, "short transcripts have no warm boundary");
+  eq(shortTranscript.coldTurnCount, 0, "short transcripts have no cold turns");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
