@@ -55,6 +55,47 @@ func TestRunMultiToolRoundEmptyIDsSurvivePairing(t *testing.T) {
 	}
 }
 
+func TestRunSkipsMemoryCompilerForSyntheticTurn(t *testing.T) {
+	rt := memorycompiler.New(t.TempDir())
+	_, seed := rt.StartTurn(context.Background(), "fix a bug", nil)
+	seed.RecordToolResults([]memorycompiler.ToolRecord{
+		{Name: "bash", Error: "exit status 1"},
+		{Name: "bash", Error: "exit status 1"},
+	})
+	seed.Finish(nil)
+
+	mp := testutil.NewMock("m", testutil.Turn{Text: "done"})
+	a := New(mp, echoRegistry(), NewSession(""), Options{MemoryCompiler: rt}, event.Discard)
+	// A controller-injected synthetic turn (e.g. the goal-loop continuation)
+	// marks the context so the compiler is bypassed; otherwise the echoed
+	// contract re-injects every turn and spins the loop (#5342, #5329).
+	ctx := WithMemoryCompilerSkip(context.Background())
+	if err := a.Run(ctx, "continue work"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	user := lastUserMessage(t, mp.Requests())
+	if strings.Contains(user.Content, "<memory-compiler-execution>") {
+		t.Fatalf("synthetic turn was compiled into a contract:\n%s", user.Content)
+	}
+	if !strings.Contains(user.Content, "continue work") {
+		t.Fatalf("synthetic turn text was lost:\n%s", user.Content)
+	}
+}
+
+func lastUserMessage(t *testing.T, reqs []provider.Request) provider.Message {
+	t.Helper()
+	if len(reqs) == 0 {
+		t.Fatal("no requests recorded")
+	}
+	var user provider.Message
+	for _, msg := range reqs[0].Messages {
+		if msg.Role == provider.RoleUser {
+			user = msg
+		}
+	}
+	return user
+}
+
 func TestRunUsesMemoryCompilerContractAsUserTurn(t *testing.T) {
 	rt := memorycompiler.New(t.TempDir())
 	_, seed := rt.StartTurn(context.Background(), "fix a bug", nil)

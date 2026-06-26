@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"reasonix/internal/fileutil"
 	"reasonix/internal/provider"
@@ -1478,10 +1479,9 @@ func strategyScoreWithReason(goal string, s Strategy) (float64, string) {
 		score -= penalty
 		reasons = append(reasons, fmt.Sprintf("%.2f usage penalty", penalty))
 	}
-	lowerGoal := strings.ToLower(goal)
 	for _, p := range s.Preconditions {
 		p = strings.ToLower(strings.TrimSpace(p))
-		if p != "" && strings.Contains(lowerGoal, p) {
+		if p != "" && strategyPreconditionMatches(goal, p) {
 			score += 0.75
 			reasons = append(reasons, "matched precondition "+p)
 		}
@@ -1495,6 +1495,30 @@ func strategyScoreWithReason(goal string, s Strategy) (float64, string) {
 		reasons = append(reasons, "low success history")
 	}
 	return score, strings.Join(reasons, "; ")
+}
+
+// strategyPreconditionMatches reports whether goal matches a strategy
+// precondition. Very short preconditions (<=2 runes, e.g. "ui") match only on
+// whole-token boundaries; a plain substring test let "ui" hit "pursuing",
+// "build", etc., which misrouted unrelated turns — including the synthetic
+// "Continue pursuing the active goal." message — to frontend-visual-verify.
+func strategyPreconditionMatches(goal, precondition string) bool {
+	precondition = strings.ToLower(strings.TrimSpace(precondition))
+	if precondition == "" {
+		return false
+	}
+	goal = strings.ToLower(goal)
+	if len([]rune(precondition)) > 2 {
+		return strings.Contains(goal, precondition)
+	}
+	for _, token := range strings.FieldsFunc(goal, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}) {
+		if token == precondition {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizedOutcomeScore(s Strategy) (float64, string) {
@@ -2707,7 +2731,7 @@ func classifyStrategy(goal string) string {
 		return "code-review"
 	case strings.Contains(lower, "bug") || strings.Contains(lower, "fix") || strings.Contains(goal, "修复"):
 		return "bugfix-reproduce-first"
-	case strings.Contains(lower, "frontend") || strings.Contains(lower, "ui") || strings.Contains(goal, "前端"):
+	case strings.Contains(lower, "frontend") || strategyPreconditionMatches(goal, "ui") || strings.Contains(goal, "前端"):
 		return "frontend-visual-verify"
 	case strings.Contains(lower, "goal") || strings.Contains(lower, "research") || strings.Contains(goal, "持续"):
 		return "long-horizon-autoresearch"

@@ -681,7 +681,7 @@ func (a *Agent) Run(ctx context.Context, input string) (runErr error) {
 		memoryCompilerInput = sourceInput
 	}
 	input = a.withTurnPreferences(rawInput)
-	if memCompiler := a.memoryCompilerRuntime(); memCompiler != nil {
+	if memCompiler := a.memoryCompilerRuntime(); memCompiler != nil && !MemoryCompilerSkipFromContext(ctx) {
 		if compiledInput, turn := memCompiler.StartTurn(ctx, memoryCompilerInput, a.session.Snapshot()); turn != nil {
 			a.compilerTurn = turn
 			a.emitMemoryCompilerStats(turn)
