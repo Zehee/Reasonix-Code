@@ -1624,7 +1624,13 @@ func TestFoldedPasteUsesPlaceholderAndExpandsOnSend(t *testing.T) {
 // the placeholder label).
 func TestPasteFoldExpandOnSubmit(t *testing.T) {
 	r := &recordingTurnRunner{}
-	ctrl := control.New(control.Options{Runner: r, Sink: event.Discard, SessionDir: t.TempDir(), Label: "test"})
+	events := make(chan event.Event, 64)
+	ctrl := control.New(control.Options{
+		Runner:     r,
+		Sink:       event.FuncSink(func(e event.Event) { events <- e }),
+		SessionDir: t.TempDir(),
+		Label:      "test",
+	})
 
 	m := newTestChatTUI()
 	m.ctrl = ctrl
@@ -1648,8 +1654,7 @@ func TestPasteFoldExpandOnSubmit(t *testing.T) {
 	model, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = model.(chatTUI)
 
-	// Wait briefly for the async controller to process.
-	time.Sleep(100 * time.Millisecond)
+	waitForCLIEvent(t, events, event.TurnDone)
 
 	if len(r.inputs) == 0 {
 		t.Fatal("runner.Run was not called — the paste was never submitted")
