@@ -426,6 +426,7 @@ export const zh: Record<DictKey, string> = {
   "composer.attachFileFailed": "文件附加失败",
   "composer.attachDropFailed": "拖放文件附加失败",
   "composer.pasteImageFailed": "未能读取剪贴板图片",
+  "composer.imageInputUnsupported": "当前模型不会直接接收图片。可切换到支持图片的模型，或让 OCR/识图 MCP 工具读取附件路径。",
   "composer.contextItems": "上下文项目",
   "composer.workspaceReferences": "工作区引用",
   "composer.removeReference": "移除引用",

@@ -3307,6 +3307,7 @@ export default function App() {
               goal={goal}
               cwd={state.meta?.cwd}
               modelLabel={state.meta?.label ?? t("status.connecting")}
+              imageInputEnabled={state.meta?.imageInputEnabled !== false}
               tabId={activeTabId}
               effort={state.effort}
               onSend={handleSend}

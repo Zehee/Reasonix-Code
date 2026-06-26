@@ -1953,6 +1953,7 @@ function makeMockApp(): AppBindings {
             workspacePath,
             sandboxPath: settings.sandbox.workspaceRoot,
             gitBranch: active?.gitBranch || (active?.scope === "project" ? "main" : ""),
+            imageInputEnabled: true,
             autoApproveTools,
             bypass: autoApproveTools,
             collaborationMode,

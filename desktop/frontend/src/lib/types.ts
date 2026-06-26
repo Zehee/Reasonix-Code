@@ -409,6 +409,7 @@ export interface Meta {
   workspaceName?: string;
   workspacePath?: string;
   gitBranch?: string;
+  imageInputEnabled?: boolean;
   autoApproveTools?: boolean;
   bypass?: boolean; // legacy JSON key for YOLO/full-access tool auto-approval
   collaborationMode?: CollaborationMode;

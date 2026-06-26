@@ -107,6 +107,10 @@ function attachmentExt(name: string): string {
   return dot >= 0 ? name.slice(dot + 1).toUpperCase() : "";
 }
 
+function hasImageAttachments(items: Attachment[]): boolean {
+  return items.some((attachment) => Boolean(attachment.previewUrl));
+}
+
 function displayRefName(name: string): string {
   return name.replace(/[\[\]\(\)\r\n]+/g, " ").replace(/\s+/g, " ").trim() || "attachment";
 }
@@ -385,6 +389,7 @@ export function Composer({
   goal,
   cwd,
   modelLabel,
+  imageInputEnabled = true,
   tabId,
   effort,
   onSend,
@@ -417,6 +422,7 @@ export function Composer({
   goal?: string;
   cwd?: string;
   modelLabel: string;
+  imageInputEnabled?: boolean;
   tabId?: string;
   effort?: EffortInfo;
   onSend: (displayText: string, submitText?: string) => void | Promise<void>;
@@ -952,7 +958,7 @@ export function Composer({
 
   const removeAttachment = (path: string) => {
     forgetAttachment(path);
-    setAttachments((prev) => prev.filter((x) => x.path !== path));
+    setAttachments(attachmentsRef.current.filter((x) => x.path !== path));
     requestAnimationFrame(() => taRef.current?.focus());
   };
 
@@ -1083,12 +1089,18 @@ export function Composer({
   const activeGoal = (goal ?? "").trim();
   const goalModeOn = collaborationMode === "goal";
   const tokenModeOn = tokenMode === "economy";
+  const warnImageInputFallback = useCallback((message = t("composer.imageInputUnsupported")) => {
+    showToast(message, "warn");
+  }, [showToast, t]);
 
   const submit = async () => {
     if (disabled || submitDisabled || readOnly || submittingRef.current) return;
     const submitDraftKey = activeDraftKeyRef.current;
     const trimmedText = text.trim();
     if (pendingPaste > 0) return;
+    if (!imageInputEnabled && hasImageAttachments(attachmentsRef.current)) {
+      warnImageInputFallback();
+    }
     if (!trimmedText && attachments.length === 0 && workspaceRefs.length === 0) {
       if (goalModeOn && !activeGoal) {
         setComposerPrompt(t("composer.goalInputRequired"));

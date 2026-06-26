@@ -425,6 +425,7 @@ export const en = {
   "composer.attachFileFailed": "File attach failed",
   "composer.attachDropFailed": "Dropped file attach failed",
   "composer.pasteImageFailed": "Could not read clipboard image",
+  "composer.imageInputUnsupported": "Current model will not receive images directly. Use an image-capable model or an OCR/vision MCP tool to inspect the attached path.",
   "composer.contextItems": "Context items",
   "composer.workspaceReferences": "Workspace references",
   "composer.removeReference": "Remove reference",
