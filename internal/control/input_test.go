@@ -33,10 +33,12 @@ func (f *fakeAutoPlanClassifier) NeedsPlan(ctx context.Context, input string, sc
 type fakeTurnRunner struct {
 	inputs               []string
 	memoryCompilerInputs []string
+	memoryCompilerSkips  []bool
 }
 
 func (f *fakeTurnRunner) Run(ctx context.Context, input string) error {
 	f.inputs = append(f.inputs, input)
+	f.memoryCompilerSkips = append(f.memoryCompilerSkips, agent.MemoryCompilerSkipFromContext(ctx))
 	if source, ok := agent.MemoryCompilerSourceInputFromContext(ctx); ok {
 		f.memoryCompilerInputs = append(f.memoryCompilerInputs, source)
 	}

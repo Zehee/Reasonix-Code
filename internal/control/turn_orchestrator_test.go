@@ -35,6 +35,38 @@ func TestTurnOrchestratorRunsForegroundUnit(t *testing.T) {
 	}
 }
 
+func TestTurnOrchestratorSkipsMemoryCompilerForSyntheticTurns(t *testing.T) {
+	// A genuine user turn supplies a Memory v5 source and is not skipped; a
+	// synthetic controller-injected turn (the goal-loop continuation) is marked
+	// to bypass compilation so its contract can't be re-injected and loop
+	// (#5342, #5329).
+	runner := &fakeTurnRunner{}
+	c := New(Options{Runner: runner})
+	o := newTurnOrchestrator(c)
+
+	real := "fix the login bug"
+	if err := o.runTurnWithRawDisplay(context.Background(), real, real, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := o.runTurnWithRawDisplay(context.Background(), goalContinueTurn, goalContinueTurn, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(runner.memoryCompilerSkips) != 2 {
+		t.Fatalf("runs = %d, want 2", len(runner.memoryCompilerSkips))
+	}
+	if runner.memoryCompilerSkips[0] {
+		t.Fatalf("genuine user turn was marked skip-compile")
+	}
+	if !runner.memoryCompilerSkips[1] {
+		t.Fatalf("synthetic goal-continuation turn was NOT marked skip-compile")
+	}
+	// The genuine turn supplies a source; the synthetic one must not.
+	if len(runner.memoryCompilerInputs) != 1 || runner.memoryCompilerInputs[0] != real {
+		t.Fatalf("memory compiler sources = %v, want exactly [%q]", runner.memoryCompilerInputs, real)
+	}
+}
+
 func TestTurnOrchestratorStopHookIgnoresCanceledTurnContext(t *testing.T) {
 	runCtx, cancel := context.WithCancel(context.Background())
 	var stopCalls int

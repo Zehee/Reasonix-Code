@@ -127,6 +127,38 @@ func TestStartTurnExposesMemoryCitations(t *testing.T) {
 	}
 }
 
+func TestStrategyPreconditionShortTokenMatchesOnWordBoundary(t *testing.T) {
+	// "ui" must match the real frontend keyword but not arbitrary substrings —
+	// otherwise the synthetic "Continue pursuing the active goal." turn (and any
+	// goal/build/quiet text) misroutes to frontend-visual-verify (#5342).
+	matches := []string{"fix the ui", "UI layout broken", "tweak the ui.", "ui/ux pass"}
+	for _, g := range matches {
+		if !strategyPreconditionMatches(g, "ui") {
+			t.Errorf("strategyPreconditionMatches(%q, \"ui\") = false, want true", g)
+		}
+	}
+	nonMatches := []string{"Continue pursuing the active goal.", "build the parser", "quiet mode", "guidance notes"}
+	for _, g := range nonMatches {
+		if strategyPreconditionMatches(g, "ui") {
+			t.Errorf("strategyPreconditionMatches(%q, \"ui\") = true, want false (substring false positive)", g)
+		}
+	}
+	// Longer preconditions keep substring semantics.
+	if !strategyPreconditionMatches("optimize the frontend pipeline", "frontend") {
+		t.Errorf("long precondition lost substring match")
+	}
+}
+
+func TestClassifyStrategyDoesNotRouteGoalContinuationToFrontend(t *testing.T) {
+	goal := "Continue pursuing the active goal. If it is complete, end with [goal:complete]."
+	if got := classifyStrategy(goal); got == "frontend-visual-verify" {
+		t.Fatalf("goal-continuation classified as %q (the \"ui\" in \"pursuing\" leaked)", got)
+	}
+	if got := classifyStrategy("redesign the ui layout"); got != "frontend-visual-verify" {
+		t.Fatalf("genuine ui goal classified as %q, want frontend-visual-verify", got)
+	}
+}
+
 func TestSuccessTraceFeedsReusableStrategyAndGraph(t *testing.T) {
 	dir := t.TempDir()
 	rt := New(dir)

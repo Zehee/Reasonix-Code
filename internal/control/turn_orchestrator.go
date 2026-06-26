@@ -26,7 +26,15 @@ func (o *turnOrchestrator) runTurnWithRawDisplay(ctx context.Context, input, raw
 	ctx = agent.WithParentSession(ctx, parentSession)
 	ctx = jobs.WithSession(ctx, parentSession)
 	ctx = agent.WithUserImages(ctx, c.inputImages(input))
-	ctx = agent.WithMemoryCompilerSourceInput(ctx, raw)
+	// Synthetic, controller-injected turns (goal-loop continuation,
+	// plan-approved execution, …) must not be Memory v5-compiled: compiling them
+	// re-injects a contract the model echoes back, which spins the goal loop
+	// forever (#5342, #5329). Only genuine user turns supply a compiler source.
+	if IsSyntheticUserMessage(raw) {
+		ctx = agent.WithMemoryCompilerSkip(ctx)
+	} else {
+		ctx = agent.WithMemoryCompilerSourceInput(ctx, raw)
+	}
 	input = c.Compose(input)
 	startMessages := c.messageCount()
 	defer c.snapshotActivityIfChanged(startMessages)
@@ -90,7 +98,7 @@ func (o *turnOrchestrator) runTurnWithRawDisplay(ctx context.Context, input, raw
 	// later turn (even "continue") falls back to the normal per-tool approval.
 	c.approval.setPlanAutoApprove(true)
 	defer c.approval.setPlanAutoApprove(false)
-	if err := c.runner.Run(ctx, c.ComposeSynthetic(planApprovedMessage)); err != nil {
+	if err := c.runner.Run(agent.WithMemoryCompilerSkip(ctx), c.ComposeSynthetic(planApprovedMessage)); err != nil {
 		if errors.Is(err, context.Canceled) && c.CancelRequested() {
 			c.stripTurnMessagesAfter(execStart)
 		}
