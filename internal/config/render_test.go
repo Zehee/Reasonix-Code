@@ -428,6 +428,46 @@ func TestRenderTOMLDocumentsPluginTrustedReadOnlyTools(t *testing.T) {
 	}
 }
 
+func TestRenderTOMLPreservesMCPCallTimeouts(t *testing.T) {
+	cfg := Default()
+	cfg.Tools.MCPCallTimeoutSeconds = intPtr(450)
+	cfg.Plugins = []PluginEntry{{
+		Name:               "maker",
+		Command:            "maker-mcp",
+		CallTimeoutSeconds: 600,
+		ToolTimeoutSeconds: map[string]int{
+			"generate/video": 1800,
+			"search":         120,
+		},
+	}}
+
+	rendered := RenderTOML(cfg)
+	for _, want := range []string{
+		"mcp_call_timeout_seconds = 450",
+		"call_timeout_seconds = 600",
+		`tool_timeout_seconds = { "generate/video" = 1800, "search" = 120 }`,
+		"Raw MCP tool names",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered config missing %q:\n%s", want, rendered)
+		}
+	}
+
+	var got Config
+	if _, err := toml.Decode(rendered, &got); err != nil {
+		t.Fatalf("rendered TOML does not parse: %v\n%s", err, rendered)
+	}
+	if got.Tools.MCPCallTimeoutSeconds == nil || *got.Tools.MCPCallTimeoutSeconds != 450 {
+		t.Fatalf("MCPCallTimeoutSeconds round trip = %v, want 450", got.Tools.MCPCallTimeoutSeconds)
+	}
+	if got.Plugins[0].CallTimeoutSeconds != 600 {
+		t.Fatalf("CallTimeoutSeconds round trip = %d, want 600", got.Plugins[0].CallTimeoutSeconds)
+	}
+	if !reflect.DeepEqual(got.Plugins[0].ToolTimeoutSeconds, cfg.Plugins[0].ToolTimeoutSeconds) {
+		t.Fatalf("ToolTimeoutSeconds round trip = %v, want %v", got.Plugins[0].ToolTimeoutSeconds, cfg.Plugins[0].ToolTimeoutSeconds)
+	}
+}
+
 func TestRenderTOMLCreationLayoutStyle(t *testing.T) {
 	c := Default()
 	if err := c.SetDesktopLayoutStyle("creation"); err != nil {

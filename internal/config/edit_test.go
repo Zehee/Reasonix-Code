@@ -810,6 +810,15 @@ func TestPluginMutators(t *testing.T) {
 	if err := c.UpsertPlugin(PluginEntry{Name: "bad", Type: "carrier-pigeon", Command: "x"}); err == nil {
 		t.Error("unknown transport should error")
 	}
+	if err := c.UpsertPlugin(PluginEntry{Name: "bad", Command: "x", CallTimeoutSeconds: -1}); err == nil {
+		t.Error("negative call_timeout_seconds should error")
+	}
+	if err := c.UpsertPlugin(PluginEntry{Name: "bad", Command: "x", ToolTimeoutSeconds: map[string]int{"generate": -1}}); err == nil {
+		t.Error("negative tool_timeout_seconds should error")
+	}
+	if err := c.UpsertPlugin(PluginEntry{Name: "bad", Command: "x", ToolTimeoutSeconds: map[string]int{" ": 1}}); err == nil {
+		t.Error("empty tool_timeout_seconds key should error")
+	}
 
 	// Replace in place.
 	if err := c.UpsertPlugin(PluginEntry{Name: "ex", Command: "other-cmd"}); err != nil {

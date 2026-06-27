@@ -74,6 +74,7 @@ api_key_env = "DEEPSEEK_API_KEY"
 [tools]
 enabled = []   # omit/empty = all built-ins
 bash_timeout_seconds = 120   # foreground safety cap; set 0 for no tool-local cap
+mcp_call_timeout_seconds = 300   # default MCP call safety cap; per-plugin/tool overrides may raise it
 
 [skills]
 # paths = ["~/my-skills", "../shared/skills"]   # extra custom skill roots
@@ -98,6 +99,8 @@ auth_mode = "none"             # none|token|password; use auth before binding be
 [[plugins]]
 name    = "example"
 command = "reasonix-plugin-example"
+call_timeout_seconds = 600   # optional per-server MCP call timeout
+tool_timeout_seconds = { "generate_video" = 1800 }   # optional raw MCP tool names
 ```
 
 For the full schema and every field's contract, see [`SPEC.md` §5](./SPEC.md#5-configuration-toml).
@@ -334,6 +337,8 @@ resource) you can copy.
 [[plugins]]                       # local stdio server
 name    = "example"
 command = "reasonix-plugin-example"
+# call_timeout_seconds = 600       # optional per-server MCP call timeout
+# tool_timeout_seconds = { "generate_video" = 1800 }   # optional raw MCP tool names
 
 [[plugins]]                       # remote server over Streamable HTTP
 name    = "stripe"

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -45,6 +46,145 @@ func (t *countingToolsTransport) toolsListCalls() int {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.calls
+}
+
+type deadlineRecordingTransport struct {
+	mu        sync.Mutex
+	deadline  []time.Duration
+	methods   []string
+	block     bool
+	noContext bool
+}
+
+func (t *deadlineRecordingTransport) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	if d, ok := ctx.Deadline(); ok {
+		t.mu.Lock()
+		t.deadline = append(t.deadline, time.Until(d))
+		t.methods = append(t.methods, method)
+		t.mu.Unlock()
+	} else {
+		t.mu.Lock()
+		t.noContext = true
+		t.methods = append(t.methods, method)
+		t.mu.Unlock()
+	}
+	if t.block {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	return json.RawMessage(`{}`), nil
+}
+
+func (t *deadlineRecordingTransport) notify(ctx context.Context, method string, params any) error {
+	return nil
+}
+func (t *deadlineRecordingTransport) close() {}
+
+func (t *deadlineRecordingTransport) lastDeadline(tst *testing.T) time.Duration {
+	tst.Helper()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if len(t.deadline) == 0 {
+		tst.Fatalf("transport recorded no deadline; methods=%v noContext=%v", t.methods, t.noContext)
+	}
+	return t.deadline[len(t.deadline)-1]
+}
+
+func assertDeadlineNear(t *testing.T, got, want time.Duration) {
+	t.Helper()
+	if got < want-2*time.Second || got > want+2*time.Second {
+		t.Fatalf("deadline = %v, want near %v", got, want)
+	}
+}
+
+func TestClientCallAppliesBuiltInDefaultTimeout(t *testing.T) {
+	for _, transportName := range []string{"stdio", "http"} {
+		t.Run(transportName, func(t *testing.T) {
+			tr := &deadlineRecordingTransport{}
+			c := &Client{name: "maker", t: tr, spec: Spec{Name: "maker"}, transport: transportName}
+			if _, err := c.call(context.Background(), "tools/list", map[string]any{}); err != nil {
+				t.Fatalf("call: %v", err)
+			}
+			assertDeadlineNear(t, tr.lastDeadline(t), defaultCallTimeout)
+		})
+	}
+}
+
+func TestClientCallTimeoutPrecedence(t *testing.T) {
+	tr := &deadlineRecordingTransport{}
+	c := &Client{
+		name: "maker",
+		t:    tr,
+		spec: Spec{
+			Name:               "maker",
+			DefaultCallTimeout: 300 * time.Second,
+			CallTimeout:        600 * time.Second,
+			ToolTimeouts:       map[string]time.Duration{"generate_video": 1800 * time.Second},
+		},
+		transport: "stdio",
+	}
+
+	if _, err := c.call(context.Background(), "tools/call", map[string]any{"name": "generate_video"}); err != nil {
+		t.Fatalf("tool override call: %v", err)
+	}
+	assertDeadlineNear(t, tr.lastDeadline(t), 1800*time.Second)
+
+	if _, err := c.call(context.Background(), "tools/call", map[string]any{"name": "search"}); err != nil {
+		t.Fatalf("plugin override call: %v", err)
+	}
+	assertDeadlineNear(t, tr.lastDeadline(t), 600*time.Second)
+
+	if _, err := c.call(context.Background(), "prompts/list", map[string]any{}); err != nil {
+		t.Fatalf("method call: %v", err)
+	}
+	assertDeadlineNear(t, tr.lastDeadline(t), 600*time.Second)
+}
+
+func TestClientCallRespectsParentDeadline(t *testing.T) {
+	tr := &deadlineRecordingTransport{}
+	c := &Client{
+		name: "maker",
+		t:    tr,
+		spec: Spec{
+			Name:        "maker",
+			CallTimeout: 10 * time.Minute,
+		},
+		transport: "http",
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if _, err := c.call(ctx, "tools/call", map[string]any{"name": "generate_video"}); err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	got := tr.lastDeadline(t)
+	if got > 150*time.Millisecond {
+		t.Fatalf("deadline = %v, want caller deadline around 100ms", got)
+	}
+}
+
+func TestClientCallTimeoutErrorNamesToolAndConfig(t *testing.T) {
+	tr := &deadlineRecordingTransport{block: true}
+	c := &Client{
+		name: "maker",
+		t:    tr,
+		spec: Spec{
+			Name:        "maker",
+			CallTimeout: 25 * time.Millisecond,
+		},
+		transport: "stdio",
+	}
+	_, err := c.call(context.Background(), "tools/call", map[string]any{"name": "generate_video"})
+	if err == nil {
+		t.Fatal("timed-out call returned nil error")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error should wrap context deadline exceeded, got %v", err)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, `MCP tool "maker.generate_video" timed out after 25ms`) ||
+		!strings.Contains(msg, "tool_timeout_seconds or call_timeout_seconds") {
+		t.Fatalf("timeout error lacks useful guidance: %v", err)
+	}
 }
 
 // TestStdioEndToEnd drives a real subprocess (this test binary re-invoked in

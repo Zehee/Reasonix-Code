@@ -851,6 +851,17 @@ func validatePlugin(e PluginEntry) error {
 	if strings.TrimSpace(e.Name) == "" {
 		return fmt.Errorf("plugin: name is required")
 	}
+	if e.CallTimeoutSeconds < 0 {
+		return fmt.Errorf("plugin %q: call_timeout_seconds must be >= 0", e.Name)
+	}
+	for name, sec := range e.ToolTimeoutSeconds {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("plugin %q: tool_timeout_seconds contains an empty tool name", e.Name)
+		}
+		if sec < 0 {
+			return fmt.Errorf("plugin %q: tool_timeout_seconds[%q] must be >= 0", e.Name, name)
+		}
+	}
 	switch strings.ToLower(strings.TrimSpace(e.Type)) {
 	case "", "stdio":
 		if strings.TrimSpace(e.Command) == "" {

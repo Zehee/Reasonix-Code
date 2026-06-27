@@ -1055,15 +1055,17 @@ func clonePricing(p *provider.Pricing) *provider.Pricing {
 
 // ToolsConfig selects which built-in tools are enabled. Empty means all of them.
 type ToolsConfig struct {
-	Enabled            []string             `toml:"enabled"`
-	BashTimeoutSeconds *int                 `toml:"bash_timeout_seconds"`
-	BackgroundJobs     BackgroundJobsConfig `toml:"background_jobs"`
-	Search             SearchConfig         `toml:"search"`
-	Shell              ShellConfig          `toml:"shell"`
+	Enabled               []string             `toml:"enabled"`
+	BashTimeoutSeconds    *int                 `toml:"bash_timeout_seconds"`
+	MCPCallTimeoutSeconds *int                 `toml:"mcp_call_timeout_seconds"`
+	BackgroundJobs        BackgroundJobsConfig `toml:"background_jobs"`
+	Search                SearchConfig         `toml:"search"`
+	Shell                 ShellConfig          `toml:"shell"`
 }
 
 const (
 	defaultBashTimeoutSeconds             = 120
+	defaultMCPCallTimeoutSeconds          = 300
 	defaultBackgroundJobStalledWarningSec = 900
 	maxBackgroundJobStalledWarningSec     = 86400
 )
@@ -1077,6 +1079,16 @@ func (c *Config) BashTimeoutSeconds() int {
 		return defaultBashTimeoutSeconds
 	}
 	return *c.Tools.BashTimeoutSeconds
+}
+
+// MCPCallTimeoutSeconds returns the default MCP JSON-RPC call timeout in
+// seconds. Omitted, zero, and negative values keep the built-in safety cap so a
+// hung MCP server cannot block a turn indefinitely.
+func (c *Config) MCPCallTimeoutSeconds() int {
+	if c.Tools.MCPCallTimeoutSeconds == nil || *c.Tools.MCPCallTimeoutSeconds <= 0 {
+		return defaultMCPCallTimeoutSeconds
+	}
+	return *c.Tools.MCPCallTimeoutSeconds
 }
 
 // BackgroundJobsConfig tunes parent-created background jobs.
@@ -1143,6 +1155,13 @@ type PluginEntry struct {
 	Env     map[string]string `toml:"env"`
 	URL     string            `toml:"url"`
 	Headers map[string]string `toml:"headers"`
+	// CallTimeoutSeconds overrides the default per-call deadline for this MCP
+	// server. Zero falls back to [tools].mcp_call_timeout_seconds.
+	CallTimeoutSeconds int `toml:"call_timeout_seconds"`
+	// ToolTimeoutSeconds overrides the per-call deadline for raw MCP tool names
+	// from this server. Keys are server-local tool names, not model-visible
+	// mcp__server__tool names.
+	ToolTimeoutSeconds map[string]int `toml:"tool_timeout_seconds"`
 	// TrustedReadOnlyTools names raw MCP tool names that Reasonix should treat as
 	// trusted read-only for planner / plan-mode / read-only research surfaces.
 	// Use this only for tools whose semantics are known to be side-effect free.

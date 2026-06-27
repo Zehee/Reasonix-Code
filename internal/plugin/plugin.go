@@ -27,6 +27,11 @@ import (
 // protocolVersion is the MCP revision Reasonix advertises during initialize.
 const protocolVersion = "2024-11-05"
 
+// defaultCallTimeout is the MCP JSON-RPC call deadline applied when neither the
+// caller context nor config provides one. It is intentionally finite so a slow
+// or hung MCP server cannot block an agent turn indefinitely.
+const defaultCallTimeout = 300 * time.Second
+
 // Spec declares an external MCP server. Type selects the transport: "stdio"
 // (default) runs Command/Args/Env as a subprocess; "http" / "streamable-http"
 // and "sse" connect to URL with optional static Headers.
@@ -38,6 +43,16 @@ type Spec struct {
 	Env     map[string]string
 	URL     string
 	Headers map[string]string
+	// DefaultCallTimeout is the global MCP call cap for this server. Zero keeps
+	// Reasonix's built-in defaultCallTimeout.
+	DefaultCallTimeout time.Duration
+	// CallTimeout overrides DefaultCallTimeout for all calls to this server.
+	// Zero falls back to DefaultCallTimeout.
+	CallTimeout time.Duration
+	// ToolTimeouts overrides the per-call deadline for raw MCP tool names.
+	// Keys are server-local tool names as returned by tools/list, not the
+	// model-visible mcp__server__tool names.
+	ToolTimeouts map[string]time.Duration
 	// Dir, when set, is the working directory of a stdio subprocess. Empty means
 	// inherit reasonix's cwd (the default for user-configured plugins). It exists
 	// for cwd-aware servers like CodeGraph, which detect the project from the
@@ -952,6 +967,21 @@ func newTransport(ctx context.Context, s Spec) (transport, error) {
 }
 
 func (c *Client) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	callCtx, cancel, timeout := c.contextWithCallTimeout(ctx, method, params)
+	if cancel != nil {
+		defer cancel()
+	}
+
+	res, err := c.callTransport(callCtx, method, params)
+	if timeout > 0 && errors.Is(err, context.DeadlineExceeded) && callCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
+		slog.Warn("plugin: MCP call timed out",
+			"server", c.name, "method", method, "tool", rawToolNameFromCallParams(params), "timeout", timeout)
+		return nil, c.timeoutError(method, params, timeout)
+	}
+	return res, err
+}
+
+func (c *Client) callTransport(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	res, err := c.t.call(ctx, method, params)
 	if err == nil || method == "initialize" || !isHTTPSessionExpired(err) {
 		return res, err
@@ -960,6 +990,62 @@ func (c *Client) call(ctx context.Context, method string, params any) (json.RawM
 		return nil, fmt.Errorf("%w; reinitialize failed: %v", err, initErr)
 	}
 	return c.t.call(ctx, method, params)
+}
+
+func (c *Client) contextWithCallTimeout(ctx context.Context, method string, params any) (context.Context, context.CancelFunc, time.Duration) {
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, nil, 0
+	}
+	timeout := c.callTimeout(method, params)
+	if timeout <= 0 {
+		timeout = defaultCallTimeout
+	}
+	callCtx, cancel := context.WithTimeout(ctx, timeout)
+	return callCtx, cancel, timeout
+}
+
+func (c *Client) callTimeout(method string, params any) time.Duration {
+	if method == "tools/call" {
+		if raw := rawToolNameFromCallParams(params); raw != "" {
+			if timeout := c.spec.ToolTimeouts[raw]; timeout > 0 {
+				return timeout
+			}
+		}
+	}
+	if c.spec.CallTimeout > 0 {
+		return c.spec.CallTimeout
+	}
+	if c.spec.DefaultCallTimeout > 0 {
+		return c.spec.DefaultCallTimeout
+	}
+	return defaultCallTimeout
+}
+
+func rawToolNameFromCallParams(params any) string {
+	m, ok := params.(map[string]any)
+	if !ok {
+		return ""
+	}
+	name, _ := m["name"].(string)
+	return name
+}
+
+func (c *Client) timeoutError(method string, params any, timeout time.Duration) error {
+	if method == "tools/call" {
+		if raw := rawToolNameFromCallParams(params); raw != "" {
+			return fmt.Errorf("MCP tool %q timed out after %s; increase tool_timeout_seconds or call_timeout_seconds to allow longer runs: %w",
+				c.name+"."+raw, formatTimeout(timeout), context.DeadlineExceeded)
+		}
+	}
+	return fmt.Errorf("MCP method %q on server %q timed out after %s; increase mcp_call_timeout_seconds or call_timeout_seconds to allow longer runs: %w",
+		method, c.name, formatTimeout(timeout), context.DeadlineExceeded)
+}
+
+func formatTimeout(timeout time.Duration) string {
+	if timeout > 0 && timeout%time.Second == 0 {
+		return fmt.Sprintf("%ds", int(timeout/time.Second))
+	}
+	return timeout.String()
 }
 
 func (c *Client) notify(ctx context.Context, method string, params any) error {

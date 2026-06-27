@@ -519,6 +519,7 @@ context_window = 1000000   # tokens; harness compacts older history near this li
 [tools]
 enabled = []   # omit/empty = all built-ins
 bash_timeout_seconds = 120   # foreground safety cap; set 0 for no tool-local cap
+mcp_call_timeout_seconds = 300   # default MCP call safety cap; plugin/tool overrides may raise it
 
 [tools.shell]
 prefer = "auto"   # auto (default) | bash | powershell | pwsh — force the shell tool's interpreter
@@ -550,6 +551,8 @@ name    = "example"            # type defaults to "stdio"
 command = "reasonix-plugin-example"
 args    = []
 # env   = { FOO = "bar" }
+# call_timeout_seconds = 600            # per-server MCP call timeout; 0 = global/default cap
+# tool_timeout_seconds = { "generate_video" = 1800 }   # raw MCP tool names
 # trusted_read_only_tools = ["search"]   # optional pre-seeded MCP read-only trust
 
 # [[plugins]]                   # a remote MCP server over Streamable HTTP
