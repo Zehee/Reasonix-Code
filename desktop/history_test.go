@@ -182,6 +182,35 @@ func TestHistoryForTabRestoresPlannerDisplayAfterReload(t *testing.T) {
 	}
 }
 
+func TestHistoryForTabUsesPinnedSessionBeforeControllerReady(t *testing.T) {
+	isolateDesktopUserDirs(t)
+	root := globalTabWorkspaceRoot()
+	dir := desktopSessionDir(root)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir session dir: %v", err)
+	}
+	path := filepath.Join(dir, "pending-controller.jsonl")
+	writeHistoryTestSession(t, path, "warm prompt")
+
+	app := NewApp()
+	tab := &WorkspaceTab{
+		ID:            "pending",
+		Scope:         "global",
+		WorkspaceRoot: root,
+		SessionPath:   path,
+		Ready:         false,
+		disabledMCP:   map[string]ServerView{},
+	}
+	app.tabs[tab.ID] = tab
+	app.tabOrder = []string{tab.ID}
+	app.activeTabID = tab.ID
+
+	got := app.HistoryForTab(tab.ID)
+	if len(got) != 1 || got[0].Role != "user" || got[0].Content != "warm prompt" {
+		t.Fatalf("pending controller history = %+v, want warm prompt", got)
+	}
+}
+
 func historyMemoryCompilerContract(t *testing.T, sourceEvent string) string {
 	t.Helper()
 	body, err := json.Marshal(map[string]any{

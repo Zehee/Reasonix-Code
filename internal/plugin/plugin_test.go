@@ -9,12 +9,43 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"reasonix/internal/event"
 	"reasonix/internal/tool"
 )
+
+type countingToolsTransport struct {
+	mu    sync.Mutex
+	calls int
+	raw   json.RawMessage
+}
+
+func (t *countingToolsTransport) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	if method != "tools/list" {
+		return json.RawMessage(`{}`), nil
+	}
+	t.mu.Lock()
+	t.calls++
+	t.mu.Unlock()
+	if len(t.raw) > 0 {
+		return t.raw, nil
+	}
+	return json.RawMessage(`{"tools":[{"name":"zed","description":"Sorted after echo.","inputSchema":{"type":"object"}},{"name":"echo","description":"Echo back the message.","inputSchema":{"type":"object","properties":{"msg":{"type":"string"}},"required":["z","msg"]},"annotations":{"readOnlyHint":true}}]}`), nil
+}
+
+func (t *countingToolsTransport) notify(ctx context.Context, method string, params any) error {
+	return nil
+}
+func (t *countingToolsTransport) close() {}
+
+func (t *countingToolsTransport) toolsListCalls() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.calls
+}
 
 // TestStdioEndToEnd drives a real subprocess (this test binary re-invoked in
 // helper mode) through the full MCP handshake and a tool call, exercising
@@ -52,6 +83,83 @@ func TestStdioEndToEnd(t *testing.T) {
 	}
 	if out != "echo: hi" {
 		t.Fatalf("result: want %q, got %q", "echo: hi", out)
+	}
+}
+
+func TestHostToolsForReusesCachedTools(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	tr := &countingToolsTransport{}
+	host := NewHost()
+	defer host.Close()
+	host.clients = []*Client{{
+		name:      "mock",
+		t:         tr,
+		spec:      Spec{Name: "mock"},
+		transport: "stdio",
+	}}
+
+	first, err := host.ToolsFor(ctx, "mock")
+	if err != nil {
+		t.Fatalf("first ToolsFor: %v", err)
+	}
+	second, err := host.ToolsFor(ctx, "mock")
+	if err != nil {
+		t.Fatalf("second ToolsFor: %v", err)
+	}
+	if got := tr.toolsListCalls(); got != 1 {
+		t.Fatalf("tools/list calls = %d, want 1", got)
+	}
+	if len(first) != 2 || len(second) != 2 {
+		t.Fatalf("ToolsFor lengths = %d and %d, want 2 each", len(first), len(second))
+	}
+	if got := first[0].Name(); got != "mcp__mock__echo" {
+		t.Fatalf("first tool name = %q, want sorted echo first", got)
+	}
+	if got, want := string(second[0].Schema()), string(first[0].Schema()); got != want {
+		t.Fatalf("cached schema changed:\n first=%s\nsecond=%s", want, got)
+	}
+	if !second[0].ReadOnly() {
+		t.Fatal("cached tool lost readOnlyHint")
+	}
+
+	statuses := host.Servers()
+	if len(statuses) != 1 || len(statuses[0].ToolList) != 2 {
+		t.Fatalf("server tool status = %+v, want cached tool metadata", statuses)
+	}
+	if statuses[0].ToolList[0].Name != "echo" || !statuses[0].ToolList[0].ReadOnlyHint {
+		t.Fatalf("tool metadata = %+v, want sorted echo with readOnlyHint", statuses[0].ToolList)
+	}
+}
+
+func TestHostToolsForCachesEmptyToolList(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	tr := &countingToolsTransport{raw: json.RawMessage(`{"tools":[]}`)}
+	host := NewHost()
+	defer host.Close()
+	host.clients = []*Client{{
+		name:      "empty",
+		t:         tr,
+		spec:      Spec{Name: "empty"},
+		transport: "stdio",
+	}}
+
+	first, err := host.ToolsFor(ctx, "empty")
+	if err != nil {
+		t.Fatalf("first ToolsFor: %v", err)
+	}
+	second, err := host.ToolsFor(ctx, "empty")
+	if err != nil {
+		t.Fatalf("second ToolsFor: %v", err)
+	}
+	if len(first) != 0 || len(second) != 0 {
+		t.Fatalf("ToolsFor lengths = %d and %d, want 0 each", len(first), len(second))
+	}
+	if got := tr.toolsListCalls(); got != 1 {
+		t.Fatalf("empty tools/list calls = %d, want 1", got)
 	}
 }
 

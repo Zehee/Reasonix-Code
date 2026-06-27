@@ -2386,10 +2386,6 @@ export default function App() {
           ? t("history.failedOpenSession")
           : (session.topicId ? "Missing workspaceRoot" : t("history.failedOpenSession")));
       }
-      if (!isChannelSession(session) && !singleSurfaceLayout) {
-        if (!latest()) return;
-        await resumeSession(session.path, targetTab.id);
-      }
       if (!latest()) return;
       seedActiveTabMeta(targetTab);
       setHistView(null);

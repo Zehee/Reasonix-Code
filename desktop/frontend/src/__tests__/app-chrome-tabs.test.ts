@@ -219,6 +219,11 @@ ok(
 );
 
 ok(
+  !/await resumeSession\(session\.path, targetTab\.id\);/.test(navigationBlock),
+  "history navigation does not re-resume a session that OpenTopicSession already pinned",
+);
+
+ok(
   /<HeartbeatPanel[\s\S]*onOpenTopic=\{\(scope, workspaceRoot, topicId\) => \{[\s\S]*void handleOpenTopic\(scope, workspaceRoot, topicId\);[\s\S]*\}\}/.test(appSource),
   "heartbeat topic navigation uses the guarded open-topic path",
 );

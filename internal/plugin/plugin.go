@@ -495,6 +495,13 @@ type Client struct {
 	resources []Resource
 	toolsMu   sync.Mutex
 	tools     []ToolInfo
+
+	// toolAdapters caches the model-visible remote tool adapters produced by
+	// the first successful tools/list call. Shared hosts reuse Client instances
+	// across controllers, so subsequent ToolsFor calls must not re-query slow
+	// MCP servers just to rebuild identical schemas.
+	toolsListed  bool
+	toolAdapters []tool.Tool
 }
 
 func (c *Client) auxiliaryClient(ctx context.Context) (*Client, context.Context, context.CancelFunc, error) {
@@ -541,8 +548,10 @@ func (h *Host) Servers() []ServerStatus {
 			Name:      c.name,
 			Transport: c.transport,
 			Tools:     c.toolCount,
-			ToolList:  append([]ToolInfo(nil), c.tools...),
 		}
+		c.toolsMu.Lock()
+		s.ToolList = append([]ToolInfo(nil), c.tools...)
+		c.toolsMu.Unlock()
 		for _, p := range h.prompts {
 			if p.Server == c.name {
 				s.Prompts++
@@ -721,6 +730,9 @@ func (h *Host) ToolsFor(ctx context.Context, name string) ([]tool.Tool, error) {
 	c := h.client(name)
 	if c == nil {
 		return nil, fmt.Errorf("client %q not found on shared host", name)
+	}
+	if tools, ok := c.cachedTools(); ok {
+		return tools, nil
 	}
 	return c.listTools(ctx)
 }
@@ -1016,6 +1028,9 @@ func (s Spec) toolReadOnlyTrusted(rawName, visibleName string) bool {
 func (c *Client) listTools(ctx context.Context) ([]tool.Tool, error) {
 	c.toolsMu.Lock()
 	defer c.toolsMu.Unlock()
+	if c.toolsListed {
+		return append([]tool.Tool(nil), c.toolAdapters...), nil
+	}
 
 	res, err := c.call(ctx, "tools/list", map[string]any{})
 	if err != nil {
@@ -1049,8 +1064,20 @@ func (c *Client) listTools(ctx context.Context) ([]tool.Tool, error) {
 		})
 	}
 	sort.SliceStable(toolInfos, func(i, j int) bool { return toolInfos[i].Name < toolInfos[j].Name })
+	sortedTools := sortToolsByName(tools)
 	c.tools = toolInfos
-	return sortToolsByName(tools), nil
+	c.toolAdapters = append([]tool.Tool(nil), sortedTools...)
+	c.toolsListed = true
+	return append([]tool.Tool(nil), sortedTools...), nil
+}
+
+func (c *Client) cachedTools() ([]tool.Tool, bool) {
+	c.toolsMu.Lock()
+	defer c.toolsMu.Unlock()
+	if !c.toolsListed {
+		return nil, false
+	}
+	return append([]tool.Tool(nil), c.toolAdapters...), true
 }
 
 // toolName builds the model-visible namespaced name "mcp__<server>__<tool>",

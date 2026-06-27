@@ -3094,9 +3094,25 @@ func (a *App) History() []HistoryMessage {
 }
 
 func (a *App) HistoryForTab(tabID string) []HistoryMessage {
-	ctrl := a.ctrlByTabID(tabID)
+	a.mu.RLock()
+	tab := a.tabByIDLocked(tabID)
+	var ctrl control.SessionAPI
+	var sessionDir, sessionPath string
+	if tab != nil {
+		ctrl = tab.Ctrl
+		sessionDir = tabSessionDir(tab)
+		sessionPath = tab.currentSessionPath()
+	}
+	a.mu.RUnlock()
 	if ctrl == nil {
-		return []HistoryMessage{}
+		if strings.TrimSpace(sessionPath) == "" {
+			return []HistoryMessage{}
+		}
+		messages, err := previewSessionMessages(sessionDir, sessionPath)
+		if err != nil {
+			return []HistoryMessage{}
+		}
+		return messages
 	}
 	msgs := ctrl.History()
 	dir := controllerSessionDir(ctrl)
