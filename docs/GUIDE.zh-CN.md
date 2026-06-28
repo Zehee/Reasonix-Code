@@ -12,6 +12,7 @@
 ## 目录
 
 - [配置](#配置)
+- [环境变量](#环境变量)
 - [Serve Web 前端](#serve-web-前端)
 - [配置路径](./CONFIG_PATHS.zh-CN.md)
 - [思考语言](./REASONING_LANGUAGE.zh-CN.md)
@@ -103,6 +104,30 @@ tool_timeout_seconds = { "generate_video" = 1800 }   # 可选：raw MCP tool 名
 planner / read-only research 可用的可信只读工具。优先使用 MCP 只读信任的一次性确认；需要预置已审过工具时，
 再在 plugin 上写 `trusted_read_only_tools`，`plan_mode_allowed_tools` 保留为兼容逃生阀。它不再解锁 `bash`、`task`、
 写文件工具、安装器、记忆变更工具等计划模式已知阻断项，也不会绕过 bash 在计划模式下的安全检查。
+
+### 环境变量
+
+多数日常设置应写在 `config.toml` 或前文提到的 Reasonix 全局 `.env` 中。下面这些变量是进程级高级开关；
+需要在启动 Reasonix 之前设置。项目 `.env` 不是 Reasonix 控制变量的运行时来源。
+
+`REASONIX_MEMORY_COMPILER_LLM_CLASSIFICATION=true` 会为 Memory v5 启用可选的 LLM 任务/聊天分类器。
+默认关闭，此时 Reasonix 使用本地 heuristic classifier，不会产生额外 provider 调用。开启后，分类缓存未命中时，
+Reasonix 可能先通过已配置 provider 发送一个很小的分类请求，再决定用户输入是任务还是普通对话；这会增加少量延迟、
+provider 用量和 token 成本。分类结果会在单个 session 内短时间缓存。只有去掉首尾空白后精确等于 `true`
+才会启用；未设置、`false`、`1`、`TRUE` 都会保持默认 heuristic 路径。
+
+```bash
+REASONIX_MEMORY_COMPILER_LLM_CLASSIFICATION=true reasonix
+```
+
+开发运行时，把变量放在启动进程的命令前，例如：
+
+```bash
+REASONIX_MEMORY_COMPILER_LLM_CLASSIFICATION=true wails dev -forcebuild
+```
+
+从系统图形界面直接启动的打包桌面端通常不会继承交互式终端里的环境变量；如果确实要开启这个高级开关，
+请从受环境变量管理的启动方式打开应用。
 
 ## Serve Web 前端
 

@@ -12,6 +12,7 @@
 ## Contents
 
 - [Configuration](#configuration)
+- [Environment variables](#environment-variables)
 - [Serve web frontend](#serve-web-frontend)
 - [Configuration paths](./CONFIG_PATHS.md)
 - [Reasoning language](./REASONING_LANGUAGE.md)
@@ -115,6 +116,36 @@ when you want to pre-seed audited tools; keep `plan_mode_allowed_tools` as the
 compatibility escape valve. It never unlocks known blocked plan-mode tools such
 as `bash`, `task`, writers, installers, or memory mutation tools, and it never
 bypasses bash's plan-mode safety checks.
+
+### Environment variables
+
+Most day-to-day settings belong in `config.toml` or the global Reasonix `.env`
+described above. The variables below are process-level advanced switches; set
+them before launching Reasonix. Project `.env` files are not a runtime source for
+Reasonix control variables.
+
+`REASONIX_MEMORY_COMPILER_LLM_CLASSIFICATION=true` enables the optional LLM
+task/chat classifier for Memory v5. By default it is disabled, and Reasonix uses
+the local heuristic classifier without extra provider calls. When enabled, cache
+misses may send a small classifier request through the configured provider before
+deciding whether a user input is task-like or conversational; this can add a
+little latency, provider usage, and token cost. The classifier result is cached
+per session for a short time. Only the exact trimmed value `true` enables it;
+unset, `false`, `1`, and `TRUE` keep the default heuristic path.
+
+```bash
+REASONIX_MEMORY_COMPILER_LLM_CLASSIFICATION=true reasonix
+```
+
+For development runs, prefix the command that starts the process, for example:
+
+```bash
+REASONIX_MEMORY_COMPILER_LLM_CLASSIFICATION=true wails dev -forcebuild
+```
+
+Packaged desktop apps launched from the OS app launcher may not inherit variables
+from your interactive terminal; start the app from an environment-managed launcher
+when you intentionally want this advanced switch enabled.
 
 ## Serve web frontend
 
