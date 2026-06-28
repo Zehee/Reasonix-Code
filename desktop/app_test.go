@@ -3208,6 +3208,52 @@ func TestListSessionsMarksAutoBotSessionAsChannel(t *testing.T) {
 	}
 }
 
+func TestDeleteSessionClearsAutoBotSessionMapping(t *testing.T) {
+	isolateDesktopUserDirs(t)
+
+	dir := config.SessionDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir session dir: %v", err)
+	}
+	path := filepath.Join(dir, "bot-channel.jsonl")
+	if err := os.WriteFile(path, []byte(`{"role":"user","content":"from channel"}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write session: %v", err)
+	}
+	other := filepath.Join(dir, "other-channel.jsonl")
+	cfg := config.Default()
+	cfg.Bot.Connections = []config.BotConnectionConfig{{
+		ID: "weixin-weixin", Provider: "weixin", Domain: "weixin", Label: "微信", Enabled: true, Status: "connected",
+		SessionMappings: []config.BotConnectionSessionMapping{
+			{RemoteID: "remove-auto", SessionID: "path:" + path, SessionSource: "auto"},
+			{RemoteID: "keep-explicit", SessionID: "path:" + path},
+			{RemoteID: "keep-other-auto", SessionID: "path:" + other, SessionSource: "auto"},
+		},
+	}}
+	if err := cfg.SaveTo(config.UserConfigPath()); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	app := NewApp()
+	ctrl := control.New(control.Options{SessionDir: dir, SessionPath: filepath.Join(dir, "active.jsonl"), Label: "test"})
+	app.setTestCtrl(ctrl, "")
+	defer app.activeCtrl().Close()
+
+	if err := app.DeleteSession(path); err != nil {
+		t.Fatalf("DeleteSession: %v", err)
+	}
+
+	got := config.LoadForEdit(config.UserConfigPath())
+	mappings := got.Bot.Connections[0].SessionMappings
+	if len(mappings) != 2 {
+		t.Fatalf("session mappings = %+v, want explicit and other auto mappings preserved", mappings)
+	}
+	for _, mapping := range mappings {
+		if mapping.RemoteID == "remove-auto" {
+			t.Fatalf("deleted session auto mapping was preserved: %+v", mappings)
+		}
+	}
+}
+
 func TestOpenChannelSessionForTabIsReadOnly(t *testing.T) {
 	isolateDesktopUserDirs(t)
 

@@ -32,6 +32,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/billing"
 	"reasonix/internal/boot"
+	"reasonix/internal/botruntime"
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
@@ -1774,6 +1775,9 @@ func (a *App) DeleteSession(path string) error {
 		}
 	}
 	a.closeRemainingRemovedSessionRuntimesAfterDestroy(removed, closedRemoved)
+	if err := botruntime.ForgetAutoSessionMappingsForPath(sessionPath); err != nil {
+		slog.Warn("desktop: failed to clear auto bot session mapping", "err", err)
+	}
 	if fallback.needs {
 		fallback = a.sessionDeleteFallbackTarget(fallback)
 		if err := a.openFallbackRuntime(fallback); err != nil {
