@@ -379,6 +379,9 @@ func (a *App) beforeClose(ctx context.Context) bool {
 		cfg = config.LoadForEdit(config.UserConfigPath())
 	}
 	if cfg.DesktopCloseBehavior() == "background" {
+		if !a.backgroundCloseHasRestorePath() {
+			return false
+		}
 		a.backgroundMaximised.Store(runtime.WindowIsMaximised(ctx))
 		a.saveWindowStateSync()
 		a.snapshotAllTabs()
@@ -386,6 +389,59 @@ func (a *App) beforeClose(ctx context.Context) bool {
 		return true
 	}
 	return false
+}
+
+const backgroundCloseTrayReadyTimeout = 500 * time.Millisecond
+
+func (a *App) backgroundCloseHasRestorePath() bool {
+	if backgroundCloseUsesApplicationHide(goruntime.GOOS) {
+		return backgroundCloseHasRestorePathFor(goruntime.GOOS, false, false)
+	}
+	if !a.startTray() {
+		return false
+	}
+	return backgroundCloseHasRestorePathFor(goruntime.GOOS, true, a.waitForTrayReady(backgroundCloseTrayReadyTimeout))
+}
+
+func (a *App) waitForTrayReady(timeout time.Duration) bool {
+	if a.isTrayReady() {
+		return true
+	}
+	ready := a.trayReadySignal()
+	if ready == nil {
+		return false
+	}
+	if timeout <= 0 {
+		select {
+		case <-ready:
+			return a.isTrayReady()
+		default:
+			return false
+		}
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-ready:
+		return a.isTrayReady()
+	case <-timer.C:
+		return a.isTrayReady()
+	}
+}
+
+func (a *App) isTrayReady() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.trayReady
+}
+
+func (a *App) trayReadySignal() <-chan struct{} {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.tray == nil {
+		return nil
+	}
+	return a.tray.ready
 }
 
 func (a *App) showMainWindow() {
@@ -430,6 +486,10 @@ func showFromBackground(ctx context.Context, wasMaximised bool) {
 
 func backgroundCloseUsesApplicationHide(goos string) bool {
 	return goos == "darwin"
+}
+
+func backgroundCloseHasRestorePathFor(goos string, trayStarted, trayReady bool) bool {
+	return backgroundCloseUsesApplicationHide(goos) || (trayStarted && trayReady)
 }
 
 type backgroundRestorePlan struct {
