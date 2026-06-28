@@ -45,7 +45,6 @@ function fmtOptionalTokens(tokens?: number): string {
 interface MetricTokenDisplay {
   display: string;
   exact: string;
-  compact: boolean;
 }
 
 function numberLocale(locale: Locale | string): string {
@@ -56,18 +55,11 @@ function numberLocale(locale: Locale | string): string {
 
 export function formatMetricTokens(tokens: number | undefined, locale: Locale | string): MetricTokenDisplay {
   if (typeof tokens !== "number" || tokens <= 0) {
-    return { display: "-", exact: "-", compact: false };
+    return { display: "-", exact: "-" };
   }
   const tag = numberLocale(locale);
   const exact = tokens.toLocaleString(tag);
-  if (tokens < 1_000_000) {
-    return { display: exact, exact, compact: false };
-  }
-  const display = new Intl.NumberFormat(tag, {
-    notation: "compact",
-    maximumFractionDigits: tokens >= 100_000_000 ? 2 : 1,
-  }).format(tokens);
-  return { display, exact, compact: display !== exact };
+  return { display: exact, exact };
 }
 
 function fmtTurns(turns: number | undefined, t: Translator): string {

@@ -109,9 +109,8 @@ eq(exactMetric.display, "999,999", "sub-million metric tokens keep exact comma f
 eq(exactMetric.exact, "999,999", "sub-million exact metric title matches the display");
 
 const largeMetric = formatMetricTokens(123_456_789, "en");
-eq(largeMetric.exact, "123,456,789", "large metric tokens keep the exact value for tooltips");
-ok(largeMetric.compact, "large metric tokens mark compact display");
-ok(largeMetric.display.length < largeMetric.exact.length, "large metric tokens use a shorter card label");
+eq(largeMetric.display, "123,456,789", "large metric tokens keep exact comma formatting");
+eq(largeMetric.exact, "123,456,789", "large metric exact title matches the display");
 
 console.log(`\n${passed} passed, ${failed} failed, ${passed + failed} total`);
 if (failed > 0) process.exit(1);
