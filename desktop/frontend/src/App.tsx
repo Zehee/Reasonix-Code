@@ -183,6 +183,7 @@ function normalizeDesktopLayoutStyle(style: string | undefined): DesktopLayoutSt
 }
 const SHOW_CONTEXT_DOCK = true;
 type HistoryScopeFilter = { scope: "global" | "project"; workspaceRoot: string };
+type WorkspaceInsertTarget = "composer" | "planRevision";
 type DesktopPlatform = "darwin" | "windows" | "linux";
 type HistoryViewState =
   | { kind: "history"; source: "scope"; filter: HistoryScopeFilter; sessions: SessionMeta[] }
@@ -918,6 +919,8 @@ export default function App() {
   const [projectRevision, setProjectRevision] = useState(0);
   const [activeTopicTurns, setActiveTopicTurns] = useState<number | undefined>(undefined);
   const [composerInsertRequest, setComposerInsertRequest] = useState<ComposerInsertRequest | null>(null);
+  const [planRevisionInsertRequest, setPlanRevisionInsertRequest] = useState<ComposerInsertRequest | null>(null);
+  const [workspaceInsertTarget, setWorkspaceInsertTarget] = useState<WorkspaceInsertTarget>("composer");
   const transientOverlayDismissSignal = useOverlayStore((s) => s.transientOverlayDismissSignal);
   const setTransientOverlayDismissSignal = useOverlayStore((s) => s.setTransientOverlayDismissSignal);
   const [desktopPlatform, setDesktopPlatform] = useState<DesktopPlatform>(detectBrowserPlatform);
@@ -2004,8 +2007,12 @@ export default function App() {
   }, [closeWorkspacePanel, openWorkspacePanel]);
 
   const addWorkspaceTextToComposer = useCallback((text: string) => {
+    if (workspaceInsertTarget === "planRevision" && state.approval?.tool === "exit_plan_mode") {
+      setPlanRevisionInsertRequest({ id: Date.now(), text });
+      return;
+    }
     setComposerInsertRequest({ id: Date.now(), text });
-  }, []);
+  }, [state.approval?.tool, workspaceInsertTarget]);
 
   // Coalesce tab-bar switches through the same last-click-wins scheduler that
   // openTopic/blank/resume navigation uses, so rapidly clicking between two
@@ -3281,6 +3288,9 @@ export default function App() {
               <ApprovalModal
                 key={state.approval.id}
                 approval={state.approval}
+                cwd={state.meta?.cwd}
+                insertRequest={planRevisionInsertRequest}
+                onRevisionActiveChange={(active) => setWorkspaceInsertTarget(active ? "planRevision" : "composer")}
                 onAnswer={async (allow, session, persist) => {
                   // Approving an exit_plan_mode plan leaves plan mode; await the
                   // mode switch before sending the approval so the controller

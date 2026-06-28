@@ -6745,6 +6745,7 @@ a[href] {
   line-height: 1.45;
 }
 .plan-revision {
+  position: relative;
   display: grid;
   gap: 8px;
 }
