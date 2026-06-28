@@ -1290,12 +1290,17 @@ export function Composer({
     const start = ta.selectionStart ?? text.length;
     const end = ta.selectionEnd ?? text.length;
 
+    // Normalize CRLF from Windows clipboard so caret offsets match the
+    // textarea's normalized value. The raw text (with CRLF) is preserved
+    // in the PastedBlock for long pastes so block content is lossless.
+    const normalizedPasted = pasted.replace(/\r\n/g, "\n");
+
     if (shouldFoldPaste(pasted)) {
       // Long paste: fold into a collapsible block so the composer stays compact.
       const id = nextPasteId.current++;
       const lines = lineCount(pasted);
       const label = t("composer.pastedLabel", { id, lines });
-      const block: PastedBlock = { label, text: pasted };
+      const block: PastedBlock = { label, text: pasted }; // keep raw text (CRLF preserved)
       const next = text.slice(0, start) + label + text.slice(end);
       pastedBlocksRef.current = [...pastedBlocksRef.current, block];
       setPastedBlocks((prev) => [...prev, block]);
@@ -1309,12 +1314,13 @@ export function Composer({
       });
     } else {
       // Short paste: insert the raw text directly into state.
-      const next = text.slice(0, start) + pasted + text.slice(end);
+      resetPromptHistoryNavigation();
+      const next = text.slice(0, start) + normalizedPasted + text.slice(end);
       setText(next);
       requestAnimationFrame(() => {
         const node = taRef.current;
         if (!node) return;
-        const pos = start + pasted.length;
+        const pos = start + normalizedPasted.length;
         node.focus();
         node.selectionStart = node.selectionEnd = pos;
       });
