@@ -50,7 +50,7 @@ flowchart LR
   D --> E["Scan with Feishu to create a PersonalAgent"]
   D --> F["Scan with Lark to create a PersonalAgent"]
   D --> G["Scan with WeChat to sign in Bot Assistant"]
-  D --> H["Scan with QQ to sign in Bot Assistant"]
+  D --> H["Manual setup for QQ Bot"]
   E --> I["Connection is saved locally"]
   F --> I
   G --> I
@@ -93,8 +93,8 @@ questions are handled through text commands.
 ### QQ
 
 1. In **Settings -> Bots -> Add IM Bot**, choose **QQ**.
-2. Generate a QR code.
-3. Scan it with QQ and finish authorization.
+2. Fill in the **App ID** and **App Secret** (or set the env var `QQ_BOT_APP_SECRET`).
+3. Click **Save** to store the credentials.
 4. Wait until the page shows the connection as connected.
 5. Send the QQ bot a message.
 
@@ -102,6 +102,9 @@ QQ Bot uses the official QQ Bot platform API. It supports interactive card
 buttons for approvals and Ask questions, similar to Feishu and Lark. When a
 card button expires or the platform reports a card action failure, copy the
 ID shown in the card and send the equivalent text command.
+
+QQ does not support QR-code scanning for connection setup. You must
+configure the App ID and App Secret manually.
 
 ## Run the bot headlessly
 
@@ -192,7 +195,7 @@ without exposing real account IDs, local paths, or private chat content.
 | Feishu | Scan to create a PersonalAgent | Interactive card buttons, or commands | Interactive card buttons, or commands | Feishu workspaces, DMs, and groups |
 | Lark | Scan to create a PersonalAgent | Interactive card buttons, or commands | Interactive card buttons, or commands | International Lark workspaces |
 | WeChat | Scan with WeChat | Reply `1` / `2`, or commands | Single-choice questions can use a number, or commands | Lightweight personal/mobile testing |
-| QQ | Scan with QQ | Interactive card buttons, or commands | Interactive card buttons, or commands | QQ groups, DMs, and official QQ Bot platform |
+| QQ | Manual setup (App ID + App Secret) | Interactive card buttons, or commands | Interactive card buttons, or commands | QQ groups, DMs, and official QQ Bot platform |
 
 Feishu and Lark card buttons are converted into commands such as
 `/approve <id>`, `/deny <id>`, or `/answer <id> <option>`. QQ card buttons
@@ -290,7 +293,7 @@ You may need to bind again if:
 
 | Symptom | What to check |
 | --- | --- |
-| QR code says the link expired | Generate a new QR code in Settings; QR codes expire. |
+| QR code says the link expired | Generate a new QR code in Settings; QR codes expire (Feishu, Lark, WeChat only — QQ uses manual setup and has no QR code). |
 | Connected but no reply | Make sure the Reasonix desktop app is running, the bot connection is enabled, and the sender ID is allowlisted or access is open. |
 | Feishu or Lark button action fails | Send the text command from the card, such as `/approve <id>` or `/deny <id>`. |
 | QQ button action fails | Same as Feishu/Lark — send the text command from the card, such as `/approve <id>` or `/deny <id>`. |
