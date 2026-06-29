@@ -2254,16 +2254,28 @@ export default function App() {
     const next = displayText.trim();
     if (!next) return false;
     const submit = (submitText ?? displayText).trim();
+    const hasCheckpointTurns = state.items.some((it) => it.kind === "user" && it.checkpointTurn != null);
+    let original = "";
+    let userCount = 0;
+    for (const item of state.items) {
+      if (item.kind !== "user") continue;
+      const matches = hasCheckpointTurns ? item.checkpointTurn === turn : userCount === turn;
+      if (matches) {
+        original = (item.submitText ?? item.text).trim();
+        break;
+      }
+      userCount++;
+    }
     const ok = await rewind(turn, "conversation");
     if (!ok) return false;
     setRewindSignal((v) => v + 1);
     try {
-      await sendToTab(sourceTabId, next, submit);
+      await sendToTab(sourceTabId, next, submit, original);
       return true;
     } catch {
       return false;
     }
-  }, [activeTab?.readOnly, activeTabId, clearContextPending, controllerReady, hydratePlaceholderActive, sendToTab, state.approval, state.ask, state.messageAction, state.running, rewind]);
+  }, [activeTab?.readOnly, activeTabId, clearContextPending, controllerReady, hydratePlaceholderActive, sendToTab, state.approval, state.ask, state.items, state.messageAction, state.running, rewind]);
 
   // History drawer: project menus can open a scoped saved-session list. Idle row
   // clicks resume; running row clicks only preview through PreviewSession.

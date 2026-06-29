@@ -785,7 +785,7 @@ func TestSubmitClearDiscardsCurrentContextWithoutSavingTranscript(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	c.submit("/clear", "")
+	c.submit("/clear", "", "")
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) && c.SessionPath() == path {
 		time.Sleep(time.Millisecond)

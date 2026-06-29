@@ -782,6 +782,18 @@ func (a *App) SubmitDisplayToTab(tabID, display, input string) error {
 	return nil
 }
 
+func (a *App) SubmitEditedDisplayToTab(tabID, display, input, original string) error {
+	tab, ctrl := a.tabAndCtrlByID(tabID)
+	if tab != nil && tab.ReadOnly {
+		return readOnlyChannelErr()
+	}
+	if ctrl == nil {
+		return workspaceNotReadyErr(tab)
+	}
+	ctrl.SubmitEditedDisplay(display, input, original)
+	return nil
+}
+
 func (a *App) bindControllerDisplayRecorder(ctrl control.SessionAPI) {
 	if ctrl == nil {
 		return
