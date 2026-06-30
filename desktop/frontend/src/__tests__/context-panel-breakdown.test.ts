@@ -1,6 +1,6 @@
 // Run: tsx src/__tests__/context-panel-breakdown.test.ts
 
-import { contextBreakdown, contextCostDisplay, formatCacheHitRate, formatMetricTokens } from "../components/ContextPanel";
+import { contextBreakdown, contextCostDisplay, contextSourceRows, formatCacheHitRate, formatMetricTokens } from "../components/ContextPanel";
 import { currencySymbol, formatMoney, formatMoneyLocalized } from "../lib/money";
 
 let passed = 0;
@@ -118,6 +118,107 @@ console.log("\ncontext panel cache rate");
 eq(formatCacheHitRate(99_950, 50), "99.95%", "cache hit rate preserves two decimal places");
 eq(formatCacheHitRate(0, 10_000), "0.00%", "cache hit rate shows zero when usage data exists");
 eq(formatCacheHitRate(0, 0), "-", "cache hit rate stays empty before usage data exists");
+
+console.log("\ncontext panel source rows");
+
+const sourceRows = contextSourceRows({
+  usedTokens: 0,
+  windowTokens: 0,
+  promptTokens: 0,
+  completionTokens: 0,
+  totalTokens: 0,
+  reasoningTokens: 0,
+  cacheHitTokens: 0,
+  cacheMissTokens: 0,
+  sessionCacheHitTokens: 0,
+  sessionCacheMissTokens: 0,
+  sessionCompletionTokens: 0,
+  readFiles: [],
+  changedFiles: [],
+  sources: {
+    planner: {
+      promptTokens: 200,
+      completionTokens: 20,
+      totalTokens: 220,
+      reasoningTokens: 0,
+      cacheHitTokens: 0,
+      cacheMissTokens: 0,
+      requestCount: 1,
+    },
+    executor: {
+      promptTokens: 1000,
+      completionTokens: 120,
+      totalTokens: 1120,
+      reasoningTokens: 0,
+      cacheHitTokens: 700,
+      cacheMissTokens: 300,
+      requestCount: 2,
+      sessionCost: 0.42,
+      sessionCurrency: "¥",
+    },
+  },
+}, "¥");
+
+eq(sourceRows.map((row) => row.source), ["executor", "planner"], "source rows keep executor before planner");
+eq(
+  {
+    input: sourceRows[0].promptTokens,
+    output: sourceRows[0].completionTokens,
+    hit: sourceRows[0].cacheHitTokens,
+    miss: sourceRows[0].cacheMissTokens,
+    requests: sourceRows[0].requests,
+  },
+  { input: 1000, output: 120, hit: 700, miss: 300, requests: 2 },
+  "executor source row exposes input, output, cache hit, cache miss, and request count",
+);
+eq(sourceRows[1].requests, 1, "planner source row remains visible without cache metadata");
+eq(sourceRows[1].cacheHitTokens + sourceRows[1].cacheMissTokens, 0, "planner source preserves absent cache metadata as empty");
+
+const executorOnlyRows = contextSourceRows({
+  usedTokens: 0,
+  windowTokens: 0,
+  promptTokens: 0,
+  completionTokens: 0,
+  totalTokens: 0,
+  reasoningTokens: 0,
+  cacheHitTokens: 0,
+  cacheMissTokens: 0,
+  sessionCacheHitTokens: 0,
+  sessionCacheMissTokens: 0,
+  sessionCompletionTokens: 0,
+  readFiles: [],
+  changedFiles: [],
+  sources: {
+    planner: {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      reasoningTokens: 0,
+      cacheHitTokens: 0,
+      cacheMissTokens: 0,
+      requestCount: 0,
+    },
+    executor: {
+      promptTokens: 4000,
+      completionTokens: 800,
+      totalTokens: 4800,
+      reasoningTokens: 0,
+      cacheHitTokens: 2500,
+      cacheMissTokens: 500,
+      requestCount: 3,
+    },
+    subagent: {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      reasoningTokens: 0,
+      cacheHitTokens: 0,
+      cacheMissTokens: 0,
+      requestCount: 0,
+    },
+  },
+}, "¥");
+eq(executorOnlyRows.map((row) => row.source), ["executor"], "source rows omit unused planner and subagent entries");
 
 console.log("\ncontext panel metric token labels");
 

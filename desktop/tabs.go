@@ -123,9 +123,8 @@ type sessionUsageStats struct {
 	SessionCostUsd   float64                     `json:"sessionCostUsd,omitempty"`
 	Sources          map[string]usageSourceStats `json:"sources,omitempty"`
 
-	activeTurnStartedAt            int64
-	executorSessionCacheHitTokens  int
-	executorSessionCacheMissTokens int
+	activeTurnStartedAt int64
+	sourceSessionCache  map[string]sourceSessionCacheCounters
 }
 
 type usageSourceStats struct {
@@ -139,6 +138,56 @@ type usageSourceStats struct {
 	SessionCost      float64 `json:"sessionCost,omitempty"`
 	SessionCurrency  string  `json:"sessionCurrency,omitempty"`
 	SessionCostUsd   float64 `json:"sessionCostUsd,omitempty"`
+}
+
+type sourceSessionCacheCounters struct {
+	Hit  int
+	Miss int
+}
+
+func cloneSessionUsageStats(in sessionUsageStats) sessionUsageStats {
+	out := in
+	if len(in.Sources) > 0 {
+		out.Sources = make(map[string]usageSourceStats, len(in.Sources))
+		for source, stats := range in.Sources {
+			out.Sources[source] = stats
+		}
+	}
+	if len(in.sourceSessionCache) > 0 {
+		out.sourceSessionCache = make(map[string]sourceSessionCacheCounters, len(in.sourceSessionCache))
+		for source, counters := range in.sourceSessionCache {
+			out.sourceSessionCache[source] = counters
+		}
+	}
+	return out
+}
+
+func (s *sessionUsageStats) cacheTokenDelta(source string, u *provider.Usage, sessionHit, sessionMiss int) (hit, miss int) {
+	if u != nil {
+		hit = u.CacheHitTokens
+		miss = u.CacheMissTokens
+	}
+	if source != event.UsageSourceExecutor && source != event.UsageSourcePlanner {
+		return hit, miss
+	}
+	if sessionHit+sessionMiss <= 0 {
+		return hit, miss
+	}
+	if s.sourceSessionCache == nil {
+		s.sourceSessionCache = map[string]sourceSessionCacheCounters{}
+	}
+	prev, ok := s.sourceSessionCache[source]
+	s.sourceSessionCache[source] = sourceSessionCacheCounters{Hit: sessionHit, Miss: sessionMiss}
+	if !ok {
+		return sessionHit, sessionMiss
+	}
+	if sessionHit < prev.Hit || sessionMiss < prev.Miss {
+		if hit+miss > 0 {
+			return hit, miss
+		}
+		return sessionHit, sessionMiss
+	}
+	return sessionHit - prev.Hit, sessionMiss - prev.Miss
 }
 
 type tabTelemetrySnapshot struct {
@@ -255,7 +304,7 @@ func cloneDetachedRuntimeTab(tab *WorkspaceTab, key string) *WorkspaceTab {
 	}
 	tab.telemMu.Lock()
 	readTelemetry := append([]readFileRecord(nil), tab.readTelemetry...)
-	usageTelemetry := tab.usageTelemetry
+	usageTelemetry := cloneSessionUsageStats(tab.usageTelemetry)
 	tab.telemMu.Unlock()
 
 	return &WorkspaceTab{
@@ -319,7 +368,7 @@ func applyRuntimeTab(target, source *WorkspaceTab, key string, wailsCtx context.
 	}
 	source.telemMu.Lock()
 	readTelemetry := append([]readFileRecord(nil), source.readTelemetry...)
-	usageTelemetry := source.usageTelemetry
+	usageTelemetry := cloneSessionUsageStats(source.usageTelemetry)
 	source.telemMu.Unlock()
 
 	if source.sink != nil {
@@ -439,20 +488,9 @@ func (t *WorkspaceTab) recordUsage(e event.Event) {
 	t.usageTelemetry.CompletionTokens += u.CompletionTokens
 	t.usageTelemetry.TotalTokens += u.TotalTokens
 	t.usageTelemetry.ReasoningTokens += u.ReasoningTokens
-	if source == event.UsageSourceExecutor && e.SessionHit+e.SessionMiss > 0 {
-		if e.SessionHit < t.usageTelemetry.executorSessionCacheHitTokens || e.SessionMiss < t.usageTelemetry.executorSessionCacheMissTokens {
-			t.usageTelemetry.CacheHitTokens += u.CacheHitTokens
-			t.usageTelemetry.CacheMissTokens += u.CacheMissTokens
-		} else {
-			t.usageTelemetry.CacheHitTokens += e.SessionHit - t.usageTelemetry.executorSessionCacheHitTokens
-			t.usageTelemetry.CacheMissTokens += e.SessionMiss - t.usageTelemetry.executorSessionCacheMissTokens
-		}
-		t.usageTelemetry.executorSessionCacheHitTokens = e.SessionHit
-		t.usageTelemetry.executorSessionCacheMissTokens = e.SessionMiss
-	} else {
-		t.usageTelemetry.CacheHitTokens += u.CacheHitTokens
-		t.usageTelemetry.CacheMissTokens += u.CacheMissTokens
-	}
+	cacheHitTokens, cacheMissTokens := t.usageTelemetry.cacheTokenDelta(source, u, e.SessionHit, e.SessionMiss)
+	t.usageTelemetry.CacheHitTokens += cacheHitTokens
+	t.usageTelemetry.CacheMissTokens += cacheMissTokens
 	t.usageTelemetry.RequestCount++
 	if t.usageTelemetry.Sources == nil {
 		t.usageTelemetry.Sources = map[string]usageSourceStats{}
@@ -462,8 +500,8 @@ func (t *WorkspaceTab) recordUsage(e event.Event) {
 	src.CompletionTokens += u.CompletionTokens
 	src.TotalTokens += u.TotalTokens
 	src.ReasoningTokens += u.ReasoningTokens
-	src.CacheHitTokens += u.CacheHitTokens
-	src.CacheMissTokens += u.CacheMissTokens
+	src.CacheHitTokens += cacheHitTokens
+	src.CacheMissTokens += cacheMissTokens
 	src.RequestCount++
 	if e.Pricing != nil {
 		cost := e.Pricing.Cost(u)
@@ -497,8 +535,7 @@ func (t *WorkspaceTab) telemetrySnapshot() tabTelemetrySnapshot {
 		}
 	}
 	usage.activeTurnStartedAt = 0
-	usage.executorSessionCacheHitTokens = 0
-	usage.executorSessionCacheMissTokens = 0
+	usage.sourceSessionCache = nil
 	return tabTelemetrySnapshot{Version: 2, ReadFiles: records, Usage: usage}
 }
 

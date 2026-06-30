@@ -412,6 +412,7 @@ export interface ContextInfo {
   sessionCurrency?: string;
   cacheHitTokens?: number;
   cacheMissTokens?: number;
+  sources?: Record<string, UsageSourceStats>;
 }
 
 export interface Meta {
