@@ -245,11 +245,17 @@ export function SettingsPanel({
                         applyTextSize(size);
                         setTextSizeState(size);
                       }}
-                      onRestartZoom={(zoom) => {
+                      onRestartZoom={async (zoom) => {
                         const snapped = snapZoom(zoom);
-                        saveRestartZoom(snapped);
-                        setZoomPct(zoomToPercent(snapped));
-                        void app.SetDesktopZoomFactor(snapped);
+                        setErr(null);
+                        setWarning(null);
+                        try {
+                          await app.SetDesktopZoomFactor(snapped);
+                          saveRestartZoom(snapped);
+                          setZoomPct(zoomToPercent(snapped));
+                        } catch (e) {
+                          setErr(String((e as Error)?.message ?? e));
+                        }
                       }}
                       onFontFamily={(font) => {
                         applyFontFamily(font);
@@ -5236,7 +5242,7 @@ function AppearanceSection({
   onTheme: (t: Theme) => void;
   onThemeStyle: (style: ThemeStyle) => void;
   onTextSize: (size: TextSize) => void;
-  onRestartZoom: (zoom: ZoomLevel) => void;
+  onRestartZoom: (zoom: ZoomLevel) => Promise<void>;
   onFontFamily: (font: FontFamily) => void;
   onMonoFontFamily: (font: MonoFontFamily) => void;
   onCustomFontNameChange: (name: string) => void;
@@ -5331,7 +5337,7 @@ function AppearanceSection({
                   max={200}
                   step={5}
                   value={zoomPct}
-                  onChange={(e) => onRestartZoom(Number(e.target.value) / 100)}
+                  onChange={(e) => { void onRestartZoom(Number(e.target.value) / 100); }}
                 />
               </div>
               <span className="zoom-slider__label">200%</span>

@@ -150,7 +150,6 @@ func main() {
 			// Follow the OS theme so the title bar matches light/dark system
 			// preference instead of being locked to dark.
 			Theme:                windows.SystemDefault,
-			IsZoomControlEnabled: true,
 			ZoomFactor:           zoomFactor,
 			WebviewGpuIsDisabled: windowsWebview2GPUDisabled(),
 		},
