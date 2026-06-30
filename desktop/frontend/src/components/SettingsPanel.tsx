@@ -650,6 +650,10 @@ function normalizeReasoningProtocol(protocol: string | undefined): string {
   return REASONING_PROTOCOLS.includes(protocol ?? "") ? protocol ?? "" : "";
 }
 
+export function providerEditorEffectiveKind(isNewCustomProvider: boolean, kind: string, kinds: string[]): string {
+  return isNewCustomProvider ? "openai" : (kind.trim() || kinds[0] || "openai");
+}
+
 function normalizeReasoningLanguage(lang: string | undefined): string {
   const v = String(lang ?? "").trim().toLowerCase();
   return v === "zh" || v === "en" ? v : "auto";
@@ -4287,7 +4291,7 @@ function ProviderEditor({
 }) {
   const t = useT();
   const [name, setName] = useState(initial?.name ?? "");
-  const [kind, setKind] = useState(initial?.kind ?? kinds[0] ?? "openai");
+  const [kind, setKind] = useState(initial?.kind ?? "openai");
   const [baseUrl, setBaseUrl] = useState(initial?.baseUrl ?? "");
   const [models, setModels] = useState((initial?.models ?? []).join(", "));
   const [visionModels, setVisionModels] = useState((initial?.visionModels ?? []).join(", "));
@@ -4311,6 +4315,7 @@ function ProviderEditor({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const builtIn = initial?.builtIn ?? false;
   const isNewCustomProvider = !initial;
+  const effectiveKind = providerEditorEffectiveKind(isNewCustomProvider, kind, kinds);
 
   // Offer the kinds the kernel actually registered; if the stored kind is a
   // legacy/unknown one, keep it as an option so editing doesn't silently change it.
@@ -4357,7 +4362,7 @@ function ProviderEditor({
         name: name.trim() || t("settings.newProviderDraftName"),
         builtIn: initial?.builtIn ?? false,
         added: initial?.added ?? true,
-        kind: kind.trim() || kinds[0] || "openai",
+        kind: effectiveKind,
         baseUrl: baseUrl.trim(),
         modelsUrl,
         models: [],
@@ -4398,7 +4403,7 @@ function ProviderEditor({
       name: name.trim(),
       builtIn: initial?.builtIn ?? false,
       added: initial?.added ?? true,
-      kind: kind.trim() || kinds[0] || "openai",
+      kind: effectiveKind,
       baseUrl: baseUrl.trim(),
       models: ms,
       visionModels: vms,
