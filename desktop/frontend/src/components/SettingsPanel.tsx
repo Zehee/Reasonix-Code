@@ -654,6 +654,24 @@ export function providerEditorEffectiveKind(isNewCustomProvider: boolean, kind: 
   return isNewCustomProvider ? "openai" : (kind.trim() || kinds[0] || "openai");
 }
 
+function trimmedURL(value: string): string {
+  return value.trim().replace(/\/+$/, "");
+}
+
+export function providerChatURLPreview(baseUrl: string, chatUrl: string, fullURL: boolean): string {
+  if (fullURL) return trimmedURL(chatUrl);
+  const base = trimmedURL(baseUrl);
+  return base ? `${base}/chat/completions` : "";
+}
+
+export function providerBaseURLFromChatURL(chatUrl: string): string {
+  const full = trimmedURL(chatUrl);
+  for (const suffix of ["/chat/completions", "/responses", "/response"]) {
+    if (full.endsWith(suffix)) return trimmedURL(full.slice(0, -suffix.length));
+  }
+  return full;
+}
+
 function normalizeReasoningLanguage(lang: string | undefined): string {
   const v = String(lang ?? "").trim().toLowerCase();
   return v === "zh" || v === "en" ? v : "auto";
@@ -786,6 +804,7 @@ function normalizeProviderView(p: ProviderView): ProviderView {
     ...p,
     builtIn: Boolean(p.builtIn),
     added: Boolean(p.added),
+    chatUrl: p.chatUrl ?? "",
     models: asArray(p.models),
     visionModels,
     visionModelsConfigured: Boolean(p.visionModelsConfigured ?? visionModels.length > 0),
@@ -4293,12 +4312,14 @@ function ProviderEditor({
   const [name, setName] = useState(initial?.name ?? "");
   const [kind, setKind] = useState(initial?.kind ?? "openai");
   const [baseUrl, setBaseUrl] = useState(initial?.baseUrl ?? "");
+  const [chatUrl, setChatUrl] = useState(initial?.chatUrl ?? "");
+  const [fullChatUrl, setFullChatUrl] = useState(Boolean((initial?.chatUrl ?? "").trim()));
   const [models, setModels] = useState((initial?.models ?? []).join(", "));
   const [visionModels, setVisionModels] = useState((initial?.visionModels ?? []).join(", "));
   const [visionModelsConfigured, setVisionModelsConfigured] = useState(
     Boolean(initial?.visionModelsConfigured ?? ((initial?.visionModels ?? []).length > 0)),
   );
-  const [modelsUrl] = useState(initial?.modelsUrl ?? "");
+  const [modelsUrl, setModelsUrl] = useState(initial?.modelsUrl ?? "");
   const [apiKeyEnv, setApiKeyEnv] = useState(initial?.apiKeyEnv ?? "");
   const [keyDraft, setKeyDraft] = useState("");
   const [balanceUrl, setBalanceUrl] = useState(initial?.balanceUrl ?? "");
@@ -4316,6 +4337,10 @@ function ProviderEditor({
   const builtIn = initial?.builtIn ?? false;
   const isNewCustomProvider = !initial;
   const effectiveKind = providerEditorEffectiveKind(isNewCustomProvider, kind, kinds);
+  const effectiveBaseUrl = fullChatUrl ? providerBaseURLFromChatURL(chatUrl) : baseUrl.trim();
+  const effectiveChatUrl = fullChatUrl ? trimmedURL(chatUrl) : "";
+  const effectiveModelsUrl = modelsUrl.trim();
+  const previewChatUrl = providerChatURLPreview(baseUrl, chatUrl, fullChatUrl);
 
   // Offer the kinds the kernel actually registered; if the stored kind is a
   // legacy/unknown one, keep it as an option so editing doesn't silently change it.
@@ -4363,8 +4388,9 @@ function ProviderEditor({
         builtIn: initial?.builtIn ?? false,
         added: initial?.added ?? true,
         kind: effectiveKind,
-        baseUrl: baseUrl.trim(),
-        modelsUrl,
+        baseUrl: effectiveBaseUrl,
+        chatUrl: effectiveChatUrl,
+        modelsUrl: effectiveModelsUrl,
         models: [],
         visionModels: [],
         visionModelsConfigured: false,
@@ -4404,13 +4430,14 @@ function ProviderEditor({
       builtIn: initial?.builtIn ?? false,
       added: initial?.added ?? true,
       kind: effectiveKind,
-      baseUrl: baseUrl.trim(),
+      baseUrl: effectiveBaseUrl,
+      chatUrl: effectiveChatUrl,
       models: ms,
       visionModels: vms,
       visionModelsConfigured: visionModelsConfigured || vms.length > 0,
       default: ms[0] ?? "",
       apiKeyEnv: effectiveApiKeyEnv,
-      modelsUrl,
+      modelsUrl: effectiveModelsUrl,
       keySet: Boolean(keyDraft.trim()) || (initial?.keySet ?? false),
       balanceUrl: balanceUrl.trim(),
       contextWindow: Number(ctx) || 0,
@@ -4460,7 +4487,7 @@ function ProviderEditor({
     () => models.split(",").map((m) => m.trim()).filter(Boolean),
     [models],
   );
-  const canFetch = Boolean(name.trim() && baseUrl.trim());
+  const canFetch = Boolean(name.trim() && effectiveBaseUrl);
 
   const protocolField = initial ? (
     <select className="mem-select" value={kind} onChange={(e) => setKind(e.target.value)}>
@@ -4489,6 +4516,14 @@ function ProviderEditor({
           onChange={(e) => setApiKeyEnv(e.target.value)}
         />
         <div className="mem-hint">{t("settings.providerApiKeyEnvHint")}</div>
+        <label className="set-label">{t("settings.providerModelsUrl")}</label>
+        <input
+          className="mem-input"
+          placeholder={t("settings.providerModelsUrlPlaceholder")}
+          value={modelsUrl}
+          onChange={(e) => setModelsUrl(e.target.value)}
+        />
+        <div className="mem-hint">{t("settings.providerModelsUrlHint")}</div>
         <label className="set-label">{t("settings.providerBalanceUrl")}</label>
         <input className="mem-input" placeholder={t("settings.balanceUrlPlaceholder")} value={balanceUrl} onChange={(e) => setBalanceUrl(e.target.value)} />
         <div className="mem-hint">{t("settings.balanceUrlHint")}</div>
@@ -4600,8 +4635,44 @@ function ProviderEditor({
       <input className="mem-input" placeholder={t("settings.customProviderNamePlaceholder")} value={name} onChange={(e) => setName(e.target.value)} disabled={!!initial} />
       <label className="set-label">{t("settings.providerProtocol")}</label>
       {protocolField}
-      <label className="set-label">{t("settings.providerBaseUrlLabel")}</label>
-      <input className="mem-input" placeholder={t("settings.providerBaseUrl")} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+      <div className="set-row">
+        <label className="set-label set-grow">
+          {t(fullChatUrl ? "settings.providerChatUrlLabel" : "settings.providerBaseUrlLabel")}
+        </label>
+        <label className="set-check">
+          <input
+            type="checkbox"
+            checked={fullChatUrl}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setFullChatUrl(checked);
+              if (checked && !chatUrl.trim()) {
+                setChatUrl(providerChatURLPreview(baseUrl, "", false));
+              } else if (!checked && !baseUrl.trim()) {
+                setBaseUrl(providerBaseURLFromChatURL(chatUrl));
+              }
+            }}
+          />
+          {t("settings.providerUseFullChatUrl")}
+        </label>
+      </div>
+      <input
+        className="mem-input"
+        placeholder={t(fullChatUrl ? "settings.providerChatUrlPlaceholder" : "settings.providerBaseUrl")}
+        value={fullChatUrl ? chatUrl : baseUrl}
+        onChange={(e) => {
+          const value = e.target.value;
+          if (fullChatUrl) {
+            setChatUrl(value);
+            setBaseUrl(providerBaseURLFromChatURL(value));
+          } else {
+            setBaseUrl(value);
+          }
+        }}
+      />
+      <div className="mem-hint">
+        {previewChatUrl ? t("settings.providerRequestPreview", { url: previewChatUrl }) : t("settings.providerRequestPreviewEmpty")}
+      </div>
       {!initial && (
         <>
           <label className="set-label">{t("settings.providerKey")}</label>
@@ -4657,7 +4728,7 @@ function ProviderEditor({
         <button className="btn btn--small" onClick={onCancel} disabled={busy}>
           {t("common.cancel")}
         </button>
-        <button className="btn btn--primary btn--small" onClick={() => void save()} disabled={busy || !name.trim() || !baseUrl.trim() || !models.trim()}>
+        <button className="btn btn--primary btn--small" onClick={() => void save()} disabled={busy || !name.trim() || !effectiveBaseUrl || !models.trim()}>
           {t("common.save")}
         </button>
       </div>

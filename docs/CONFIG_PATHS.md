@@ -108,6 +108,15 @@ uses `CUSTOM_API_KEY`, it will keep working with that key. If several old custom
 providers accidentally share `CUSTOM_API_KEY`, edit each provider's
 `api_key_env` to a distinct name and save the corresponding API key again.
 
+### Custom provider endpoint URLs
+
+Custom OpenAI-compatible providers normally store an API endpoint in `base_url`.
+Reasonix sends chat requests to `base_url + "/chat/completions"` and probes model
+discovery candidates such as `/models` and `/v1/models`. If a gateway gives you a
+complete chat request URL, set `chat_url`; Reasonix will use it directly and will
+not append `/chat/completions`. If model discovery needs a separate address, set
+`models_url`.
+
 ## Global `.env`
 
 `<Reasonix home>/.env` is the single runtime source for provider API keys saved

@@ -95,6 +95,14 @@ provider-name 规则。例如 `https://token.sensenova.cn/v1` 会生成 provider
 读取这个 key。若多个旧自定义 provider 已经意外共用了 `CUSTOM_API_KEY`，需要手动把各自的
 `api_key_env` 改成不同名称，并重新保存对应的 API key。
 
+### 自定义 provider 的端点 URL
+
+自定义 OpenAI-compatible provider 通常只需要在 `base_url` 中填写 API 端点。
+Reasonix 会把聊天请求发送到 `base_url + "/chat/completions"`，并尝试 `/models`
+和 `/v1/models` 等模型发现地址。如果网关给的是完整聊天请求 URL，可以设置
+`chat_url`；Reasonix 会直接使用这个地址，不再追加 `/chat/completions`。如果模型
+发现需要使用单独地址，可以设置 `models_url`。
+
 ## 全局 `.env`
 
 `<Reasonix home>/.env` 是 Reasonix 保存的 provider API key 的唯一运行时来源。

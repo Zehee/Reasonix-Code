@@ -32,6 +32,7 @@ type ProviderView struct {
 	Added             bool     `json:"added"`
 	Kind              string   `json:"kind"`
 	BaseURL           string   `json:"baseUrl"`
+	ChatURL           string   `json:"chatUrl"`
 	Models            []string `json:"models"`
 	VisionModels      []string `json:"visionModels"`
 	VisionModelsSet   bool     `json:"visionModelsConfigured"`
@@ -306,7 +307,7 @@ func providerViewFromEntryForRootWithResolver(p config.ProviderEntry, builtIn, a
 	key := resolver.ResolveGlobalFirst(p.APIKeyEnv)
 	requiresKey := p.RequiresAPIKey()
 	return ProviderView{
-		Name: p.Name, BuiltIn: builtIn, Added: added, Kind: p.Kind, BaseURL: p.BaseURL,
+		Name: p.Name, BuiltIn: builtIn, Added: added, Kind: p.Kind, BaseURL: p.BaseURL, ChatURL: p.ChatURL,
 		Models: nonNil(models), VisionModels: nonNil(providerVisionModels(models, visionModels)), VisionModelsSet: visionModelsSet, ModelsURL: p.ModelsURL, Default: p.DefaultModel(),
 		APIKeyEnv:         p.APIKeyEnv,
 		KeySet:            key.Set,
@@ -1203,7 +1204,8 @@ func (a *App) SaveProvider(p ProviderView) error {
 		e.Name = p.Name
 		e.Kind = p.Kind
 		e.BaseURL = p.BaseURL
-		e.ModelsURL = p.ModelsURL
+		e.ChatURL = strings.TrimSpace(p.ChatURL)
+		e.ModelsURL = strings.TrimSpace(p.ModelsURL)
 		e.APIKeyEnv = p.APIKeyEnv
 		e.BalanceURL = strings.TrimSpace(p.BalanceURL)
 		e.ContextWindow = p.ContextWindow
@@ -1283,7 +1285,7 @@ func (a *App) FetchProviderModels(p ProviderView) ([]string, error) {
 	e := config.ProviderEntry{
 		Name:      p.Name,
 		BaseURL:   p.BaseURL,
-		ModelsURL: p.ModelsURL,
+		ModelsURL: strings.TrimSpace(p.ModelsURL),
 		APIKeyEnv: p.APIKeyEnv,
 	}
 	e.ResolveAPIKeyForRoot(a.activeWorkspaceRoot())

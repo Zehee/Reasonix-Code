@@ -84,14 +84,16 @@ type Config struct {
   differing only in `base_url` / `model` / `api_key_env`. Adding another OpenAI-
   compatible model is a config edit, not a code change.
 - **A provider is a vendor endpoint** (one `base_url` + `api_key_env`) that offers
-  one or more models. An entry declares either a single `model = "..."` or a
+  one or more models. OpenAI-compatible chat normally posts to
+  `base_url + "/chat/completions"`; set `chat_url` only for gateways that require a
+  full request URL. An entry declares either a single `model = "..."` or a
   `models = ["...", "..."]` list (with an optional `default`); the list form lets
-  one vendor expose several models without re-declaring the endpoint/key — picking
-  a model reuses the same connection. A **model reference** (`default_model`, the
-  `--model` flag, the desktop switcher) resolves via `Config.ResolveModel`, which
-  accepts a provider name (→ its default model), a bare model name, or an explicit
-  `provider/model`. `context_window` / `price` are per-provider, so models that
-  need distinct values stay separate single-`model` entries.
+  one vendor expose several models without re-declaring the endpoint/key. A
+  **model reference** (`default_model`, the `--model` flag, the desktop switcher)
+  resolves via `Config.ResolveModel`, which accepts a provider name (→ its default
+  model), a bare model name, or an explicit `provider/model`. `context_window` /
+  `price` are per-provider, so models that need distinct values stay separate
+  single-`model` entries.
 - Streaming tool-call deltas are accumulated by index inside the provider; only
   complete `ToolCall`s are emitted.
 
@@ -527,6 +529,8 @@ reasoning_language = "auto"       # visible reasoning text: auto|zh|en
 name           = "deepseek"
 kind           = "openai"
 base_url       = "https://api.deepseek.com"
+# chat_url     = "https://proxy.example.com/v1/chat/completions"   # optional full chat request URL
+# models_url   = "https://proxy.example.com/v1/models"             # optional model discovery URL
 models         = ["deepseek-v4-flash", "deepseek-v4-pro"]
 default        = "deepseek-v4-flash"   # optional; defaults to models[0]
 api_key_env    = "DEEPSEEK_API_KEY"
