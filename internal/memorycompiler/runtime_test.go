@@ -743,6 +743,11 @@ func TestMemoryCompilerSuppressesCompilerFeedbackNoise(t *testing.T) {
 			{Target: "strategy_selector", Change: "add_constraint", Reason: planModeConstraint, Applied: true},
 			{Target: "strategy_selector", Change: "add_constraint", Reason: "keep focused regression check", Applied: true},
 		},
+		NoisyRefs: map[string]int{
+			overhead:                  2,
+			planModeNode:              2,
+			"real transient IO error": 2,
+		},
 	})
 	compiled, err := compileExecutionContract(ir)
 	if err != nil {
@@ -754,7 +759,7 @@ func TestMemoryCompilerSuppressesCompilerFeedbackNoise(t *testing.T) {
 	if strings.Contains(compiled, planModeBlocked) {
 		t.Fatalf("compiled contract leaked plan-mode policy noise:\n%s", compiled)
 	}
-	for _, want := range []string{realConstraint.Text, "use the issue body as source", "keep focused regression check"} {
+	for _, want := range []string{realConstraint.Text, "use the issue body as source", "keep focused regression check", "real transient IO error"} {
 		if !strings.Contains(compiled, want) {
 			t.Fatalf("compiled contract lost actionable signal %q:\n%s", want, compiled)
 		}

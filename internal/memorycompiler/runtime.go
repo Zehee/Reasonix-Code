@@ -574,9 +574,10 @@ func buildIRWithPolicy(goal, sourceEvent string, st state) (PlannerIR, ControlPo
 	}
 	for _, noisy := range sortedNoisyRefs(st.NoisyRefs) {
 		ref, count := noisy.ref, noisy.count
-		if count >= 2 {
-			ir.RiskNotes = append(ir.RiskNotes, "quarantined noisy memory pattern "+ref)
+		if count < 2 || isCompilerFeedbackNoise(ref) {
+			continue
 		}
+		ir.RiskNotes = append(ir.RiskNotes, "quarantined noisy memory pattern "+ref)
 	}
 	ir.RiskNotes = append(ir.RiskNotes, driftRiskNotes(drift)...)
 	for _, node := range usableSubgraphNodes(st.Nodes, st.Edges, now) {
