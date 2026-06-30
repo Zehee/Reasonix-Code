@@ -234,6 +234,59 @@ func TestResearchGoalCreatedEmitsLifecycleNotice(t *testing.T) {
 	}
 }
 
+func TestResearchGoalRepeatedSetReusesAutoResearchTask(t *testing.T) {
+	root := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(root); err == nil {
+		root = resolved
+	}
+	events := make(chan event.Event, 8)
+	c := New(Options{
+		WorkspaceRoot: root,
+		Sink: event.FuncSink(func(e event.Event) {
+			if e.Kind == event.Notice {
+				events <- e
+			}
+		}),
+	})
+
+	goal := "请持续研究当前项目的 AutoResearch 状态栏展示链路，验证任务创建、状态刷新、右侧 Context 面板展示、状态栏 chip 展示是否一致。不要只看表面现象，需要找到根因、记录 evidence，并在完成前确认所有验证步骤通过。不要修改文件"
+	c.SetGoalWithResearchMode(goal, GoalResearchOn)
+	_, _, _, firstTaskID := c.goals.snapshot()
+	if firstTaskID == "" {
+		t.Fatal("first AutoResearch task id was empty")
+	}
+
+	c.SetGoalWithResearchMode(goal, GoalResearchOn)
+	c.SetGoal(goal)
+	_, _, _, repeatedTaskID := c.goals.snapshot()
+	if repeatedTaskID != firstTaskID {
+		t.Fatalf("repeated SetGoal created a new task: got %q, want %q", repeatedTaskID, firstTaskID)
+	}
+
+	entries, err := os.ReadDir(filepath.Join(root, ".reasonix", "autoresearch"))
+	if err != nil {
+		t.Fatalf("read autoresearch dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("autoresearch task count = %d, want 1", len(entries))
+	}
+
+	createdNotices := 0
+	for {
+		select {
+		case e := <-events:
+			if strings.Contains(e.Text, "autoresearch task created") {
+				createdNotices++
+			}
+		default:
+			if createdNotices != 1 {
+				t.Fatalf("created notices = %d, want 1", createdNotices)
+			}
+			return
+		}
+	}
+}
+
 func TestResearchGoalMissingExplicitTaskBlocksInsteadOfCreatingNewTask(t *testing.T) {
 	root := t.TempDir()
 	if resolved, err := filepath.EvalSymlinks(root); err == nil {

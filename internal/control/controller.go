@@ -1509,6 +1509,10 @@ func (c *Controller) ensureAutoResearchTask(goal string, researchMode GoalResear
 	if goal == "" || c.autoResearch == nil || !shouldUseAutoResearch(goal, researchMode) {
 		return "", ""
 	}
+	currentGoal, currentStatus, _, currentTaskID := c.goals.snapshot()
+	if strings.TrimSpace(currentGoal) == goal && currentStatus == GoalStatusRunning && strings.TrimSpace(currentTaskID) != "" {
+		return currentTaskID, ""
+	}
 	if task, ok, err := c.autoResearch.ResumeFromGoalText(goal); err != nil {
 		slog.Warn("controller: resume autoresearch task", "err", err)
 		if ok {
