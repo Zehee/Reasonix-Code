@@ -1714,6 +1714,7 @@ export const zhTW: Record<DictKey, string> = {
   "context.healthManyFilesShort": "檔案較多",
   "context.healthLowCacheShort": "命中偏低",
   "context.sessionTokens": "會話 tokens",
+  "context.inputCache": "輸入快取",
   "context.costBreakdown": "費用來源",
   "context.sourceBreakdown": "模型用量明細",
   "context.sourceShareTokens": "按 tokens 佔比",

@@ -1651,6 +1651,7 @@ export const en = {
   "context.other": "Other",
   "context.total": "Total",
   "context.cacheHit": "Cache hit",
+  "context.inputCache": "Input cache",
   "context.inputCacheHit": "Input (cache hit)",
   "context.inputCacheMiss": "Input (cache miss)",
   "context.outputTokens": "Output tokens",

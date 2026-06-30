@@ -1653,6 +1653,7 @@ export const zh: Record<DictKey, string> = {
   "context.other": "其他",
   "context.total": "总计",
   "context.cacheHit": "缓存命中",
+  "context.inputCache": "输入缓存",
   "context.inputCacheHit": "输入 tokens(命中缓存)",
   "context.inputCacheMiss": "输入 tokens(未命中缓存)",
   "context.outputTokens": "输出 tokens",

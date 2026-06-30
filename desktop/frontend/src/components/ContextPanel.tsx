@@ -434,13 +434,30 @@ export function ContextPanel({
           </section>
           <section className="context-panel__section">
             <SectionHeading title={t("context.runtimeMetrics")} />
-            <div className="context-panel__stats">
-              <MetricCard label={t("context.time")} value={fmtDuration(elapsed, t)} />
-              <MetricCard label={t("context.requests")} value={requestCount > 0 ? String(requestCount) : "-"} />
-              <MetricCard label={t("context.inputCacheHit")} value={sessionCacheHitMetric.display} valueTitle={sessionCacheHitMetric.exact} wide />
-              <MetricCard label={t("context.inputCacheMiss")} value={sessionCacheMissMetric.display} valueTitle={sessionCacheMissMetric.exact} wide />
-              <MetricCard label={t("context.outputTokens")} value={sessionCompletionMetric.display} valueTitle={sessionCompletionMetric.exact} wide />
-              <MetricCard label={t("context.sessionTokens")} value={totalTokensMetric.display} valueTitle={totalTokensMetric.exact} wide />
+            <div className="context-panel__runtime-card">
+              <div className="context-panel__runtime-summary">
+                <RuntimeMetric label={t("context.time")} value={fmtDuration(elapsed, t)} />
+                <RuntimeMetric label={t("context.requests")} value={requestCount > 0 ? String(requestCount) : "-"} />
+                <RuntimeMetric label={t("context.outputTokens")} value={sessionCompletionMetric.display} title={sessionCompletionMetric.exact} />
+                <RuntimeMetric label={t("context.sessionTokens")} value={totalTokensMetric.display} title={totalTokensMetric.exact} />
+              </div>
+              <div className="context-panel__runtime-cache">
+                <div className="context-panel__runtime-cache-head">
+                  <span>{t("context.inputCache")}</span>
+                  <strong>{formatCacheHitRate(sessionCacheHit, sessionCacheMiss)}</strong>
+                </div>
+                <SourceSplitBar
+                  label={`${t("context.sourceCacheHit")}/${t("context.sourceCacheMiss")}`}
+                  segments={[
+                    { label: t("context.sourceCacheHit"), value: sessionCacheHit, tone: "hit" },
+                    { label: t("context.sourceCacheMiss"), value: sessionCacheMiss, tone: "miss" },
+                  ]}
+                />
+                <div className="context-panel__runtime-cache-values">
+                  <SourceMetric label={t("context.sourceCacheHit")} value={sessionCacheHitMetric.display} title={sessionCacheHitMetric.exact} />
+                  <SourceMetric label={t("context.sourceCacheMiss")} value={sessionCacheMissMetric.display} title={sessionCacheMissMetric.exact} />
+                </div>
+              </div>
             </div>
           </section>
           <section className="context-panel__section">
@@ -586,6 +603,16 @@ function MetricCard({ label, value, valueTitle, tone, wide }: { label: string; v
   const exactTitle = valueTitle && valueTitle !== value ? valueTitle : undefined;
   return (
     <div className={`context-panel__metric${toneClass}${wideClass}`} aria-label={exactTitle ? `${label}: ${exactTitle}` : undefined}>
+      <span>{label}</span>
+      <strong title={exactTitle}>{value}</strong>
+    </div>
+  );
+}
+
+function RuntimeMetric({ label, value, title }: { label: string; value: string; title?: string }) {
+  const exactTitle = title && title !== value ? title : undefined;
+  return (
+    <div className="context-panel__runtime-metric" aria-label={exactTitle ? `${label}: ${exactTitle}` : undefined}>
       <span>{label}</span>
       <strong title={exactTitle}>{value}</strong>
     </div>

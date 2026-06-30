@@ -19100,6 +19100,91 @@ body > .mermaid-diagram--fullscreen {
   color: var(--err);
 }
 
+.context-panel__runtime-card {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 8px 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.context-panel__runtime-summary {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 10px;
+}
+
+.context-panel__runtime-metric {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.context-panel__runtime-metric span,
+.context-panel__runtime-metric strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-panel__runtime-metric span {
+  color: var(--fg-muted);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.context-panel__runtime-metric strong {
+  color: var(--fg);
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.context-panel__runtime-cache {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.context-panel__runtime-cache-head {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.context-panel__runtime-cache-head span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-dim);
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-panel__runtime-cache-head strong {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.context-panel__runtime-cache-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 8px;
+}
+
 .context-panel__source-list {
   display: grid;
   gap: 10px;
