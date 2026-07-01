@@ -76,6 +76,31 @@ func TestNormalizeBashRunErrorAllowsPreservedWaitDelay(t *testing.T) {
 	}
 }
 
+func TestWaitForTrackedShellProcessReturnsWhenWaitStallsAfterCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	tracked := &trackedShellProcess{}
+	releaseWait := make(chan struct{})
+	defer close(releaseWait)
+
+	start := time.Now()
+	err := waitForTrackedShellProcess(ctx, tracked, func() error {
+		<-releaseWait
+		return nil
+	}, 20*time.Millisecond)
+	elapsed := time.Since(start)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled", err)
+	}
+	if elapsed > time.Second {
+		t.Fatalf("cancelled stalled wait returned too slowly: %v", elapsed)
+	}
+	if !tracked.killed {
+		t.Fatal("tracked process was not marked killed")
+	}
+}
+
 func longSleepCommand(sh sandbox.Shell) string {
 	if sh.Kind == sandbox.ShellPowerShell {
 		return "Start-Sleep -Seconds 2"
