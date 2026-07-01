@@ -28,6 +28,7 @@ import (
 	"reasonix/internal/eventwire"
 	"reasonix/internal/fileutil"
 	"reasonix/internal/provider"
+	"reasonix/internal/store"
 )
 
 // --- WorkspaceTab -----------------------------------------------------------
@@ -1318,18 +1319,17 @@ func (a *App) openTopicTabWithActivation(scope, workspaceRoot, topicID, sessionP
 			return TabMeta{}, err
 		}
 	}
+	profile := loadTabSessionProfile(sessionPath)
 	tab := &WorkspaceTab{
-		ID:               tabID,
-		Scope:            scope,
-		WorkspaceRoot:    actualRoot,
-		TopicID:          topicID,
-		TopicTitle:       topicTitle,
-		SessionPath:      sessionPath,
-		tokenMode:        boot.TokenModeFull,
-		mode:             "normal",
-		toolApprovalMode: control.ToolApprovalAsk,
-		disabledMCP:      map[string]ServerView{},
+		ID:            tabID,
+		Scope:         scope,
+		WorkspaceRoot: actualRoot,
+		TopicID:       topicID,
+		TopicTitle:    topicTitle,
+		SessionPath:   sessionPath,
+		disabledMCP:   map[string]ServerView{},
 	}
+	applyTabSessionProfile(tab, profile)
 	tab.sink = &tabEventSink{tabID: tabID, app: a}
 
 	a.tabs[tabID] = tab
@@ -1826,6 +1826,7 @@ func (a *App) CloseTab(tabID string) error {
 	if tab.Ctrl != nil && !tab.ReadOnly {
 		_ = tab.Ctrl.Snapshot()
 	}
+	saveTabSessionMetaForCurrentSession(tab)
 	if tab.Ctrl == nil || !tab.hasActiveRuntimeWork() {
 		a.markTabRemovedLocked(tab)
 	}
@@ -1899,6 +1900,7 @@ func (a *App) keepOnlyVisibleTab(tabID string) (TabMeta, error) {
 		if tab.Ctrl != nil && !tab.ReadOnly {
 			_ = tab.Ctrl.Snapshot()
 		}
+		saveTabSessionMetaForCurrentSession(tab)
 		if tab.Ctrl == nil || !tab.hasActiveRuntimeWork() {
 			a.markTabRemovedLocked(tab)
 		}
@@ -2897,7 +2899,7 @@ func (a *App) saveTabsCollectLocked() (string, []desktopTabEntry, string, uint64
 				Effort:           cloneStringPtr(tab.effort),
 				TokenMode:        persistedTabTokenMode(currentTabTokenMode(tab)),
 				Mode:             persistedTabMode(currentTabMode(tab)),
-				Goal:             strings.TrimSpace(currentTabGoal(tab)),
+				Goal:             persistedTabGoal(tab),
 				ToolApprovalMode: persistedToolApprovalMode(currentTabToolApprovalMode(tab)),
 			})
 		}
@@ -5631,11 +5633,137 @@ func saveTabSessionMeta(tab *WorkspaceTab, path string) error {
 	m.WorkspaceRoot = workspaceRoot
 	m.TopicID = tab.TopicID
 	m.TopicTitle = tab.TopicTitle
+	m.TokenMode = persistedTabTokenMode(currentTabTokenMode(tab))
+	m.Mode = persistedTabMode(currentTabMode(tab))
+	m.ToolApprovalMode = persistedToolApprovalMode(currentTabToolApprovalMode(tab))
+	m.Goal = persistedTabGoal(tab)
 	if err := agent.SaveBranchMetaPreserveUpdated(path, m); err != nil {
 		return err
 	}
 	invalidateTopicSessionIndexForPath(path)
 	return nil
+}
+
+func tabSessionMetaPathForCurrentSession(tab *WorkspaceTab) string {
+	if tab == nil {
+		return ""
+	}
+	path := strings.TrimSpace(tab.currentSessionPath())
+	if path == "" {
+		return ""
+	}
+	for _, dir := range []string{tabRuntimeSessionDir(tab), tabSessionDir(tab)} {
+		if resolved, ok := pinnedTabSessionPath(dir, path); ok {
+			return resolved
+		}
+	}
+	path = canonicalTabSessionPath(path)
+	if filepath.IsAbs(path) {
+		return path
+	}
+	return ""
+}
+
+func saveTabSessionMetaForCurrentSession(tab *WorkspaceTab) {
+	if tab == nil || tab.ReadOnly {
+		return
+	}
+	if _, discard := transientBlankSessionArtifactPath(tab); discard {
+		return
+	}
+	path := tabSessionMetaPathForCurrentSession(tab)
+	if path == "" {
+		return
+	}
+	_ = saveTabSessionMeta(tab, path)
+}
+
+type tabSessionProfile struct {
+	tokenMode        string
+	mode             string
+	toolApprovalMode string
+	goal             string
+}
+
+func defaultTabSessionProfile() tabSessionProfile {
+	return tabSessionProfile{
+		tokenMode:        boot.TokenModeFull,
+		mode:             "normal",
+		toolApprovalMode: control.ToolApprovalAsk,
+	}
+}
+
+func tabSessionProfileFromMeta(sessionPath string, meta agent.BranchMeta) tabSessionProfile {
+	profile := defaultTabSessionProfile()
+	profile.tokenMode = boot.NormalizeTokenMode(meta.TokenMode)
+	profile.mode = normalizeTabMode(meta.Mode)
+	profile.toolApprovalMode = normalizeToolApprovalMode(meta.ToolApprovalMode)
+	if profile.toolApprovalMode == control.ToolApprovalAsk && tabModeHasAutoApproveTools(meta.Mode) {
+		profile.toolApprovalMode = control.ToolApprovalYolo
+	}
+	profile.goal = runningTabSessionGoal(sessionPath, meta.Goal)
+	return profile
+}
+
+func loadTabSessionProfile(sessionPath string) tabSessionProfile {
+	meta, ok, err := agent.LoadBranchMeta(sessionPath)
+	if err != nil || !ok {
+		return defaultTabSessionProfile()
+	}
+	return tabSessionProfileFromMeta(sessionPath, meta)
+}
+
+func applyTabSessionProfile(tab *WorkspaceTab, profile tabSessionProfile) {
+	if tab == nil {
+		return
+	}
+	tab.tokenMode = boot.NormalizeTokenMode(profile.tokenMode)
+	tab.mode = normalizeTabMode(profile.mode)
+	tab.toolApprovalMode = normalizeToolApprovalMode(profile.toolApprovalMode)
+	if tab.toolApprovalMode == control.ToolApprovalAsk && tabModeHasAutoApproveTools(tab.mode) {
+		tab.toolApprovalMode = control.ToolApprovalYolo
+	}
+	tab.mode = tabModeFromAxes(tabModeHasPlan(tab.mode), tab.toolApprovalMode == control.ToolApprovalYolo)
+	tab.goal = strings.TrimSpace(profile.goal)
+}
+
+func persistedTabGoal(tab *WorkspaceTab) string {
+	goal := strings.TrimSpace(currentTabGoal(tab))
+	if goal == "" || currentTabGoalStatus(tab) != control.GoalStatusRunning {
+		return ""
+	}
+	return goal
+}
+
+type tabSessionGoalState struct {
+	Goal   string `json:"goal,omitempty"`
+	Status string `json:"status,omitempty"`
+}
+
+func runningTabSessionGoal(sessionPath, fallback string) string {
+	fallback = strings.TrimSpace(fallback)
+	if fallback == "" {
+		return ""
+	}
+	data, err := os.ReadFile(store.SessionGoalState(sessionPath))
+	if err != nil {
+		return fallback
+	}
+	var state tabSessionGoalState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return fallback
+	}
+	switch state.Status {
+	case control.GoalStatusRunning:
+		if goal := strings.TrimSpace(state.Goal); goal != "" {
+			return goal
+		}
+		return fallback
+	case "", control.GoalStatusStopped:
+		return ""
+	default:
+		return ""
+	}
 }
 
 func canonicalTabSessionPath(path string) string {
