@@ -1,6 +1,6 @@
 // Run: tsx src/__tests__/context-panel-breakdown.test.ts
 
-import { contextBreakdown, contextCostDisplay, contextSourceRows, formatCacheHitRate, formatMetricTokens } from "../components/ContextPanel";
+import { cacheHitTone, contextBreakdown, contextCostDisplay, contextSourceRows, contextWindowStatus, formatCacheHitRate, formatMetricTokens } from "../components/ContextPanel";
 import { currencySymbol, formatMoney, formatMoneyLocalized } from "../lib/money";
 
 let passed = 0;
@@ -49,7 +49,7 @@ eq(
   42_124,
   "legend values sum to used context tokens",
 );
-eq(Math.round(mock.otherPct), 33, "donut endpoint follows used/window percent");
+eq(Math.round(mock.otherPct), 33, "usage endpoint follows used/window percent");
 
 const issue5283 = contextBreakdown(6888, 1_000_000, 6840, 48, 48);
 eq(
@@ -90,8 +90,15 @@ eq(
     reasoningPct: 0,
     otherPct: 0,
   },
-  "unknown context window keeps donut segments empty",
+  "unknown context window keeps usage segments empty",
 );
+
+console.log("\ncontext window status");
+
+eq(contextWindowStatus(33, 80), { tone: "good", key: "context.windowStatusHealthy" }, "low usage stays healthy");
+eq(contextWindowStatus(72, 80), { tone: "notice", key: "context.windowStatusWatch" }, "usage near compact threshold warns early");
+eq(contextWindowStatus(80, 80), { tone: "warn", key: "context.windowStatusPastCompact" }, "compact threshold reached takes warning tone");
+eq(contextWindowStatus(91, 80), { tone: "warn", key: "context.windowStatusNearLimit" }, "near hard limit overrides compact status");
 
 console.log("\ncontext panel cost");
 
@@ -118,6 +125,10 @@ console.log("\ncontext panel cache rate");
 eq(formatCacheHitRate(99_950, 50), "99.95%", "cache hit rate preserves two decimal places");
 eq(formatCacheHitRate(0, 10_000), "0.00%", "cache hit rate shows zero when usage data exists");
 eq(formatCacheHitRate(0, 0), "-", "cache hit rate stays empty before usage data exists");
+eq(cacheHitTone(8700, 1300), "good", "healthy cache hit rate uses positive tone");
+eq(cacheHitTone(6000, 4000), "notice", "mid cache hit rate uses notice tone");
+eq(cacheHitTone(5999, 4001), "warn", "low cache hit rate uses warning tone");
+eq(cacheHitTone(0, 0), undefined, "missing cache data stays uncolored");
 
 console.log("\ncontext panel source rows");
 
