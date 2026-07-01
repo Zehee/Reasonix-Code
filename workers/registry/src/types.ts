@@ -3,6 +3,7 @@ export interface RegistryUser {
   id: number;
   handle: string;
   role: "member" | "admin";
+  emailVerified: boolean;
 }
 
 export type PackageKind = "skill" | "mcp";
@@ -48,6 +49,7 @@ export interface PackageDTO {
   installCount: number;
   starCount: number;
   verified: boolean;
+  status: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -92,6 +94,7 @@ export function toPackageDTO(row: PackageRow): PackageDTO {
     installCount: row.install_count,
     starCount: row.star_count,
     verified: row.verified === 1,
+    status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

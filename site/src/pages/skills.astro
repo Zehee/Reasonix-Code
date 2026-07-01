@@ -90,7 +90,7 @@ const desc = "Browse, publish, and install community skills and MCP servers for 
         <div class="pub-head">
           <div>
             <h3><span class="l-en">Publish a package</span><span class="l-zh">发布一个包</span></h3>
-            <p><span class="l-en">Signed-in publishers only. Your package is namespaced to your handle: <code>@you/name</code>.</span><span class="l-zh">仅登录用户可发布。包会以你的 handle 命名:<code>@you/name</code>。</span></p>
+            <p><span class="l-en">Verified accounts only. Submissions are reviewed before they go live; your package is namespaced to your handle (<code>@you/name</code>).</span><span class="l-zh">仅已验证邮箱的账号可提交。提交后经管理员审核才会公开;包以你的 handle 命名(<code>@you/name</code>)。</span></p>
           </div>
           <button type="button" class="pub-close" id="publish-close" aria-label="Close">✕</button>
         </div>
@@ -421,7 +421,10 @@ const desc = "Browse, publish, and install community skills and MCP servers for 
         const data = await r.json().catch(() => ({}));
         if (r.status === 401) { setMsg('Sign in at id.reasonix.io to publish.', 'err'); return; }
         if (!r.ok) { setMsg(data?.error?.message || 'Publish failed.', 'err'); return; }
-        setMsg(`Published ${data.package.slug}@${data.version}.`, 'ok');
+        const pending = data.package?.status === 'pending';
+        setMsg(pending
+          ? `Submitted ${data.package.slug} for review — an admin approves it before it goes live.`
+          : `Published ${data.package.slug}@${data.version}.`, 'ok');
         ev.target.reset();
         loadPackages(); loadFeed();
       } catch { setMsg('Registry is unreachable right now.', 'err'); }

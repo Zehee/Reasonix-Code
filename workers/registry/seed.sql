@@ -30,3 +30,9 @@ INSERT INTO events (type, package_id, actor_handle, summary, created_at) VALUES
 INSERT INTO events (type, package_id, actor_handle, summary, created_at)
   SELECT 'install', p.id, '', 'installed ' || p.slug, datetime('now','-' || (abs(random()) % 6) || ' days')
   FROM packages p, (SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5);
+
+-- a pending submission (moderation): must stay out of the public list/detail until approved
+INSERT INTO packages
+  (kind, scope_handle, name, slug, summary, source, install_kind, tags, latest_version, status, publisher_id, created_at, updated_at)
+VALUES
+  ('skill','newbie','untested-skill','newbie/untested-skill','A freshly submitted skill awaiting review','https://example.com/untested/SKILL.md','skill','experimental','0.1.0','pending',9,datetime('now','-20 minutes'),datetime('now','-20 minutes'));

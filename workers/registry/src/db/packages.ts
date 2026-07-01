@@ -77,8 +77,10 @@ export class PackageRepo {
     return res.results ?? [];
   }
 
-  // Create a new package or append a version to an owned one. Republishing an
-  // existing version is refused (409) so version history stays immutable.
+  // Create a new package or append a version to an owned one. New packages from
+  // non-admins land as 'pending' (hidden until an admin approves); versions of an
+  // already-approved package stay live. Republishing an existing version is
+  // refused (409) so version history stays immutable.
   async publish(user: RegistryUser, input: PublishInput, now: string): Promise<PublishResult> {
     const slug = `${user.handle}/${input.name}`;
     const existing = await this.bySlug(slug);
@@ -114,12 +116,13 @@ export class PackageRepo {
     }
 
     const version = input.version || "0.1.0";
+    const status = user.role === "admin" ? "active" : "pending";
     const inserted = await this.db
       .prepare(
         `INSERT INTO packages
            (kind, scope_handle, name, slug, summary, description, source, install_kind,
-            homepage, repo_url, tags, latest_version, publisher_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14)
+            homepage, repo_url, tags, latest_version, status, publisher_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15)
          RETURNING id`,
       )
       .bind(
@@ -135,6 +138,7 @@ export class PackageRepo {
         input.repoUrl,
         input.tags.join(","),
         version,
+        status,
         user.id,
         now,
       )
@@ -192,6 +196,35 @@ export class PackageRepo {
       .bind(pkg.id)
       .run();
     return { starred: false, count: Math.max(0, pkg.star_count - 1) };
+  }
+
+  // Admin: packages awaiting (or past) review, newest first.
+  async listByStatus(status: string, limit: number): Promise<PackageRow[]> {
+    const res = await this.db
+      .prepare("SELECT * FROM packages WHERE status = ?1 ORDER BY created_at DESC LIMIT ?2")
+      .bind(status, limit)
+      .all<PackageRow>();
+    return res.results ?? [];
+  }
+
+  // Admin: move a package between statuses (approve → active, reject, hide).
+  async setStatus(slug: string, status: string, now: string): Promise<PackageRow | null> {
+    const res = await this.db
+      .prepare("UPDATE packages SET status = ?1, updated_at = ?2 WHERE slug = ?3")
+      .bind(status, now, slug)
+      .run();
+    if ((res.meta.changes ?? 0) === 0) return null;
+    return this.bySlug(slug);
+  }
+
+  // Admin: grant or revoke the verified trust badge.
+  async setVerified(slug: string, verified: boolean, now: string): Promise<PackageRow | null> {
+    const res = await this.db
+      .prepare("UPDATE packages SET verified = ?1, updated_at = ?2 WHERE slug = ?3")
+      .bind(verified ? 1 : 0, now, slug)
+      .run();
+    if ((res.meta.changes ?? 0) === 0) return null;
+    return this.bySlug(slug);
   }
 }
 

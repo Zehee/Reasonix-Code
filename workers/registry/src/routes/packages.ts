@@ -32,16 +32,23 @@ packages.get("/:handle/:name", async (c) => {
 
 packages.post("/", writeRateLimit, requireAuth, async (c) => {
   const user = currentUser(c);
+  if (!user.emailVerified) {
+    throw new ApiError(403, "email_unverified", "Verify your email at id.reasonix.io before publishing.");
+  }
   const input = await parseBody(c, PublishSchema);
   const { packages: repo, events } = repos(c.env);
   const { row, created, version } = await repo.publish(user, input, now());
-  await events.log({
-    type: created ? "publish" : "update",
-    packageId: row.id,
-    actorHandle: user.handle,
-    summary: `${created ? "published" : "updated"} ${row.slug}@${version}`,
-    now: now(),
-  });
+  // Announce only what is public. A pending submission waits for an admin to
+  // approve it before it surfaces in the feed or the listing.
+  if (row.status === "active") {
+    await events.log({
+      type: created ? "publish" : "update",
+      packageId: row.id,
+      actorHandle: user.handle,
+      summary: `${created ? "published" : "updated"} ${row.slug}@${version}`,
+      now: now(),
+    });
+  }
   return c.json({ package: toPackageDTO(row), created, version }, created ? 201 : 200);
 });
 
