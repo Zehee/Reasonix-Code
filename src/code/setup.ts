@@ -32,6 +32,8 @@ import {
   spawnSubagent,
 } from "../tools/subagent.js";
 import { registerTodoTool } from "../tools/todo.js";
+import { registerRefineTools } from "../tools/refine.js";
+import { registerThemeTools } from "../tools/theme-tools.js";
 import { registerWebTools } from "../tools/web.js";
 
 export interface CodeToolsetOpts {
@@ -100,6 +102,8 @@ export async function buildCodeToolset(opts: CodeToolsetOpts): Promise<CodeTools
   registerPlanTool(tools);
   registerChoiceTool(tools);
   registerTodoTool(tools);
+  registerRefineTools(tools);
+  registerThemeTools(tools);
   registerScaffoldTools(tools, { projectRoot: opts.rootDir });
   if (searchEnabled()) {
     registerWebTools(tools);

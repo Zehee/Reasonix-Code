@@ -24,6 +24,8 @@ import { TelegramChannel } from "../../telegram/channel.js";
 import { ToolRegistry } from "../../tools.js";
 import { registerChoiceTool } from "../../tools/choice.js";
 import { registerMemoryTools } from "../../tools/memory.js";
+import { registerRefineTools } from "../../tools/refine.js";
+import { registerThemeTools } from "../../tools/theme-tools.js";
 import { registerWebTools } from "../../tools/web.js";
 import { WeixinChannel } from "../../weixin/channel.js";
 import { stopAndSaveCpuProfile } from "../cpu-prof.js";
@@ -347,6 +349,8 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
     // preferences, doc language, library picks). Independent of plan
     // mode, which chat doesn't have anyway.
     registerChoiceTool(tools);
+    registerRefineTools(tools);
+    registerThemeTools(tools);
   }
 
   // resolveSession handles --new (timestamped name, old session preserved)
