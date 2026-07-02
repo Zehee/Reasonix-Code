@@ -697,6 +697,11 @@ type tabEventSink struct {
 	mu            sync.RWMutex
 	ctx           context.Context
 	runtimeEvents asyncRuntimeEmitter
+	botSink       event.Sink // optional: when set, events are also forwarded here
+}
+
+type closeableEventSink interface {
+	Close()
 }
 
 func (s *tabEventSink) Emit(e event.Event) {
@@ -739,6 +744,34 @@ func (s *tabEventSink) Emit(e event.Event) {
 	// Persist after each turn so a force-kill loses at most the in-flight prompt.
 	if e.Kind == event.TurnDone && s.app != nil {
 		s.app.scheduleTabSnapshot(s.tabID)
+	}
+	// Forward event to bot channels when a bot forwarder is attached.
+	// Read the sink under the read lock so SetBotSink can safely swap it
+	// from another goroutine.
+	s.mu.RLock()
+	bs := s.botSink
+	s.mu.RUnlock()
+	if bs != nil {
+		bs.Emit(e)
+		// Detach the forwarder after TurnDone so subsequent turns on the
+		// same tab do not keep pushing to bot channels.
+		if e.Kind == event.TurnDone {
+			s.SetBotSink(nil)
+		}
+	}
+}
+
+// SetBotSink atomically sets or clears the bot event forwarder on this sink.
+// It is safe to call concurrently with Emit.
+func (s *tabEventSink) SetBotSink(sink event.Sink) {
+	s.mu.Lock()
+	old := s.botSink
+	s.botSink = sink
+	s.mu.Unlock()
+	if old != nil && old != sink {
+		if closer, ok := old.(closeableEventSink); ok {
+			closer.Close()
+		}
 	}
 }
 
