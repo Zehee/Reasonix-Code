@@ -34,6 +34,13 @@ agent.md
 .reasonix/sessions/
 .reasonix/semantic-skip
 .reasonix/truncated-results/
+.reasonix/attachments/
+.reasonix/desktop-topic-created-at.json
+.reasonix/desktop-topic-title-sources.json
+.reasonix/desktop-topic-titles.json
+
+# Auto-generated code graph
+.codegraph/
 # Scratch entry regenerated each time scripts/bundle-codemirror.mjs runs.
 scripts/.cm-entry.mjs
 # Personal bun lockfile — project uses npm officially.
