@@ -62,8 +62,8 @@ desktop/src-tauri/binaries/
 .probe-snapshots/
 
 # Standalone binary (bun build --compile)
-reasonix-clear
-reasonix-clear.exe
+reasonix-code
+reasonix-code.exe
 
 # Atomic-write temp files
 *.tmp
