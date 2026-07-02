@@ -86,8 +86,8 @@ describe("session persistence", () => {
     appendSessionMessage("foo", { role: "assistant", content: "hello" });
     const msgs = loadSessionMessages("foo");
     expect(msgs.length).toBe(2);
-    expect(msgs[0]).toEqual({ role: "user", content: "hi" });
-    expect(msgs[1]).toEqual({ role: "assistant", content: "hello" });
+    expect(msgs[0]).toMatchObject({ role: "user", content: "hi" });
+    expect(msgs[1]).toMatchObject({ role: "assistant", content: "hello" });
   });
 
   it("tolerates malformed lines (skips them)", () => {
@@ -105,10 +105,10 @@ describe("session persistence", () => {
 
     rewriteSession("safe-rewrite", [{ role: "user", content: "new" }]);
 
-    expect(loadSessionMessages("safe-rewrite")).toEqual([{ role: "user", content: "new" }]);
-    expect(readFileSync(`${sessionPath("safe-rewrite")}.bak`, "utf8")).toBe(
-      `${JSON.stringify({ role: "user", content: "old" })}\n`,
-    );
+    expect(loadSessionMessages("safe-rewrite")).toMatchObject([{ role: "user", content: "new" }]);
+    const bakContent = readFileSync(`${sessionPath("safe-rewrite")}.bak`, "utf8");
+    expect(bakContent).toContain('"content":"old"');
+    expect(bakContent).toContain('"session.header"');
   });
 
   it("loadSessionMessages falls back to backup when the live transcript has no valid entries", () => {
@@ -117,7 +117,7 @@ describe("session persistence", () => {
     writeFileSync(`${p}.bak`, readFileSync(p, "utf8"));
     writeFileSync(p, "not json\nalso not json\n");
 
-    expect(loadSessionMessages("recover-corrupt")).toEqual([{ role: "user", content: "saved" }]);
+    expect(loadSessionMessages("recover-corrupt")).toMatchObject([{ role: "user", content: "saved" }]);
   });
 
   it("loadSessionMessages does not resurrect backup when the live transcript is empty", () => {
@@ -483,7 +483,7 @@ describe("session persistence", () => {
       expect(existsSync(sessionPath(archived!).replace(/\.jsonl$/, ".events.jsonl"))).toBe(true);
       expect(existsSync(sessionPath(archived!).replace(/\.jsonl$/, ".meta.json"))).toBe(true);
       expect(existsSync(`${sessionPath(archived!)}.bak`)).toBe(true);
-      expect(loadSessionMessages(archived!)).toEqual([{ role: "user", content: "hi" }]);
+      expect(loadSessionMessages(archived!)).toMatchObject([{ role: "user", content: "hi" }]);
     });
 
     it("disambiguates when called twice in the same minute", () => {
@@ -494,8 +494,8 @@ describe("session persistence", () => {
       expect(a).not.toBeNull();
       expect(b).not.toBeNull();
       expect(a).not.toBe(b);
-      expect(loadSessionMessages(a!)).toEqual([{ role: "user", content: "first" }]);
-      expect(loadSessionMessages(b!)).toEqual([{ role: "user", content: "second" }]);
+      expect(loadSessionMessages(a!)).toMatchObject([{ role: "user", content: "first" }]);
+      expect(loadSessionMessages(b!)).toMatchObject([{ role: "user", content: "second" }]);
     });
 
     it("archive name is excluded from the resume-by-prefix lookup", () => {
@@ -573,7 +573,7 @@ describe("session persistence", () => {
     });
     loop.appendAndPersist({ role: "user", content: "[!ls]\n$ ls\n[exit 0]\nfile1 file2" });
     const reloaded = loadSessionMessages("bang-persist");
-    expect(reloaded).toEqual([{ role: "user", content: "[!ls]\n$ ls\n[exit 0]\nfile1 file2" }]);
+    expect(reloaded).toMatchObject([{ role: "user", content: "[!ls]\n$ ls\n[exit 0]\nfile1 file2" }]);
   });
 
   describe("timestampSuffix", () => {

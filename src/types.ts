@@ -38,6 +38,17 @@ export interface ChatMessage {
   tool_calls?: ToolCall[];
   /** Must round-trip in tool-loop continuations — thinking mode 400s without it. */
   reasoning_content?: string | null;
+  /** Monotonic turn counter, 1-based. All messages in one user→assistant cycle share the same turnId. */
+  turnId?: number;
+  /** Stable session UUID, embedded in every message for self-contained data — survives meta.json loss. */
+  sessionId?: string;
+}
+
+/** First line of a JSONL file — enables sessionId recovery even when .meta.json is lost. */
+export interface SessionHeader {
+  type: "session.header";
+  sessionId: string;
+  createdAt: string;
 }
 
 export interface RawUsage {

@@ -53,3 +53,10 @@ desktop/src-tauri/binaries/
 *.cpuprofile
 
 .probe-snapshots/
+
+# Standalone binary (bun build --compile)
+reasonix-clear
+reasonix-clear.exe
+
+# Atomic-write temp files
+*.tmp

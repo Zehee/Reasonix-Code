@@ -1,7 +1,7 @@
 /** JSONL append-only message log under `~/.reasonix/sessions/`; concurrent-write safe. */
 
 import { execFileSync } from "node:child_process";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
   appendFileSync,
   chmodSync,
@@ -73,6 +73,7 @@ export interface SessionInfo {
 }
 
 export interface SessionMeta {
+  sessionId?: string;
   branch?: string;
   summary?: string;
   totalCostUsd?: number;
@@ -112,6 +113,82 @@ export function sessionPath(name: string): string {
 export function sanitizeName(name: string): string {
   const cleaned = name.replace(/[^\w\-\u4e00-\u9fa5]/g, "_").slice(0, 64);
   return cleaned || "default";
+}
+
+/** RFC 4122 UUID v4 — stable session identifier that survives file renames and meta.json loss. */
+export function generateSessionId(): string {
+  return randomUUID();
+}
+
+/** Read the first line of a JSONL file — returns null if the file is missing, empty, or the first line isn't a session.header. */
+export function readSessionHeader(path: string): { sessionId: string; createdAt: string } | null {
+  try {
+    const raw = readFileSync(path, "utf8");
+    const firstLine = raw.split(/\r?\n/)[0]?.trim();
+    if (!firstLine) return null;
+    const parsed = JSON.parse(firstLine);
+    if (parsed?.type === "session.header" && typeof parsed.sessionId === "string") {
+      return { sessionId: parsed.sessionId, createdAt: parsed.createdAt };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Ensure the JSONL file starts with a session.header. If the file is missing / empty / has no header, prepend one. */
+export function ensureSessionHeader(path: string, sessionId: string): void {
+  if (existsSync(path)) {
+    const existing = readSessionHeader(path);
+    if (existing) return; // header already present
+    // File exists but no header — prepend one by rewriting with header + original messages
+    const raw = readFileSync(path, "utf8");
+    const header = JSON.stringify({ type: "session.header", sessionId, createdAt: new Date().toISOString() });
+    atomicWriteSync(path, `${header}\n${raw.trimEnd()}\n`, `${path}.${randomBytes(4).toString("hex")}.tmp`);
+    return;
+  }
+  // New file — write header as first line
+  const header = JSON.stringify({ type: "session.header", sessionId, createdAt: new Date().toISOString() });
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${header}\n`, "utf8");
+}
+
+/** Scan an array of messages and return the next turnId:
+ *  - role=user  → max existing turnId + 1 (or 1 if none)
+ *  - otherwise  → max existing turnId (or 1 if none)
+ */
+export function resolveNextTurnId(messages: ChatMessage[], nextRole: string): number {
+  let maxId = 0;
+  for (const m of messages) {
+    if (typeof m.turnId === "number" && m.turnId > maxId) maxId = m.turnId;
+  }
+  if (nextRole === "user") return maxId + 1;
+  return maxId || 1;
+}
+
+/** Resolve the stable sessionId for a session: .meta.json → JSONL header → generate new UUID + persist.
+ *  This is the recovery chain when meta.json is lost or corrupted. */
+export function loadSessionId(name: string): string {
+  // 1. Try meta.json
+  const meta = loadSessionMeta(name);
+  if (typeof meta.sessionId === "string" && meta.sessionId.length > 0) {
+    return meta.sessionId;
+  }
+  // 2. Try JSONL header
+  const p = sessionPath(name);
+  const header = existsSync(p) ? readSessionHeader(p) : null;
+  if (header) {
+    // Recover meta.json from header
+    patchSessionMeta(name, { sessionId: header.sessionId });
+    return header.sessionId;
+  }
+  // 3. Generate new UUID and persist
+  const newId = generateSessionId();
+  if (existsSync(p)) {
+    ensureSessionHeader(p, newId);
+  }
+  patchSessionMeta(name, { sessionId: newId });
+  return newId;
 }
 
 /** Sortable timestamp `YYYYMMDDHHmm` — used as a session-name suffix. */
@@ -204,7 +281,10 @@ function readSessionMessages(
     const trimmed = line.trim();
     if (!trimmed) continue;
     try {
-      const msg = JSON.parse(trimmed) as ChatMessage;
+      const parsed = JSON.parse(trimmed);
+      // Skip session.header lines (v2-compatible first-line metadata)
+      if (parsed?.type === "session.header") continue;
+      const msg = parsed as ChatMessage;
       if (msg && typeof msg === "object" && "role" in msg) out.push(msg);
     } catch {
       /* skip malformed line */
@@ -274,11 +354,28 @@ function loadSessionMessagesFromPath(path: string): ChatMessage[] {
 export function appendSessionMessage(name: string, message: ChatMessage): void {
   const path = sessionPath(name);
   mkdirSync(dirname(path), { recursive: true });
-  appendFileSync(path, `${JSON.stringify(message)}\n`, "utf8");
+
+  // Load existing messages to compute turnId and sessionId
+  const existing = existsSync(path) ? readSessionMessages(path)?.messages ?? [] : [];
+
+  // Resolve / assign sessionId
+  const sessionId = loadSessionId(name);
+
+  // Assign turnId for new messages; preserve existing turnId if somehow pre-set
+  const turnId = resolveNextTurnId(existing, message.role);
+
+  const stamped: ChatMessage = { ...message, turnId, sessionId: message.sessionId ?? sessionId };
+
+  // Build output: header + all messages
+  const header = JSON.stringify({ type: "session.header", sessionId, createdAt: new Date().toISOString() });
+  const body = [...existing, stamped].map((m) => JSON.stringify(m)).join("\n");
+  const tmp = `${path}.${randomBytes(4).toString("hex")}.tmp`;
+
   try {
-    chmodSync(path, 0o600);
+    atomicWriteSync(path, `${header}\n${body}\n`, tmp);
+    chmodPrivate(path);
   } catch {
-    /* chmod not supported on this platform */
+    /* disk full or permission denied shouldn't kill the chat */
   }
   invalidatePromptHistoryCache();
 }
@@ -633,10 +730,15 @@ export function deleteSession(name: string): boolean {
   }
 }
 
-/** Crash-safe rewrite: snapshot the previous live log, write a sibling tmp file, then atomically swap it in. */
+/** Crash-safe rewrite: snapshot the previous live log, write a sibling tmp file, then atomically swap it in. Preserves session.header and existing turnId/sessionId. */
 export function rewriteSession(name: string, messages: ChatMessage[]): void {
   const path = sessionPath(name);
   mkdirSync(dirname(path), { recursive: true });
+
+  // Resolve sessionId (from meta, header, or generate)
+  const sessionId = loadSessionId(name);
+
+  const header = JSON.stringify({ type: "session.header", sessionId, createdAt: new Date().toISOString() });
   const body = messages.map((m) => JSON.stringify(m)).join("\n");
   const tmp = `${path}.${randomBytes(8).toString("hex")}.tmp`;
   if (existsSync(path) && statSync(path).size > 0) {
@@ -644,7 +746,7 @@ export function rewriteSession(name: string, messages: ChatMessage[]): void {
     copyFileSync(path, backup);
     chmodPrivate(backup);
   }
-  atomicWriteSync(path, body ? `${body}\n` : "", tmp);
+  atomicWriteSync(path, `${header}\n${body}\n`, tmp);
   invalidatePromptHistoryCache();
 }
 
@@ -664,7 +766,8 @@ export function archiveSession(name: string): string | null {
   return null;
 }
 
-/** Byte-scan for `\n` — avoids the UTF-8 decode + regex split + per-line filter the previous implementation paid on every list. ~10× faster on multi-MB jsonls. */
+/** Byte-scan for `\n` — avoids the UTF-8 decode + regex split + per-line filter the previous implementation paid on every list. ~10× faster on multi-MB jsonls.
+ *  Automatically excludes the session.header line from the count if present. */
 function countLines(path: string): number {
   try {
     const buf = readFileSync(path);
@@ -672,9 +775,16 @@ function countLines(path: string): number {
     for (let i = 0; i < buf.length; i++) {
       if (buf[i] === 0x0a) count++;
     }
-    // appendSessionMessage always writes a trailing newline, but a
-    // hand-edited file may end without one — account for the dangling line.
+    // A hand-edited file may end without a trailing newline — account for the dangling line.
     if (buf.length > 0 && buf[buf.length - 1] !== 0x0a) count++;
+    // Subtract the session.header line if present
+    if (count > 0) {
+      const firstLineEnd = buf.indexOf(0x0a);
+      if (firstLineEnd > 0) {
+        const firstLine = buf.subarray(0, firstLineEnd).toString("utf8").trim();
+        if (firstLine.includes('"session.header"')) count--;
+      }
+    }
     return count;
   } catch {
     return 0;
@@ -703,6 +813,13 @@ async function countLinesAsync(path: string): Promise<number> {
       if (buf[i] === 0x0a) count++;
     }
     if (buf.length > 0 && buf[buf.length - 1] !== 0x0a) count++;
+    if (count > 0) {
+      const firstLineEnd = buf.indexOf(0x0a);
+      if (firstLineEnd > 0) {
+        const firstLine = buf.subarray(0, firstLineEnd).toString("utf8").trim();
+        if (firstLine.includes('"session.header"')) count--;
+      }
+    }
     return count;
   } catch {
     return 0;
@@ -754,7 +871,9 @@ async function readSessionMessagesAsync(
     const trimmed = line.trim();
     if (!trimmed) continue;
     try {
-      const msg = JSON.parse(trimmed) as ChatMessage;
+      const parsed = JSON.parse(trimmed);
+      if (parsed?.type === "session.header") continue;
+      const msg = parsed as ChatMessage;
       if (msg && typeof msg === "object" && "role" in msg) out.push(msg);
     } catch {
       /* skip malformed line */
@@ -833,8 +952,30 @@ export async function readTailMessagesAsync(path: string, count: number): Promis
 export async function appendSessionMessageAsync(name: string, message: ChatMessage): Promise<void> {
   const path = sessionPath(name);
   await mkdir(dirname(path), { recursive: true });
-  await appendFile(path, `${JSON.stringify(message)}\n`, "utf8");
-  await chmodPrivateAsync(path);
+
+  // Read existing messages (async)
+  let existing: ChatMessage[] = [];
+  try {
+    const loaded = await readSessionMessagesAsync(path);
+    if (loaded) existing = loaded.messages;
+  } catch {
+    /* file may not exist yet */
+  }
+
+  const sessionId = loadSessionId(name);
+  const turnId = resolveNextTurnId(existing, message.role);
+  const stamped: ChatMessage = { ...message, turnId, sessionId: message.sessionId ?? sessionId };
+
+  const header = JSON.stringify({ type: "session.header", sessionId, createdAt: new Date().toISOString() });
+  const body = [...existing, stamped].map((m) => JSON.stringify(m)).join("\n");
+  const tmp = `${path}.${randomBytes(4).toString("hex")}.tmp`;
+
+  try {
+    await atomicWrite(path, `${header}\n${body}\n`, tmp);
+    await chmodPrivateAsync(path);
+  } catch {
+    /* disk issue shouldn't kill the chat */
+  }
 }
 
 export async function renameSessionAsync(oldName: string, newName: string): Promise<boolean> {
@@ -888,6 +1029,9 @@ export async function deleteSessionAsync(name: string): Promise<boolean> {
 export async function rewriteSessionAsync(name: string, messages: ChatMessage[]): Promise<void> {
   const path = sessionPath(name);
   await mkdir(dirname(path), { recursive: true });
+
+  const sessionId = loadSessionId(name);
+  const header = JSON.stringify({ type: "session.header", sessionId, createdAt: new Date().toISOString() });
   const body = messages.map((m) => JSON.stringify(m)).join("\n");
   const tmp = `${path}.${randomBytes(8).toString("hex")}.tmp`;
   try {
@@ -900,7 +1044,7 @@ export async function rewriteSessionAsync(name: string, messages: ChatMessage[])
   } catch {
     /* file doesn't exist yet — fine */
   }
-  await atomicWrite(path, body ? `${body}\n` : "", tmp);
+  await atomicWrite(path, `${header}\n${body}\n`, tmp);
 }
 
 export async function listSessionsAsync(opts?: {

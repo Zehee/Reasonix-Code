@@ -24,7 +24,7 @@ function readPackageVersion(): string {
       const p = join(dir, "package.json");
       if (existsSync(p)) {
         const pkg = JSON.parse(readFileSync(p, "utf8"));
-        if (pkg?.name === "reasonix" && typeof pkg.version === "string") {
+        if (pkg?.name === "reasonix-code" && typeof pkg.version === "string") {
           return pkg.version;
         }
       }
