@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 460" width="800" height="460">
+  <defs>
+    <style>
+      .box { fill: #f5f5f5; stroke: #616161; stroke-width: 1.5; rx: 4; }
+      .arrow { stroke: #424242; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+      .label { font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; fill: #212121; }
+      .label-em { font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; font-weight: 600; fill: #1e88e5; }
+      .label-sm { font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 10px; fill: #757575; }
+      .hit { fill: #e53935; stroke: none; rx: 2; }
+      .member { fill: #ffcc02; stroke: none; rx: 2; }
+    </style>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#424242"/>
+    </marker>
+  </defs>
+  <rect width="800" height="460" fill="#ffffff"/>
+  <text class="label-em" x="20" y="25">search_context(&quot;auth JWT&quot;) 工作机制</text>
+  <rect class="box" x="30" y="50" width="180" height="60"/>
+  <text class="label" x="120" y="72" text-anchor="middle">sessionA JSONL</text>
+  <rect class="member" x="40" y="80" width="6" height="20"/>
+  <rect class="member" x="52" y="80" width="6" height="20"/>
+  <rect class="hit" x="64" y="80" width="6" height="20"/>
+  <text class="label-sm" x="64" y="77" text-anchor="middle">命中</text>
+  <rect class="member" x="76" y="80" width="6" height="20"/>
+  <rect class="member" x="88" y="80" width="6" height="20"/>
+  <line class="arrow" x1="8" y1="55" x2="25" y2="55"/>
+  <text class="label-sm" x="6" y="50" text-anchor="start">时间</text>
+  <rect class="box" x="30" y="130" width="180" height="60"/>
+  <text class="label" x="120" y="152" text-anchor="middle">sessionB JSONL</text>
+  <rect class="member" x="40" y="160" width="6" height="20"/>
+  <rect class="hit" x="52" y="160" width="6" height="20"/>
+  <text class="label-sm" x="52" y="157" text-anchor="middle">命中</text>
+  <rect class="member" x="64" y="160" width="6" height="20"/>
+  <rect class="member" x="76" y="160" width="6" height="20"/>
+  <rect class="member" x="88" y="160" width="6" height="20"/>
+  <rect class="box" x="280" y="80" width="160" height="55"/>
+  <text class="label" x="360" y="105" text-anchor="middle">search_context(&quot;auth JWT&quot;)</text>
+  <text class="label-sm" x="360" y="122" text-anchor="middle">关键词命中 + 左右扩展</text>
+  <line class="arrow" x1="210" y1="95" x2="270" y2="100"/>
+  <line class="arrow" x1="210" y1="155" x2="270" y2="115"/>
+  <rect class="box" x="500" y="50" width="270" height="100"/>
+  <text class="label-em" x="635" y="70" text-anchor="middle">Cluster（簇）</text>
+  <text class="label-sm" x="635" y="85" text-anchor="middle">命中 turn + 相邻 turns</text>
+  <text class="label-sm" x="635" y="100" text-anchor="middle">多次连续交互 = 决策/事件单元</text>
+  <text class="label-sm" x="510" y="120" fill="#e53935">命中 turn</text>
+  <text class="label-sm" x="510" y="135" fill="#ffcc02">相邻 turn</text>
+  <line class="arrow" x1="440" y1="105" x2="490" y2="100"/>
+  <rect class="box" x="500" y="180" width="270" height="50"/>
+  <text class="label" x="635" y="210" text-anchor="middle">提炼 cluster - refined_turns (SQLite)</text>
+  <line class="arrow" x1="600" y1="150" x2="635" y2="178"/>
+  <rect class="box" x="500" y="260" width="270" height="70"/>
+  <text class="label" x="635" y="282" text-anchor="middle">搜索视图 JSON</text>
+  <text class="label-sm" x="510" y="300">query, createdAt, totalMatches</text>
+  <text class="label-sm" x="510" y="316">clusters[]: { sessionId, hitTurnId, members[] }</text>
+  <line class="arrow" x1="635" y1="230" x2="635" y2="256"/>
+  <rect class="box" x="500" y="360" width="270" height="50"/>
+  <text class="label" x="635" y="390" text-anchor="middle">多次搜索 - 多个 search view</text>
+  <text class="label-em" x="635" y="403" text-anchor="middle">LLM 分析挂载 - Theme JSON</text>
+  <line class="arrow" x1="635" y1="330" x2="635" y2="356"/>
+  <rect class="box" x="30" y="220" width="180" height="50"/>
+  <text class="label" x="120" y="250" text-anchor="middle">sessionC/D/E...</text>
+  <line class="arrow" x1="120" y1="190" x2="120" y2="218"/>
+  <line class="arrow" x1="210" y1="245" x2="270" y2="210" stroke-dasharray="4,3"/>
+</svg>
