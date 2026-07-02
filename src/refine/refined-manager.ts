@@ -1,0 +1,81 @@
+/**
+ * Refined turn orchestrator.
+ *
+ * Delegates extraction, storage, and row mapping to focused modules under
+ * src/refine/. This file keeps the original public API and owns cross-cutting
+ * concerns such as the write mutex.
+ */
+
+import { Mutex } from './utils/mutex.js';
+import { RefinedStore } from './store.js';
+import { extract } from './extractor.js';
+import type {
+  RawTurn,
+  RefinedTurn,
+  RefinedSearchOptions,
+  RefinedSearchMatch,
+} from './types.js';
+
+export {
+  type RawAction,
+  type RawTurn,
+  type RefinedTurn,
+  type RefinedSearchOptions,
+  type RefinedSearchMatch,
+} from './types.js';
+
+export class RefinedManager {
+  refinedRoot: string;
+  private store: RefinedStore;
+  private mutex: Mutex;
+
+  constructor(refinedRoot: string) {
+    this.refinedRoot = refinedRoot;
+    this.store = new RefinedStore(refinedRoot);
+    this.mutex = new Mutex();
+  }
+
+  refineTurn(turn: RawTurn, sessionId: string): RefinedTurn {
+    return extract(turn, sessionId);
+  }
+
+  async saveRefinedTurns(sessionId: string, refinedTurns: RefinedTurn[]): Promise<void> {
+    return this.mutex.runExclusive(() => {
+      this.store.saveRefinedTurns(sessionId, refinedTurns);
+    });
+  }
+
+  loadRefinedTurns(sessionId: string): RefinedTurn[] {
+    return this.store.loadRefinedTurns(sessionId);
+  }
+
+  loadRefinedTurn(sessionId: string, turnId: number): RefinedTurn | undefined {
+    return this.store.loadRefinedTurn(sessionId, turnId);
+  }
+
+  getDbPath(): string {
+    return this.store.getDbPath();
+  }
+
+  searchRefinedTurns(options: RefinedSearchOptions): RefinedSearchMatch[] {
+    return this.store.searchRefinedTurns(options);
+  }
+
+  countAll(): number {
+    return this.store.countAll();
+  }
+
+  listRecentTurns(limit: number): RefinedTurn[] {
+    return this.store.listRecentTurns(limit);
+  }
+
+  async deleteRefinedTurns(refs: Array<{ sessionId: string; turnId: number }>): Promise<number> {
+    return this.mutex.runExclusive(() => {
+      return this.store.deleteRefinedTurns(refs);
+    });
+  }
+
+  close(): void {
+    this.store.close();
+  }
+}
