@@ -23,26 +23,19 @@ Built on the cache-first, flash-first loop of DeepSeek-Reasonix, our memory arch
 
 ---
 
-## Design principles
+## The problem
 
-**Lightweight.** No vector database, no graph database, no external services. Everything runs locally: SQLite for the refined index, JSON files for themes, Markdown for memory. A single `install.ps1` or `irm` download gets you running.
+Every coding agent faces the same fundamental fragmentation: **context compaction and session independence tear decisions apart.**
 
-**Transparent.** Every piece of memory is a plain file you can open in any editor. Refined turns are deterministic rules, not LLM summarization — same input always produces the same output. Themes are JSON arrays of (sessionId, turnId) references.
+A real example — you spend weeks building an auth module:
+- Day 1: decide on JWT + httpOnly cookie (vs localStorage)
+- Day 3: implement the login endpoint
+- Day 10: adjust cookie policy for Safari compatibility
+- Day 30: a new session, and the Agent suggests putting the refresh token in **localStorage** — contradicting the decision made 29 days ago.
 
-**Controllable.** You decide what gets remembered. The system never auto-refines without a search trigger ("search is the attention signal"). You can read, edit, or delete any memory, any refined turn, any theme association. No opaque "knowledge base" you can't inspect.
+Each decision is in a separate session log. Between sessions, they're invisible to the Agent. This isn't a model capability problem — **it's an architecture problem.**
 
-## Why not just use DeepSeek-Reasonix?
-
-The upstream [DeepSeek-Reasonix](https://github.com/esengine/DeepSeek-Reasonix) is a general-purpose agent platform. Its Go rewrite (main-v2) uses a pooled session model where all conversations mix into one store, distinguished by topic IDs.
-
-Reasonix-Code takes a different approach:
-
-| | DeepSeek-Reasonix (main-v2) | Reasonix-Code |
-|---|---|---|
-| Session model | Pooled with topicId | Independent files, self-contained |
-| Cross-session recall | Manual topic management | Automatic refinement + search |
-| Memory architecture | v5 memory + topics | Three-layer: Raw → Material → Thematic |
-| Design philosophy | Minimal changes | Robustness first, self-healing |
+Reasonix-Code's three-layer memory architecture solves this by automatically capturing, indexing, and linking decisions across sessions, so the Agent sees the full timeline before suggesting a contradictory approach.
 
 ---
 

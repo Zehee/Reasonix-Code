@@ -23,26 +23,19 @@
 
 ---
 
-## 设计原则
+## 问题所在
 
-**轻量。** 不需要向量数据库、图数据库或任何外部服务。全部本地运行：SQLite 做提炼索引、JSON 文件存主题、Markdown 存记忆。一条 `install.ps1` 或 `irm` 下载即可运行。
+每个 coding agent 都面临同一个根本断裂：**上下文压缩和会话独立让决策碎片化。**
 
-**透明。** 每一条记忆都是可以用任意编辑器打开的纯文本文件。提炼结果是确定性规则，不是 LLM 摘要——相同输入永远产生相同输出。主题就是 `(sessionId, turnId)` 引用的 JSON 数组。
+一个真实的例子——你花数周做一个认证模块：
+- 第 1 天：决定用 JWT + httpOnly cookie（而不是 localStorage）
+- 第 3 天：实现登录接口
+- 第 10 天：为 Safari 兼容调整 cookie 策略
+- 第 30 天：新 session 启动，Agent 竟然建议把 refresh token 放 **localStorage** —— 与 29 天前的决策直接矛盾。
 
-**可控。** 你决定什么值得记。系统不会在没有搜索触发的情况下自动提炼（"搜索是最注意力信号"）。你可以阅读、编辑或删除任何记忆、任何提炼轮次、任何主题关联。没有不可检查的"知识库黑箱"。
+每一条决策都在独立的 session 日志里，跨 session 时 Agent 看不见。这不是模型能力问题——**这是架构问题。**
 
-## 为什么不用 DeepSeek-Reasonix？
-
-上游 [DeepSeek-Reasonix](https://github.com/esengine/DeepSeek-Reasonix) 是一个通用 agent 平台。它的 Go 重写版本（main-v2）使用大池子 + topicId 管理 session。
-
-Reasonix-Code 走不同路线：
-
-| | DeepSeek-Reasonix (main-v2) | Reasonix-Code |
-|---|---|---|
-| Session 模型 | 大池子 + topicId 混合 | 独立文件，自包含 |
-| 跨 session 追溯 | 手动 topic 管理 | 自动提炼 + 搜索 |
-| 记忆架构 | v5 memory + topics | 三层存储：原始日志 → 材料库 → 主题 |
-| 设计哲学 | 改动最小化 | 鲁棒性优先，自愈 |
+Reasonix-Code 的三层记忆架构通过自动捕获、索引和关联跨 session 的决策来解决这个问题，让 Agent 在提出矛盾建议前先看到完整的时间线。
 
 ---
 
