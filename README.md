@@ -15,11 +15,21 @@
   <a href="https://github.com/Zehee/Reasonix-Code/stargazers"><img src="https://img.shields.io/github/stars/Zehee/Reasonix-Code?style=flat-square&color=dbab09&labelColor=161b22&logo=github&logoColor=white" alt="stars"/></a>
 </p>
 
-**Reasonix-Code** is a TypeScript coding agent that remembers decisions across sessions. Built on the cache-first, flash-first loop of DeepSeek-Reasonix, with a new three-layer memory architecture for cross-session theme tracing.
+**Reasonix-Code** is a lightweight, transparent, and controllable coding agent purpose-built for developers who want their AI to remember decisions across sessions — without the overhead of vector databases, knowledge graphs, or opaque "AI memory" black boxes.
 
-> **Status:** Active development. Based on the Reasonix TypeScript line (v0.x), independently evolved.
+Built on the cache-first, flash-first loop of DeepSeek-Reasonix, our memory architecture is designed from the ground up for **coding scenarios**: deterministic turn refinement (no LLM), keyword-based search (no embeddings), and cross-session theme tracing in plain JSON files you can read and edit.
+
+> **Status:** Active development. Independently evolved from the Reasonix TypeScript line (v0.x).
 
 ---
+
+## Design principles
+
+**Lightweight.** No vector database, no graph database, no external services. Everything runs locally: SQLite for the refined index, JSON files for themes, Markdown for memory. A single `install.ps1` or `irm` download gets you running.
+
+**Transparent.** Every piece of memory is a plain file you can open in any editor. Refined turns are deterministic rules, not LLM summarization — same input always produces the same output. Themes are JSON arrays of (sessionId, turnId) references.
+
+**Controllable.** You decide what gets remembered. The system never auto-refines without a search trigger ("search is the attention signal"). You can read, edit, or delete any memory, any refined turn, any theme association. No opaque "knowledge base" you can't inspect.
 
 ## Why not just use DeepSeek-Reasonix?
 

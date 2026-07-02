@@ -15,11 +15,21 @@
   <a href="https://github.com/Zehee/Reasonix-Code/stargazers"><img src="https://img.shields.io/github/stars/Zehee/Reasonix-Code?style=flat-square&color=dbab09&labelColor=161b22&logo=github&logoColor=white" alt="stars"/></a>
 </p>
 
-**Reasonix-Code** 是一个为编程场景打造的 TypeScript agent，具备跨 session 的决策追溯能力。基于 DeepSeek-Reasonix 的 cache-first、flash-first 循环核心，新增三层记忆架构。
+**Reasonix-Code** 是一个轻量、透明、可控的编程 agent，专为需要 AI 记住跨 session 决策的开发者设计——不需要向量数据库、知识图谱或黑盒式的"AI 记忆"。
+
+基于 DeepSeek-Reasonix 的 cache-first、flash-first 循环核心，我们的记忆架构从零开始为 **编程场景** 设计：确定性提炼（不用 LLM）、关键词搜索（不用 embedding）、跨 session 主题追溯（纯 JSON 文件，可读可改）。
 
 > **状态：** 活跃开发中。基于 Reasonix TypeScript 分支（v0.x），独立演进。
 
 ---
+
+## 设计原则
+
+**轻量。** 不需要向量数据库、图数据库或任何外部服务。全部本地运行：SQLite 做提炼索引、JSON 文件存主题、Markdown 存记忆。一条 `install.ps1` 或 `irm` 下载即可运行。
+
+**透明。** 每一条记忆都是可以用任意编辑器打开的纯文本文件。提炼结果是确定性规则，不是 LLM 摘要——相同输入永远产生相同输出。主题就是 `(sessionId, turnId)` 引用的 JSON 数组。
+
+**可控。** 你决定什么值得记。系统不会在没有搜索触发的情况下自动提炼（"搜索是最注意力信号"）。你可以阅读、编辑或删除任何记忆、任何提炼轮次、任何主题关联。没有不可检查的"知识库黑箱"。
 
 ## 为什么不用 DeepSeek-Reasonix？
 
