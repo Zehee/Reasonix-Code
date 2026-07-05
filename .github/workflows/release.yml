@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Build binary
+        run: bun build ./src/cli/index.ts --compile --outfile build/reasonix-code-${{ github.ref_name }}.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reasonix-code-windows
+          path: build/reasonix-code-${{ github.ref_name }}.exe
+
+  publish:
+    needs: build-windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: reasonix-code-windows
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: reasonix-code-${{ github.ref_name }}.exe
+          generate_release_notes: true
