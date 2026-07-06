@@ -341,6 +341,7 @@ export class CacheFirstLoop {
         .archivePreviousTurnNoise(messages, this._turn)
         .then((archived) => {
           if (archived > 0) {
+            process.stderr.write(`▸ ${this.sessionName}: archived ${archived} tool results.\n`);
             this.log.compactInPlace(messages);
             if (this.sessionName) {
               try {
@@ -1295,6 +1296,7 @@ export class CacheFirstLoop {
     const log = this.log.toFullHistory();
     const archived = await this._archiver.archivePreviousTurnNoise(log, this._turn);
     if (archived > 0) {
+      process.stderr.write(`▸ turn ${this._turn}: archived ${archived} old tool results.\n`);
       this.log.compactInPlace(log);
       if (this.sessionName) {
         try {
