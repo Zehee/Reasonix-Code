@@ -202,7 +202,7 @@ import { cardsToDashboardMessages } from "./state/cards-to-messages.js";
 import { ChatScrollProvider, useChatScrollActions } from "./state/chat-scroll-provider.js";
 import { hydrateCardsFromMessages } from "./state/hydrate.js";
 import { InflightProvider } from "./state/inflight-context.js";
-import { AgentStoreProvider, useAgentState, useAgentStore, useDispatch } from "./state/provider.js";
+import { AgentStoreProvider, useAgentState, useAgentStore } from "./state/provider.js";
 import { VerboseContext } from "./state/verbose-context.js";
 import { ThemeProvider } from "./theme/context.js";
 import { FG, SURFACE, type ThemeName, listThemeNames } from "./theme/tokens.js";
@@ -617,18 +617,13 @@ function AppInner({
     editModeRef,
     modeFlash,
   } = useEditGate(!!codeMode);
-  const dispatch = useDispatch();
   const setEditModeLive = useCallback(
     (mode: EditMode) => {
       editModeRef.current = mode;
       setEditMode(mode);
       if (codeMode) saveEditMode(mode);
-      // Sync the store's status.mode so the bottom StatusRow reflects the change.
-      // EditMode → store Mode: review/edit → "edit", auto → "auto", yolo → "edit", plan → "plan"
-      const storeMode = mode === "auto" ? "auto" : mode === "plan" ? "plan" : "edit";
-      dispatch({ type: "mode.change", mode: storeMode });
     },
-    [codeMode, editModeRef, setEditMode, dispatch],
+    [codeMode, editModeRef, setEditMode],
   );
   const engineeringLifecycleBaseModeRef = useRef<EngineeringLifecycleMode>(
     loadEngineeringLifecycleMode(),
@@ -4449,8 +4444,7 @@ function AppInner({
       <TickerProvider disabled={tickerSuspended}>
         <InflightProvider inflight={loop.inflight}>
           <Box flexDirection="column" backgroundColor={SURFACE.bg}>
-            {/* Content area: constrained to available viewport minus input area (~4 rows) */}
-            <Box flexDirection="column" height={Math.max(1, (stdout.rows ?? 30) - 4)} overflow="hidden">
+            <Box flexDirection="column">
               <Box flexDirection="column" flexGrow={1}>
                 <LiveExpandContext.Provider value={liveExpand}>
                   <VerboseContext.Provider value={verboseMode}>
