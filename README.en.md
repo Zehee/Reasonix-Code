@@ -153,16 +153,20 @@ src/
 
 ```
 ~/.reasonix/
-├── sessions/{workspace-slug}/    ← Workspace-isolated sessions
-│   ├── active.jsonl              ← Active conversation
-│   ├── active.archive.jsonl      ← Pre-compressed shadow (raw tool results)
-│   ├── active.meta.json          ← Metadata (usage, cache diagnostics)
-│   ├── 20260701_120000.jsonl     ← Archived history (/new rotation)
-│   └── 20260701_120000.archive.jsonl
-├── refined/{workspace-slug}/     ← Refined index (per-workspace SQLite)
+├── sessions/                      ← All sessions
+│   ├── {workspace-slug}/          ← Workspace-isolated
+│   │   ├── active.jsonl           ← Active conversation
+│   │   ├── active.archive.jsonl   ← Pre-compressed shadow (raw tool results)
+│   │   ├── active.meta.json       ← Metadata
+│   │   ├── 20260701_120000.jsonl  ← Archived history (/new rotation)
+│   │   └── 20260701_120000.archive.jsonl
+│   ├── __chat__/                  ← Non-workspace sessions
+│   ├── {root-hash}/checkpoints/   ← Git snapshots before file writes
+│   └── *.plan.json, *.pending.json
+├── refined/{workspace-slug}/      ← Refined index (per-workspace SQLite)
 │   └── refined.sqlite
-├── mcp-handshake/                ← MCP handshake cache (global)
-├── memory/                       ← User memory + project memory
+├── mcp-handshake/                 ← MCP handshake cache (global)
+├── memory/                        ← User memory + project memory
 └── config.json
 ```
 

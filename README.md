@@ -153,16 +153,20 @@ src/
 
 ```
 ~/.reasonix/
-├── sessions/{workspace-slug}/    ← 会话按工作区隔离
-│   ├── active.jsonl              ← 当前活跃会话
-│   ├── active.archive.jsonl      ← 预压缩影子（原始工具结果）
-│   ├── active.meta.json          ← 元数据（用量、缓存诊断）
-│   ├── 20260701_120000.jsonl     ← 历史归档（/new 轮转）
-│   └── 20260701_120000.archive.jsonl
-├── refined/{workspace-slug}/     ← 提炼索引（每工作区独立 SQLite）
+├── sessions/                      ← 所有会话
+│   ├── {workspace-slug}/          ← 按工作区隔离
+│   │   ├── active.jsonl           ← 当前活跃会话
+│   │   ├── active.archive.jsonl   ← 预压缩影子（工具结果原文）
+│   │   ├── active.meta.json       ← 元数据
+│   │   ├── 20260701_120000.jsonl  ← 历史归档（/new 轮转）
+│   │   └── 20260701_120000.archive.jsonl
+│   ├── __chat__/                  ← 无工作区会话
+│   ├── {root-hash}/checkpoints/   ← 文件写入前的 git 快照
+│   └── *.plan.json, *.pending.json
+├── refined/{workspace-slug}/      ← 提炼索引
 │   └── refined.sqlite
-├── mcp-handshake/                ← MCP 握手缓存（全局共享）
-├── memory/                       ← 用户记忆 + 项目记忆
+├── mcp-handshake/                 ← MCP 握手缓存（全局共享）
+├── memory/                        ← 用户记忆 + 项目记忆
 └── config.json
 ```
 
