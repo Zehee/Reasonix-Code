@@ -1,3 +1,4 @@
+import { copyFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
@@ -17,6 +18,21 @@ export default defineConfig({
         return html
           .replace('/assets/app.js?token=__REASONIX_TOKEN__', '/src/main.tsx')
           .replace('/assets/app.css?token=__REASONIX_TOKEN__', '/src/styles.css');
+      },
+    },
+    // Rollup input override skips HTML generation; copy the Tauri-specific
+    // index.html (which references flat ./app.js / ./app.css) post-build.
+    {
+      name: "copy-index-html",
+      closeBundle() {
+        const src = resolve(HERE, "index.html");
+        const dst = resolve(HERE, "dist", "index.html");
+        if (!existsSync(src)) {
+          console.warn("[copy-index-html] source not found:", src);
+          return;
+        }
+        copyFileSync(src, dst);
+        console.log(`[copy-index-html] ${src} → ${dst}`);
       },
     },
   ],

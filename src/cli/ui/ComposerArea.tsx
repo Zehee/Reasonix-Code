@@ -158,7 +158,7 @@ export const ComposerArea: React.FC<ComposerAreaProps> = React.memo(
           planMode={planMode}
         />
         {activeLoop ? <LoopStatusRow loop={activeLoop} /> : null}
-        <StatusRow statusBar={statusBar} />
+        <StatusRow statusBar={statusBar} editMode={editMode} />
       </Box>
     );
 

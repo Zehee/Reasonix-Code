@@ -1,8 +1,7 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isWebRuntime } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { isWebRuntime } from "./lib/tauri-bridge";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { CommandPalette, Toast, buildCommands, useCommandPalette } from "./CommandPalette";
 import { WorkspaceProvider } from "./Markdown";

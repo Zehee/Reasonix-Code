@@ -9,16 +9,21 @@ const listeners = new Map<string, Set<EventCallback>>();
 let eventIdCounter = 0;
 let currentTurn = 1;
 
-// 模式检测
+// 模式检测: tauri (Tauri WebView, via window.__TAURI__) / server (CLI HTTP server) / mock (Vite dev)
 const modeMeta = document.querySelector('meta[name="reasonix-mode"]');
 const rawMode = modeMeta?.getAttribute("content") ?? "";
 const isServerMode = rawMode !== "" && rawMode !== "__REASONIX_MODE__";
-const MODE = isServerMode ? "server" : "mock";
+const isTauriMode = typeof window !== "undefined" && !!(window as any).__TAURI__?.invoke;
+const MODE: "tauri" | "server" | "mock" = isTauriMode
+  ? "tauri"
+  : isServerMode
+    ? "server"
+    : "mock";
 
 /** Web vs. native dispatcher hint — `true` whenever the dashboard is served by the CLI server, false in the Tauri desktop wrapper where native dialogs work. */
 export const isWebRuntime = isServerMode;
 
-console.log(`[tauri-bridge] mode=${MODE}${isServerMode ? ` mode="${rawMode}"` : ""}`);
+console.log(`[tauri-bridge] mode=${MODE}`);
 
 // 事件广播
 function broadcast(eventName: string, payload: any) {
@@ -922,6 +927,26 @@ async function serverRpc(payload: Record<string, any>): Promise<void> {
 export async function invoke(cmd: string, args?: any): Promise<any> {
   console.log(`[tauri-bridge] invoke -> cmd: ${cmd}${args ? " " + JSON.stringify(args) : ""}`);
 
+  // Tauri desktop mode: delegate to real Tauri invoke via window.__TAURI__
+  if (MODE === "tauri") {
+    const tauri = (window as any).__TAURI__;
+    if (cmd === "rpc_spawn") {
+      await tauri.invoke("rpc_spawn");
+      return;
+    }
+    if (cmd === "rpc_send") {
+      await tauri.invoke("rpc_send", { line: args.line });
+      return;
+    }
+    if (cmd === "rpc_kill") {
+      await tauri.invoke("rpc_kill");
+      return;
+    }
+    // For all other commands (open_in_editor, write_text_file, etc.),
+    // delegate directly to Tauri — Rust handles routing.
+    return tauri.invoke(cmd, args ?? {});
+  }
+
   if (MODE === "server") {
     if (cmd === "rpc_spawn") {
       serverInit().catch(console.warn);
@@ -1000,9 +1025,24 @@ export async function listen<T = any>(
     listeners.set(eventName, bucket);
   }
   bucket.add(callback);
+
+  // In Tauri desktop mode, bridge real Tauri events into the local listener
+  // system so the Rust backend's rpc:event / rpc:stderr / rpc:exit reach the app.
+  let unlistenTauri: (() => void) | undefined;
+  if (MODE === "tauri") {
+    const tauri = (window as any).__TAURI__;
+    if (tauri?.event?.listen) {
+      const unsub = await tauri.event.listen(eventName, (event: { payload: T }) => {
+        broadcast(eventName, event.payload);
+      });
+      unlistenTauri = unsub;
+    }
+  }
+
   return () => {
     const b = listeners.get(eventName);
     if (b) b.delete(callback);
+    if (unlistenTauri) unlistenTauri();
   };
 }
 
