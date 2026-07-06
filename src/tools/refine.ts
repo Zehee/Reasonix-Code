@@ -2,14 +2,20 @@
  * Refine tools: search_context and refine_session_turns.
  */
 
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { ToolRegistry, ToolCallContext } from "../tools.js";
-import { RefinedManager } from "../refine/refined-manager.js";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { sessionsDir, sessionPath, workspaceSlug, loadSessionMessages, loadSessionMeta } from "../memory/session.js";
 import { ARCHIVE_MARKER } from "../memory/archiver.js";
-import type { RawTurn, RawAction, RefinedTurn } from "../refine/types.js";
+import {
+  loadSessionMessages,
+  loadSessionMeta,
+  sessionPath,
+  sessionsDir,
+  workspaceSlug,
+} from "../memory/session.js";
+import { RefinedManager } from "../refine/refined-manager.js";
+import type { RawAction, RawTurn, RefinedTurn } from "../refine/types.js";
+import type { ToolCallContext, ToolRegistry } from "../tools.js";
 
 function getRefinedRoot(): string {
   const cwd = process.cwd();
@@ -107,7 +113,11 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
       properties: {
         query: { type: "string", description: "搜索关键词" },
         maxClusters: { type: "number", description: "最多返回簇数，默认 5" },
-        detail: { type: "string", enum: ["compact", "normal"], description: "详情级别，默认 normal" },
+        detail: {
+          type: "string",
+          enum: ["compact", "normal"],
+          description: "详情级别，默认 normal",
+        },
       },
       required: ["query"],
     },
@@ -137,7 +147,9 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
         bySession.set(m.sessionId, list);
       }
 
-      const lines: string[] = [`Found ${matches.length} matches in ${bySession.size} sessions for "${query}":`];
+      const lines: string[] = [
+        `Found ${matches.length} matches in ${bySession.size} sessions for "${query}":`,
+      ];
 
       for (const [sid, ms] of bySession) {
         lines.push(`\n## Session: ${sid} (${ms.length} matches)`);
@@ -181,7 +193,12 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
         const dir = sessionsDir();
         if (existsSync(dir)) {
           const files = readdirSync(dir)
-            .filter((f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".archive.jsonl"))
+            .filter(
+              (f) =>
+                f.endsWith(".jsonl") &&
+                !f.endsWith(".events.jsonl") &&
+                !f.endsWith(".toolcache.jsonl"),
+            )
             .sort()
             .reverse();
           if (files.length > 0) {
@@ -245,14 +262,20 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
     fn: async (args: Record<string, unknown>, _ctx?: ToolCallContext): Promise<string> => {
       const rawRefs = args.references;
       if (!Array.isArray(rawRefs) || rawRefs.length === 0) {
-        return JSON.stringify({ error: "references must be a non-empty array", rounds: [], notFound: [] });
+        return JSON.stringify({
+          error: "references must be a non-empty array",
+          rounds: [],
+          notFound: [],
+        });
       }
 
       const refs = rawRefs
-        .filter((r): r is { sessionName: string; turnId: number } =>
-          r !== null && typeof r === "object" &&
-          typeof (r as Record<string, unknown>).sessionName === "string" &&
-          typeof (r as Record<string, unknown>).turnId === "number",
+        .filter(
+          (r): r is { sessionName: string; turnId: number } =>
+            r !== null &&
+            typeof r === "object" &&
+            typeof (r as Record<string, unknown>).sessionName === "string" &&
+            typeof (r as Record<string, unknown>).turnId === "number",
         )
         .slice(0, 20);
 
@@ -269,7 +292,11 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
         bySession.get(ref.sessionName)!.add(ref.turnId);
       }
 
-      const rounds: Array<{ sessionName: string; turnId: number; messages: import("../types.js").ChatMessage[] }> = [];
+      const rounds: Array<{
+        sessionName: string;
+        turnId: number;
+        messages: import("../types.js").ChatMessage[];
+      }> = [];
       const notFound: Array<{ sessionName: string; turnId: number }> = [];
 
       for (const [sessionName, turnIds] of bySession.entries()) {
@@ -291,7 +318,11 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
 
         for (const msg of messages) {
           const msgTurnId = msg.turnId ?? 0;
-          if (msg.role === "user" && currentTurnId !== undefined && currentTurnMessages.length > 0) {
+          if (
+            msg.role === "user" &&
+            currentTurnId !== undefined &&
+            currentTurnMessages.length > 0
+          ) {
             turnMap.set(currentTurnId, currentTurnMessages);
             currentTurnMessages = [];
           }
@@ -326,9 +357,12 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
  * in a messages array. Used by `sessionToRawTurns` to ensure the refined
  * index captures full detail even after proactive archiving.
  */
-function restoreArchivedContentSync(sessionName: string, messages: import("../types.js").ChatMessage[]): void {
-  // Archive path = sessionPath + .archive.jsonl
-  const archivePath = sessionPath(sessionName) + ".archive.jsonl";
+function restoreArchivedContentSync(
+  sessionName: string,
+  messages: import("../types.js").ChatMessage[],
+): void {
+  // Archive path = sessionPath + .toolcache.jsonl
+  const archivePath = sessionPath(sessionName) + ".toolcache.jsonl";
   try {
     if (!existsSync(archivePath)) return;
     const raw = readFileSync(archivePath, "utf-8");

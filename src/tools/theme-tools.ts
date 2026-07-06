@@ -4,8 +4,8 @@
 
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { ToolRegistry, ToolCallContext } from "../tools.js";
 import { ThemeManager } from "../themes/manager.js";
+import type { ToolCallContext, ToolRegistry } from "../tools.js";
 
 function themesDir(): string {
   return join(homedir(), ".reasonix", "themes");
@@ -48,7 +48,11 @@ export function registerThemeTools(registry: ToolRegistry): ToolRegistry {
       if (turnId <= 0) return "tag_theme: turnId must be a positive number";
 
       const mgr = themeManager();
-      await mgr.addThemeAssociation(theme, { sessionId, turnId, timestamp: new Date().toISOString() });
+      await mgr.addThemeAssociation(theme, {
+        sessionId,
+        turnId,
+        timestamp: new Date().toISOString(),
+      });
 
       return `Tagged turn ${turnId} of session "${sessionId}" to theme "${theme}".`;
     },

@@ -4,14 +4,14 @@
  *
  * Instead of waiting for the 75% fold threshold, this module selectively
  * archives old tool results (errors, file reads, edit diffs) into a
- * `{session}.archive.jsonl` file after each turn, keeping the main context
+ * `{session}.toolcache.jsonl` file after each turn, keeping the main context
  * lean while preserving traceability. The model sees a short reference
  * like `[archived: read_file result for src/index.ts (2345 chars)]`.
  */
 
-import { readFile, writeFile, mkdir, appendFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import type { ChatMessage } from "../types.js";
 import { sessionPath } from "./session.js";
 
@@ -69,8 +69,8 @@ export interface ArchiveEntry {
 // ---------------------------------------------------------------------------
 
 function archivePathFor(sessionName: string): string {
-  // Archive path = sessionPath + .archive.jsonl
-  return sessionPath(sessionName) + ".archive.jsonl";
+  // Archive path = sessionPath + .toolcache.jsonl
+  return sessionPath(sessionName) + ".toolcache.jsonl";
 }
 
 // ---------------------------------------------------------------------------
@@ -130,10 +130,7 @@ export class TurnArchiver {
    * current turn), archive them to JSONL, and replace them in-place with
    * short references. Returns the number of items archived.
    */
-  async archivePreviousTurnNoise(
-    log: ChatMessage[],
-    currentTurn: number,
-  ): Promise<number> {
+  async archivePreviousTurnNoise(log: ChatMessage[], currentTurn: number): Promise<number> {
     if (!this._archivePath) return 0;
     if (currentTurn <= this.keepTurns) return 0;
 
@@ -165,11 +162,7 @@ export class TurnArchiver {
       // Write to archive.
       try {
         await mkdir(dirname(this._archivePath), { recursive: true });
-        await appendFile(
-          this._archivePath,
-          JSON.stringify(entry) + "\n",
-          "utf-8",
-        );
+        await appendFile(this._archivePath, JSON.stringify(entry) + "\n", "utf-8");
       } catch {
         // Best-effort — if we can't write, don't strip.
         continue;
@@ -187,11 +180,13 @@ export class TurnArchiver {
    * Persist the modified log (with archive references instead of full content)
    * to the session file. This is called after the archive pass.
    */
-  async persistArchivedLog(
-    sessionName: string,
-    log: ChatMessage[],
-  ): Promise<void> {
-    const p = join(homedir(), ".reasonix", SESSIONS_SUBDIR, `${sessionName.replace(/[^a-zA-Z0-9_-]/g, "_")}.archived.jsonl`);
+  async persistArchivedLog(sessionName: string, log: ChatMessage[]): Promise<void> {
+    const p = join(
+      homedir(),
+      ".reasonix",
+      SESSIONS_SUBDIR,
+      `${sessionName.replace(/[^a-zA-Z0-9_-]/g, "_")}.archived.jsonl`,
+    );
     try {
       await mkdir(dirname(p), { recursive: true });
       const lines = log.map((m) => JSON.stringify(m)).join("\n");

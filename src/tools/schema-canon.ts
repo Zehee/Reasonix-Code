@@ -13,13 +13,7 @@
 
 // ── Canonicalization ──────────────────────────────────────────────
 
-type JsonSchema =
-  | Record<string, unknown>
-  | Array<unknown>
-  | string
-  | number
-  | boolean
-  | null;
+type JsonSchema = Record<string, unknown> | Array<unknown> | string | number | boolean | null;
 
 /**
  * Recursively normalize a JSON Schema object:
@@ -119,14 +113,14 @@ export function shrinkDescription(desc: string): string {
 /**
  * Apply canonicalization + shrinking to a tool definition object.
  */
-export function normalizeToolDescriptor(
-  descriptor: { name: string; description: string; parameters?: unknown },
-): { name: string; description: string; parameters: unknown } {
+export function normalizeToolDescriptor(descriptor: {
+  name: string;
+  description: string;
+  parameters?: unknown;
+}): { name: string; description: string; parameters: unknown } {
   return {
     name: descriptor.name,
     description: shrinkDescription(descriptor.description),
-    parameters: descriptor.parameters
-      ? canonicalizeSchema(descriptor.parameters)
-      : undefined,
+    parameters: descriptor.parameters ? canonicalizeSchema(descriptor.parameters) : undefined,
   };
 }

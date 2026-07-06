@@ -2,10 +2,10 @@
  * Theme association storage (theme -> turns / memories).
  */
 
-import fs from 'fs';
-import path from 'path';
-import { sanitizeKey, toTitle } from '../refine/utils/validation.js';
-import { Mutex } from '../refine/utils/mutex.js';
+import fs from "fs";
+import path from "path";
+import { Mutex } from "../refine/utils/mutex.js";
+import { sanitizeKey, toTitle } from "../refine/utils/validation.js";
 
 export interface ThemeTurnRef {
   sessionId: string;
@@ -55,7 +55,7 @@ export class ThemeManager {
     const filePath = this.themeFilePath(theme);
     if (!fs.existsSync(filePath)) return null;
     try {
-      return JSON.parse(fs.readFileSync(filePath, 'utf8')) as ThemeAssociation;
+      return JSON.parse(fs.readFileSync(filePath, "utf8")) as ThemeAssociation;
     } catch {
       return null;
     }
@@ -64,8 +64,8 @@ export class ThemeManager {
   saveTheme(theme: string, association: ThemeAssociation): void {
     const filePath = this.themeFilePath(theme);
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    const tmpPath = filePath + '.tmp';
-    fs.writeFileSync(tmpPath, JSON.stringify(association, null, 2), 'utf8');
+    const tmpPath = filePath + ".tmp";
+    fs.writeFileSync(tmpPath, JSON.stringify(association, null, 2), "utf8");
     fs.renameSync(tmpPath, filePath);
   }
 
@@ -80,8 +80,8 @@ export class ThemeManager {
     if (!fs.existsSync(this.themesRoot)) return [];
     return fs
       .readdirSync(this.themesRoot)
-      .filter((name) => name.endsWith('.json'))
-      .map((name) => path.basename(name, '.json'))
+      .filter((name) => name.endsWith(".json"))
+      .map((name) => path.basename(name, ".json"))
       .sort();
   }
 

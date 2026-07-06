@@ -40,7 +40,7 @@ import type { ChatMessage } from "../types.js";
 
 const SESSION_SIDECAR_EXTS = [
   ".events.jsonl",
-  ".archive.jsonl",
+  ".toolcache.jsonl",
   ".meta.json",
   ".pending.json",
   ".plan.json",
@@ -136,7 +136,10 @@ export function sanitizeName(name: string): string {
 
 /** Deterministic workspace slug from a project root path. Used for session directory isolation and refined index paths. */
 export function workspaceSlug(root: string): string {
-  return root.replace(/[/\\:]/g, "-").replace(/^-+/, "").toLowerCase();
+  return root
+    .replace(/[/\\:]/g, "-")
+    .replace(/^-+/, "")
+    .toLowerCase();
 }
 
 /** RFC 4122 UUID v4 — stable session identifier that survives file renames and meta.json loss. */
@@ -167,12 +170,24 @@ export function ensureSessionHeader(path: string, sessionId: string): void {
     if (existing) return; // header already present
     // File exists but no header — prepend one by rewriting with header + original messages
     const raw = readFileSync(path, "utf8");
-    const header = JSON.stringify({ type: "session.header", sessionId, createdAt: new Date().toISOString() });
-    atomicWriteSync(path, `${header}\n${raw.trimEnd()}\n`, `${path}.${randomBytes(4).toString("hex")}.tmp`);
+    const header = JSON.stringify({
+      type: "session.header",
+      sessionId,
+      createdAt: new Date().toISOString(),
+    });
+    atomicWriteSync(
+      path,
+      `${header}\n${raw.trimEnd()}\n`,
+      `${path}.${randomBytes(4).toString("hex")}.tmp`,
+    );
     return;
   }
   // New file — write header as first line
-  const header = JSON.stringify({ type: "session.header", sessionId, createdAt: new Date().toISOString() });
+  const header = JSON.stringify({
+    type: "session.header",
+    sessionId,
+    createdAt: new Date().toISOString(),
+  });
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${header}\n`, "utf8");
 }
@@ -233,7 +248,13 @@ export function findSessionsByPrefix(prefix: string): string[] {
   if (!existsSync(dir)) return [];
   try {
     const files = readdirSync(dir)
-      .filter((f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".archive.jsonl") && f.startsWith(prefix))
+      .filter(
+        (f) =>
+          f.endsWith(".jsonl") &&
+          !f.endsWith(".events.jsonl") &&
+          !f.endsWith(".toolcache.jsonl") &&
+          f.startsWith(prefix),
+      )
       .sort()
       .reverse();
     return files.map((f) => f.replace(/\.jsonl$/, ""));
@@ -380,7 +401,7 @@ export function appendSessionMessage(name: string, message: ChatMessage): void {
   mkdirSync(dirname(path), { recursive: true });
 
   // Load existing messages to compute turnId and sessionId
-  const existing = existsSync(path) ? readSessionMessages(path)?.messages ?? [] : [];
+  const existing = existsSync(path) ? (readSessionMessages(path)?.messages ?? []) : [];
 
   // Resolve / assign sessionId
   const sessionId = loadSessionId(name);
@@ -391,7 +412,11 @@ export function appendSessionMessage(name: string, message: ChatMessage): void {
   const stamped: ChatMessage = { ...message, turnId, sessionId: message.sessionId ?? sessionId };
 
   // Build output: header + all messages
-  const header = JSON.stringify({ type: "session.header", sessionId, createdAt: new Date().toISOString() });
+  const header = JSON.stringify({
+    type: "session.header",
+    sessionId,
+    createdAt: new Date().toISOString(),
+  });
   const body = [...existing, stamped].map((m) => JSON.stringify(m)).join("\n");
   const tmp = `${path}.${randomBytes(4).toString("hex")}.tmp`;
 
@@ -420,16 +445,26 @@ export function listSessions(opts?: {
     // Collect all .jsonl files from root + workspace subdirectories
     const entries: Array<{ name: string; path: string }> = [];
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.isFile() && entry.name.endsWith(".jsonl") &&
-          !entry.name.endsWith(".events.jsonl") &&
-          !entry.name.endsWith(".archive.jsonl")) {
+      if (
+        entry.isFile() &&
+        entry.name.endsWith(".jsonl") &&
+        !entry.name.endsWith(".events.jsonl") &&
+        !entry.name.endsWith(".toolcache.jsonl")
+      ) {
         entries.push({ name: entry.name.replace(/\.jsonl$/, ""), path: join(dir, entry.name) });
       } else if (entry.isDirectory()) {
         // Workspace subdirectory — scan for .jsonl files
         const subdir = join(dir, entry.name);
         for (const f of readdirSync(subdir)) {
-          if (f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".archive.jsonl")) {
-            entries.push({ name: `${entry.name}/${f.replace(/\.jsonl$/, "")}`, path: join(subdir, f) });
+          if (
+            f.endsWith(".jsonl") &&
+            !f.endsWith(".events.jsonl") &&
+            !f.endsWith(".toolcache.jsonl")
+          ) {
+            entries.push({
+              name: `${entry.name}/${f.replace(/\.jsonl$/, "")}`,
+              path: join(subdir, f),
+            });
           }
         }
       }
@@ -533,7 +568,8 @@ function listSessionsForPromptHistory(workspace?: string): PromptHistorySessionI
   } else {
     try {
       const files = readdirSync(dir).filter(
-        (f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".archive.jsonl"),
+        (f) =>
+          f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".toolcache.jsonl"),
       );
       sessions = files.flatMap((file) => {
         const path = join(dir, file);
@@ -773,7 +809,11 @@ export function rewriteSession(name: string, messages: ChatMessage[]): void {
   // Resolve sessionId (from meta, header, or generate)
   const sessionId = loadSessionId(name);
 
-  const header = JSON.stringify({ type: "session.header", sessionId, createdAt: new Date().toISOString() });
+  const header = JSON.stringify({
+    type: "session.header",
+    sessionId,
+    createdAt: new Date().toISOString(),
+  });
   const body = messages.map((m) => JSON.stringify(m)).join("\n");
   const tmp = `${path}.${randomBytes(8).toString("hex")}.tmp`;
   if (existsSync(path) && statSync(path).size > 0) {
@@ -930,7 +970,13 @@ export async function findSessionsByPrefixAsync(prefix: string): Promise<string[
   const dir = sessionsDir();
   try {
     const files = (await readdir(dir))
-      .filter((f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".archive.jsonl") && f.startsWith(prefix))
+      .filter(
+        (f) =>
+          f.endsWith(".jsonl") &&
+          !f.endsWith(".events.jsonl") &&
+          !f.endsWith(".toolcache.jsonl") &&
+          f.startsWith(prefix),
+      )
       .sort()
       .reverse();
     return files.map((f) => f.replace(/\.jsonl$/, ""));
@@ -1002,7 +1048,11 @@ export async function appendSessionMessageAsync(name: string, message: ChatMessa
   const turnId = resolveNextTurnId(existing, message.role);
   const stamped: ChatMessage = { ...message, turnId, sessionId: message.sessionId ?? sessionId };
 
-  const header = JSON.stringify({ type: "session.header", sessionId, createdAt: new Date().toISOString() });
+  const header = JSON.stringify({
+    type: "session.header",
+    sessionId,
+    createdAt: new Date().toISOString(),
+  });
   const body = [...existing, stamped].map((m) => JSON.stringify(m)).join("\n");
   const tmp = `${path}.${randomBytes(4).toString("hex")}.tmp`;
 
@@ -1067,7 +1117,11 @@ export async function rewriteSessionAsync(name: string, messages: ChatMessage[])
   await mkdir(dirname(path), { recursive: true });
 
   const sessionId = loadSessionId(name);
-  const header = JSON.stringify({ type: "session.header", sessionId, createdAt: new Date().toISOString() });
+  const header = JSON.stringify({
+    type: "session.header",
+    sessionId,
+    createdAt: new Date().toISOString(),
+  });
   const body = messages.map((m) => JSON.stringify(m)).join("\n");
   const tmp = `${path}.${randomBytes(8).toString("hex")}.tmp`;
   try {
@@ -1095,7 +1149,7 @@ export async function listSessionsAsync(opts?: {
       : null;
   try {
     const files = (await readdir(dir)).filter(
-      (f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".archive.jsonl"),
+      (f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".toolcache.jsonl"),
     );
     const results = await Promise.all(
       files.flatMap(async (file) => {

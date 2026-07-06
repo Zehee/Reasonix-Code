@@ -6,23 +6,18 @@
  * concerns such as the write mutex.
  */
 
-import { Mutex } from './utils/mutex.js';
-import { RefinedStore } from './store.js';
-import { extract } from './extractor.js';
-import type {
+import { extract } from "./extractor.js";
+import { RefinedStore } from "./store.js";
+import type { RawTurn, RefinedSearchMatch, RefinedSearchOptions, RefinedTurn } from "./types.js";
+import { Mutex } from "./utils/mutex.js";
+
+export type {
+  RawAction,
   RawTurn,
   RefinedTurn,
   RefinedSearchOptions,
   RefinedSearchMatch,
-} from './types.js';
-
-export {
-  type RawAction,
-  type RawTurn,
-  type RefinedTurn,
-  type RefinedSearchOptions,
-  type RefinedSearchMatch,
-} from './types.js';
+} from "./types.js";
 
 export class RefinedManager {
   refinedRoot: string;

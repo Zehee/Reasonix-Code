@@ -520,6 +520,10 @@ export function applyMemoryStack(
   const customSkillPaths = cfg?.skills?.paths
     ? resolveSkillPaths(cfg.skills.paths, rootDir)
     : loadResolvedSkillPaths(rootDir);
-  const withSkills = applySkillsIndex(withMemory, { projectRoot: rootDir, homeDir, customSkillPaths });
+  const withSkills = applySkillsIndex(withMemory, {
+    projectRoot: rootDir,
+    homeDir,
+    customSkillPaths,
+  });
   return applyThemeActivity(withSkills);
 }

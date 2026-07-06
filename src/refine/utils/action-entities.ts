@@ -5,8 +5,8 @@
  * tool names, and error snippets without duplicating the logic.
  */
 
-import { LIMITS } from '../constants.js';
-import type { RawAction } from '../types.js';
+import { LIMITS } from "../constants.js";
+import type { RawAction } from "../types.js";
 
 export interface ExtractedEntities {
   files: string[];
@@ -25,24 +25,23 @@ export function extractEntitiesFromAction(action: RawAction): ExtractedEntities 
   if (action.name) tools.push(action.name);
 
   const args =
-    typeof action.args === 'object' && action.args !== null
+    typeof action.args === "object" && action.args !== null
       ? (action.args as Record<string, unknown>)
       : {};
-  for (const key of ['path', 'file', 'filePath', 'cwd'] as const) {
+  for (const key of ["path", "file", "filePath", "cwd"] as const) {
     const value = args[key];
-    if (typeof value === 'string') {
-      if (key === 'cwd' && value.includes('node_modules')) continue;
+    if (typeof value === "string") {
+      if (key === "cwd" && value.includes("node_modules")) continue;
       files.push(value);
     }
   }
 
-  const result = action.result || '';
+  const result = action.result || "";
   if (
-    typeof result === 'string' &&
-    (result.toLowerCase().includes('error') || result.toLowerCase().includes('failed'))
+    typeof result === "string" &&
+    (result.toLowerCase().includes("error") || result.toLowerCase().includes("failed"))
   ) {
-    errors.push((result.split(
-'\n')[0] ?? '').slice(0, LIMITS.errorSnippet));
+    errors.push((result.split("\n")[0] ?? "").slice(0, LIMITS.errorSnippet));
   }
 
   return { files, tools, errors };

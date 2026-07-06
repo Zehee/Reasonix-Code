@@ -6,17 +6,17 @@
  * extraction. No LLM is involved.
  */
 
-import type { RawTurn, RefinedTurn } from './types.js';
-import { ACTION_KEYWORDS, LIMITS } from './constants.js';
-import { extractEntitiesFromAction } from './utils/action-entities.js';
-import { matchCategory } from './utils/headings.js';
+import { ACTION_KEYWORDS, LIMITS } from "./constants.js";
+import type { RawTurn, RefinedTurn } from "./types.js";
+import { extractEntitiesFromAction } from "./utils/action-entities.js";
+import { matchCategory } from "./utils/headings.js";
 
 function buildActionRegex(): RegExp {
   // Sort longer phrases first so "Next step" wins over "Next".
   const sorted = [...ACTION_KEYWORDS].sort((a, b) => b.length - a.length);
-  const escaped = sorted.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const escaped = sorted.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   // Support both English colon and Chinese full-width colon, optional whitespace.
-  return new RegExp(`^(?:${escaped.join('|')})(：|:)?\\s*`, 'i');
+  return new RegExp(`^(?:${escaped.join("|")})(：|:)?\\s*`, "i");
 }
 
 const ACTION_REGEX = buildActionRegex();
@@ -32,7 +32,7 @@ function pickAgentLead(agentText: string): string | null {
   const first = agentText.split(/\r?\n/).find((line) => line.trim().length > 0);
   if (!first) return null;
   const trimmed = first.trim();
-  return trimmed.length > 0 && trimmed.length <= LIMITS.agentLead && !trimmed.startsWith('#')
+  return trimmed.length > 0 && trimmed.length <= LIMITS.agentLead && !trimmed.startsWith("#")
     ? trimmed
     : null;
 }
@@ -46,21 +46,24 @@ export function extract(turn: RawTurn, sessionId: string): RefinedTurn {
   const errors = new Set<string>();
 
   for (const action of turn.actions || []) {
-    const { files: actionFiles, tools: actionTools, errors: actionErrors } =
-      extractEntitiesFromAction(action);
+    const {
+      files: actionFiles,
+      tools: actionTools,
+      errors: actionErrors,
+    } = extractEntitiesFromAction(action);
     for (const file of actionFiles) files.add(file);
     for (const tool of actionTools) tools.add(tool);
     for (const error of actionErrors) errors.add(error);
   }
 
-  const userText = (turn.user || '').slice(0, LIMITS.userText).trim();
+  const userText = (turn.user || "").slice(0, LIMITS.userText).trim();
   const toolNames = Array.from(tools);
-  const agentText = turn.agentText || turn.agent || '';
+  const agentText = turn.agentText || turn.agent || "";
   const agentLead = pickAgentLead(agentText);
 
   let summary = userText;
   if (toolNames.length > 0) {
-    summary = `${userText ? `${userText} · ` : ''}${toolNames.join(', ')}`;
+    summary = `${userText ? `${userText} · ` : ""}${toolNames.join(", ")}`;
   }
   if (agentLead && agentLead !== userText) {
     summary = summary ? `${summary} · ${agentLead}` : agentLead;
@@ -89,12 +92,12 @@ export function extract(turn: RawTurn, sessionId: string): RefinedTurn {
     let extracted: string | null = null;
 
     // List item.
-    if (line.startsWith('- ') || line.startsWith('* ')) {
+    if (line.startsWith("- ") || line.startsWith("* ")) {
       extracted = line.slice(2).trim();
     }
     // Numbered list item like "1. xxx" or "1) xxx".
     else if (/^(\d+)[.)]\s+/.test(line)) {
-      extracted = line.replace(/^\d+[.)]\s+/, '').trim();
+      extracted = line.replace(/^\d+[.)]\s+/, "").trim();
     }
     // Action / conclusion sentence.
     else {
@@ -118,7 +121,7 @@ export function extract(turn: RawTurn, sessionId: string): RefinedTurn {
 
   return {
     sessionId,
-    turnId: parseInt(String(turn.turnId), 10),
+    turnId: Number.parseInt(String(turn.turnId), 10),
     timestamp: turn.timestamp,
     summary,
     facts: facts.slice(0, LIMITS.facts),

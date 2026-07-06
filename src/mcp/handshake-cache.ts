@@ -16,8 +16,8 @@
  * degrade to a fresh handshake.
  */
 
-import { randomUUID, createHash } from "node:crypto";
-import { readFile, writeFile, mkdir, unlink, rename } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { McpServerSpec } from "./spec.js";
@@ -135,7 +135,10 @@ function cacheFilePath(name: string): string {
  * Falls back to `_` when every character is stripped.
  */
 function slug(name: string): string {
-  const s = name.toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/^-+|-+$/g, "");
+  const s = name
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "-")
+    .replace(/^-+|-+$/g, "");
   return s || "_";
 }
 
@@ -170,10 +173,7 @@ export async function loadCachedHandshake(
  * Atomically persist a handshake snapshot to disk. Writes to a temp file then
  * renames over the target so a crash mid-write never leaves a half-written JSON.
  */
-export async function saveCachedHandshake(
-  name: string,
-  data: CachedHandshake,
-): Promise<void> {
+export async function saveCachedHandshake(name: string, data: CachedHandshake): Promise<void> {
   try {
     const dir = cacheDir();
     await mkdir(dir, { recursive: true });
@@ -225,7 +225,10 @@ export function buildCachedHandshake(
     tools: tools.map((t) => ({
       name: t.name,
       description: t.description ?? "",
-      inputSchema: canonicalizeSchema(t.inputSchema as Record<string, unknown>) as Record<string, unknown>,
+      inputSchema: canonicalizeSchema(t.inputSchema as Record<string, unknown>) as Record<
+        string,
+        unknown
+      >,
     })),
     lastValidated: new Date().toISOString(),
   };

@@ -2,15 +2,15 @@
  * SQLite storage for refined turns.
  */
 
-import fs from 'fs';
-import path from 'path';
-import Database from 'better-sqlite3';
-import type { RefinedSearchOptions, RefinedSearchMatch, RefinedTurn } from './types.js';
-import { turnToRow } from './adapter.js';
-import { rowToTurn } from './adapter.js';
-import { LIMITS } from './constants.js';
-import { buildLikeConditions, scoreText } from './utils/search.js';
-import { dateRangeSql } from './utils/date.js';
+import fs from "fs";
+import path from "path";
+import Database from "better-sqlite3";
+import { turnToRow } from "./adapter.js";
+import { rowToTurn } from "./adapter.js";
+import { LIMITS } from "./constants.js";
+import type { RefinedSearchMatch, RefinedSearchOptions, RefinedTurn } from "./types.js";
+import { dateRangeSql } from "./utils/date.js";
+import { buildLikeConditions, scoreText } from "./utils/search.js";
 
 export class RefinedStore {
   refinedRoot: string;
@@ -19,7 +19,7 @@ export class RefinedStore {
 
   constructor(refinedRoot: string) {
     this.refinedRoot = refinedRoot;
-    this.dbPath = path.join(refinedRoot, 'refined.sqlite');
+    this.dbPath = path.join(refinedRoot, "refined.sqlite");
     fs.mkdirSync(refinedRoot, { recursive: true });
     this.db = new Database(this.dbPath);
     this.initDb();
@@ -80,7 +80,7 @@ export class RefinedStore {
 
   loadRefinedTurns(sessionId: string): RefinedTurn[] {
     const stmt = this.db.prepare(
-      'SELECT * FROM refined_turns WHERE session_id = ? ORDER BY turn_id',
+      "SELECT * FROM refined_turns WHERE session_id = ? ORDER BY turn_id",
     );
     const rows = stmt.all(sessionId) as Array<{
       session_id: string;
@@ -97,7 +97,7 @@ export class RefinedStore {
 
   loadRefinedTurn(sessionId: string, turnId: number): RefinedTurn | undefined {
     const stmt = this.db.prepare(
-      'SELECT * FROM refined_turns WHERE session_id = ? AND turn_id = ?',
+      "SELECT * FROM refined_turns WHERE session_id = ? AND turn_id = ?",
     );
     const row = stmt.get(sessionId, turnId) as
       | {
@@ -115,7 +115,7 @@ export class RefinedStore {
   }
 
   searchRefinedTurns(options: RefinedSearchOptions): RefinedSearchMatch[] {
-    const rawQuery = typeof options.query === 'string' ? options.query.trim() : '';
+    const rawQuery = typeof options.query === "string" ? options.query.trim() : "";
     if (!rawQuery) return [];
 
     const terms = rawQuery
@@ -125,7 +125,9 @@ export class RefinedStore {
     if (terms.length === 0) return [];
 
     const limit =
-      typeof options.limit === 'number' ? Math.max(1, Math.floor(options.limit)) : LIMITS.searchResultLimit;
+      typeof options.limit === "number"
+        ? Math.max(1, Math.floor(options.limit))
+        : LIMITS.searchResultLimit;
     const dateFrom = options.dateFrom || null;
     const dateTo = options.dateTo || null;
 
@@ -133,24 +135,24 @@ export class RefinedStore {
     const params: (string | number)[] = [];
 
     for (const term of terms) {
-      const escaped = term.split('%').join('\\%').split('_').join('\\_');
+      const escaped = term.split("%").join("\\%").split("_").join("\\_");
       const like = `%${escaped}%`;
       params.push(like, like, like);
     }
 
     const dateRange = dateRangeSql(dateFrom || undefined, dateTo || undefined);
     if (dateRange.from) {
-      conditions.push('timestamp >= ?');
+      conditions.push("timestamp >= ?");
       params.push(dateRange.from);
     }
     if (dateRange.to) {
-      conditions.push('timestamp <= ?');
+      conditions.push("timestamp <= ?");
       params.push(dateRange.to);
     }
 
     const sql = `SELECT session_id, turn_id, timestamp, summary, facts, notes
                  FROM refined_turns
-                 WHERE ${conditions.join(' AND ')}
+                 WHERE ${conditions.join(" AND ")}
                  ORDER BY timestamp DESC
                  LIMIT ?`;
     params.push(limit * LIMITS.searchCandidateMultiplier);
@@ -176,8 +178,8 @@ export class RefinedStore {
         turnId: row.turn_id,
         timestamp: row.timestamp ?? undefined,
         summary: row.summary,
-        facts: JSON.parse(row.facts || '[]'),
-        notes: JSON.parse(row.notes || '[]'),
+        facts: JSON.parse(row.facts || "[]"),
+        notes: JSON.parse(row.notes || "[]"),
         score,
       });
     }
@@ -187,14 +189,12 @@ export class RefinedStore {
   }
 
   countAll(): number {
-    const row = this.db.prepare('SELECT COUNT(*) AS c FROM refined_turns').get() as { c: number };
+    const row = this.db.prepare("SELECT COUNT(*) AS c FROM refined_turns").get() as { c: number };
     return row?.c ?? 0;
   }
 
   listRecentTurns(limit: number): RefinedTurn[] {
-    const stmt = this.db.prepare(
-      'SELECT * FROM refined_turns ORDER BY timestamp DESC LIMIT ?',
-    );
+    const stmt = this.db.prepare("SELECT * FROM refined_turns ORDER BY timestamp DESC LIMIT ?");
     const rows = stmt.all(limit) as Array<{
       session_id: string;
       turn_id: number;
@@ -210,7 +210,9 @@ export class RefinedStore {
 
   deleteRefinedTurns(refs: Array<{ sessionId: string; turnId: number }>): number {
     if (refs.length === 0) return 0;
-    const deleteStmt = this.db.prepare('DELETE FROM refined_turns WHERE session_id = ? AND turn_id = ?');
+    const deleteStmt = this.db.prepare(
+      "DELETE FROM refined_turns WHERE session_id = ? AND turn_id = ?",
+    );
     const transaction = this.db.transaction(() => {
       let count = 0;
       for (const ref of refs) {

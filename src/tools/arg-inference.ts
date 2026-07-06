@@ -49,10 +49,7 @@ const paramAliasMap = buildParamAliasMap();
  * Try to match a plausible parameter name to the schema's known parameters.
  * Returns the canonical schema key name, or null if no match.
  */
-function fuzzyMatchParam(
-  key: string,
-  schemaParams: Record<string, unknown>,
-): string | null {
+function fuzzyMatchParam(key: string, schemaParams: Record<string, unknown>): string | null {
   // 1. Exact match.
   if (key in schemaParams) return key;
 
@@ -274,7 +271,7 @@ function extractSchemaParams(spec: ToolSpec | undefined): Record<string, unknown
   if (!spec?.function?.parameters) return {};
   const params = spec.function.parameters;
   if (typeof params !== "object" || Array.isArray(params)) return {};
-  return (params as Record<string, unknown>).properties as Record<string, unknown> ?? {};
+  return ((params as Record<string, unknown>).properties as Record<string, unknown>) ?? {};
 }
 
 function extractRequiredParams(schemaParams: Record<string, unknown>): string[] {
@@ -305,8 +302,14 @@ function splitByTopLevelComma(s: string): string[] {
       quoteChar = c;
       continue;
     }
-    if (c === "(" || c === "[" || c === "{") { depth++; continue; }
-    if (c === ")" || c === "]" || c === "}") { depth--; continue; }
+    if (c === "(" || c === "[" || c === "{") {
+      depth++;
+      continue;
+    }
+    if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      continue;
+    }
     if (c === "," && depth === 0) {
       parts.push(s.slice(start, i));
       start = i + 1;
@@ -358,9 +361,19 @@ function findTopLevelEq(s: string): number {
       if (c === quoteChar && s[i - 1] !== "\\") inQuote = false;
       continue;
     }
-    if (c === '"' || c === "'") { inQuote = true; quoteChar = c; continue; }
-    if (c === "(" || c === "[" || c === "{") { depth++; continue; }
-    if (c === ")" || c === "]" || c === "}") { depth--; continue; }
+    if (c === '"' || c === "'") {
+      inQuote = true;
+      quoteChar = c;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{") {
+      depth++;
+      continue;
+    }
+    if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      continue;
+    }
     if (c === "=" && depth === 0 && !inQuote) return i;
   }
   return -1;
@@ -373,8 +386,15 @@ function parseArgValue(raw: string): unknown {
   const trimmed = raw.trim();
 
   // Try as JSON first (handles strings, numbers, booleans, null, arrays, objects).
-  if (trimmed.startsWith("{") || trimmed.startsWith("[") || trimmed.startsWith('"') || trimmed.startsWith("'")) {
-    try { return JSON.parse(trimmed); } catch {}
+  if (
+    trimmed.startsWith("{") ||
+    trimmed.startsWith("[") ||
+    trimmed.startsWith('"') ||
+    trimmed.startsWith("'")
+  ) {
+    try {
+      return JSON.parse(trimmed);
+    } catch {}
     // Try single-quoted string.
     if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
       return trimmed.slice(1, -1);
@@ -390,8 +410,10 @@ function parseArgValue(raw: string): unknown {
   if (trimmed === "null") return null;
 
   // Plain string — strip surrounding quotes if any.
-  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-      (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
     return trimmed.slice(1, -1);
   }
 

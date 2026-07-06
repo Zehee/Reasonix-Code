@@ -2,10 +2,10 @@
  * Shared markdown heading normalization and category matching.
  */
 
-import { CATEGORY_HEADINGS } from '../constants.js';
+import { CATEGORY_HEADINGS } from "../constants.js";
 
 export function normalizeHeading(heading: string): string {
-  return heading.trim().replace(/[:：]\s*$/g, '');
+  return heading.trim().replace(/[:：]\s*$/g, "");
 }
 
 export function matchCategory(heading: string): string | null {

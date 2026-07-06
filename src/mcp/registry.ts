@@ -255,7 +255,9 @@ export async function bridgeMcpTools(
       // Update the cache timestamp.
       if (opts.spec) {
         const fingerprint = specFingerprint(opts.spec);
-        saveCachedHandshake(serverName, buildCachedHandshake(fingerprint, {}, listed.tools)).catch(() => {});
+        saveCachedHandshake(serverName, buildCachedHandshake(fingerprint, {}, listed.tools)).catch(
+          () => {},
+        );
       }
       return { ...result, env };
     }
@@ -279,7 +281,9 @@ export async function bridgeMcpTools(
   // Persist the live tool list for the next session's cache hit.
   if (opts.spec) {
     const fingerprint = specFingerprint(opts.spec);
-    saveCachedHandshake(serverName, buildCachedHandshake(fingerprint, {}, listed.tools)).catch(() => {});
+    saveCachedHandshake(serverName, buildCachedHandshake(fingerprint, {}, listed.tools)).catch(
+      () => {},
+    );
   }
 
   return { ...result, env };

@@ -200,7 +200,7 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
         registry: tools,
         namePrefix,
         serverName: label,
-        spec,  // enables disk-cached handshake for prefix-stable tool registration
+        spec, // enables disk-cached handshake for prefix-stable tool registration
         host,
         ready,
         onProgress: (info) => ctx.progressSink.current?.(info),

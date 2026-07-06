@@ -3,9 +3,9 @@
  */
 
 function truncate(text: unknown, maxLen: number): string {
-  if (text === null || text === undefined) return '';
+  if (text === null || text === undefined) return "";
   const s = String(text);
-  return s.length > maxLen ? s.slice(0, maxLen) + '...' : s;
+  return s.length > maxLen ? s.slice(0, maxLen) + "..." : s;
 }
 
 /**
@@ -16,7 +16,7 @@ export function scoreText(text: string, terms: string[]): number {
   let score = 0;
   for (const term of terms) {
     const pattern = term.replace(/[.*+?^${}()|[\]\\]/g, (ch) => `\\${ch}`);
-    const re = new RegExp(pattern, 'gi');
+    const re = new RegExp(pattern, "gi");
     const matches = haystack.match(re);
     if (matches) score += matches.length;
   }
@@ -42,8 +42,8 @@ export function extractSnippet(text: string, terms: string[], maxLen: number): s
   const start = Math.max(0, bestPos - 60);
   const end = Math.min(text.length, bestPos + bestTermLen + 60);
   let snippet = text.slice(start, end);
-  if (start > 0) snippet = '...' + snippet;
-  if (end < text.length) snippet = snippet + '...';
+  if (start > 0) snippet = "..." + snippet;
+  if (end < text.length) snippet = snippet + "...";
   return snippet;
 }
 

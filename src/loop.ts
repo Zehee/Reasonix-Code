@@ -11,7 +11,6 @@ import {
 } from "./mcp/registry.js";
 
 import { ContextManager, TURN_START_FOLD_THRESHOLD } from "./context-manager.js";
-import { resolveContextTokens } from "./telemetry/stats.js";
 import { InflightSet } from "./core/inflight.js";
 import { t } from "./i18n/index.js";
 import { dispatchToolCallsChunked } from "./loop/dispatch.js";
@@ -45,8 +44,8 @@ import {
   thinkingModeForModel,
 } from "./loop/thinking.js";
 import type { LoopEvent } from "./loop/types.js";
-import { AppendOnlyLog, type ImmutablePrefix, VolatileScratch } from "./memory/runtime.js";
 import { TurnArchiver } from "./memory/archiver.js";
+import { AppendOnlyLog, type ImmutablePrefix, VolatileScratch } from "./memory/runtime.js";
 import {
   appendSessionMessage,
   archiveSession,
@@ -63,6 +62,7 @@ import {
   buildCacheDiagnostic,
   latestCacheDiagnostic,
 } from "./telemetry/cache-diagnostics.js";
+import { resolveContextTokens } from "./telemetry/stats.js";
 import { type CacheDiagnostics, SessionStats, type TurnStats } from "./telemetry/stats.js";
 import { countTokensBounded } from "./tokenizer.js";
 import { ToolRegistry } from "./tools.js";
@@ -337,16 +337,21 @@ export class CacheFirstLoop {
 
       // Archive old tool noise at startup so the session is loaded in
       // compressed form — this is the main contributor to fast start.
-      this._archiver.archivePreviousTurnNoise(messages, this._turn).then((archived) => {
-        if (archived > 0) {
-          this.log.compactInPlace(messages);
-          if (this.sessionName) {
-            try {
-              rewriteSession(this.sessionName, messages);
-            } catch { /* best-effort */ }
+      this._archiver
+        .archivePreviousTurnNoise(messages, this._turn)
+        .then((archived) => {
+          if (archived > 0) {
+            this.log.compactInPlace(messages);
+            if (this.sessionName) {
+              try {
+                rewriteSession(this.sessionName, messages);
+              } catch {
+                /* best-effort */
+              }
+            }
           }
-        }
-      }).catch(() => {});
+        })
+        .catch(() => {});
     } else {
       this.resumedMessageCount = 0;
     }
@@ -669,11 +674,7 @@ export class CacheFirstLoop {
       toolCallsOnly: true,
     });
     const final = stamped.messages;
-    if (
-      healed.healedCount === 0 &&
-      argsShrunk.healedCount === 0 &&
-      stamped.stampedCount === 0
-    ) {
+    if (healed.healedCount === 0 && argsShrunk.healedCount === 0 && stamped.stampedCount === 0) {
       this._healedCache = current;
       this._healedVersion = this.log.version;
       return current;
@@ -1285,9 +1286,8 @@ export class CacheFirstLoop {
   private async archiveAfterTurn(): Promise<void> {
     // Only compress when context is under meaningful pressure (>= 60%).
     // Below that, let the recent 5 turns accumulate naturally.
-    const lastUsage = this.stats.turns.length > 0
-      ? this.stats.turns[this.stats.turns.length - 1]?.usage
-      : null;
+    const lastUsage =
+      this.stats.turns.length > 0 ? this.stats.turns[this.stats.turns.length - 1]?.usage : null;
     const ctxMax = resolveContextTokens(this.model);
     const promptTokens = lastUsage?.promptTokens ?? 0;
     if (promptTokens < ctxMax * 0.6) return;

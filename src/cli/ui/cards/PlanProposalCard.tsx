@@ -4,8 +4,8 @@ import { Box, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
 import type { PlanStep } from "../../../tools/plan.js";
-import { MarkdownView } from "../markdown-view.js";
 import { PlanStepList } from "../PlanStepList.js";
+import { MarkdownView } from "../markdown-view.js";
 import { extractOpenQuestionsSection } from "../plan-open-questions.js";
 import { FG, TONE } from "../theme/tokens.js";
 

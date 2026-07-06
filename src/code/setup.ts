@@ -22,6 +22,7 @@ import { registerJavaSourceTool } from "../tools/java-source.js";
 import { JobRegistry } from "../tools/jobs.js";
 import { registerMemoryTools } from "../tools/memory.js";
 import { registerPlanTool } from "../tools/plan.js";
+import { registerRefineTools } from "../tools/refine.js";
 import { registerScaffoldTools } from "../tools/scaffold.js";
 import { registerShellTools } from "../tools/shell.js";
 import { type SkillInstalledHook, registerSkillTools } from "../tools/skills.js";
@@ -31,9 +32,8 @@ import {
   formatSubagentResult,
   spawnSubagent,
 } from "../tools/subagent.js";
-import { registerTodoTool } from "../tools/todo.js";
-import { registerRefineTools } from "../tools/refine.js";
 import { registerThemeTools } from "../tools/theme-tools.js";
+import { registerTodoTool } from "../tools/todo.js";
 import { registerWebTools } from "../tools/web.js";
 
 export interface CodeToolsetOpts {

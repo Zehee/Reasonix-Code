@@ -6,6 +6,7 @@ import { healLoadedMessages } from "./loop.js";
 import { stripHallucinatedToolMarkup } from "./loop.js";
 import { buildAssistantMessage } from "./loop/messages.js";
 import { DEFAULT_MAX_RESULT_CHARS } from "./mcp/registry.js";
+import { loadArchiveMap, restoreFromArchive } from "./memory/archiver.js";
 import type { AppendOnlyLog } from "./memory/runtime.js";
 import { rewriteSession } from "./memory/session.js";
 import {
@@ -16,7 +17,6 @@ import {
 } from "./telemetry/stats.js";
 import { countTokensBounded, estimateRequestTokens } from "./tokenizer.js";
 import type { ChatMessage, ToolSpec } from "./types.js";
-import { loadArchiveMap, restoreFromArchive } from "./memory/archiver.js";
 
 function extractPinnedConstraints(systemPrompt: string): string {
   // matchAll because the system prompt can carry multiple blocks under the same
@@ -213,10 +213,7 @@ export function snipStaleToolResults(messages: ChatMessage[], maxBytes = 4096): 
 export const PRUNE_MIN_BYTES = 1024;
 export const PRUNE_PLACEHOLDER_PREFIX = "[elided tool result — ";
 
-export function pruneStaleToolResults(
-  messages: ChatMessage[],
-  minBytes = PRUNE_MIN_BYTES,
-): number {
+export function pruneStaleToolResults(messages: ChatMessage[], minBytes = PRUNE_MIN_BYTES): number {
   let saved = 0;
   for (let i = 0; i < messages.length; i++) {
     const m = messages[i]!;
@@ -281,8 +278,8 @@ export function pinnedPrefixLen(messages: ChatMessage[]): number {
  */
 export function mechanicalFoldDigest(messages: ChatMessage[]): string {
   const firstUser = messages.find((m) => m.role === "user");
-  const userText = firstUser && typeof firstUser.content === "string"
-    ? firstUser.content.slice(0, 2000) : "";
+  const userText =
+    firstUser && typeof firstUser.content === "string" ? firstUser.content.slice(0, 2000) : "";
   // Collect last few tool results
   const toolResults: string[] = [];
   for (let i = messages.length - 1; i >= 0 && toolResults.length < 3; i--) {

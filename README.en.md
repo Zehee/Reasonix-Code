@@ -156,10 +156,10 @@ src/
 ├── sessions/                      ← All sessions
 │   ├── {workspace-slug}/          ← Workspace-isolated
 │   │   ├── active.jsonl           ← Active conversation
-│   │   ├── active.archive.jsonl   ← Pre-compressed shadow (raw tool results)
+│   │   ├── active.toolcache.jsonl   ← Pre-compressed shadow (raw tool results)
 │   │   ├── active.meta.json       ← Metadata
 │   │   ├── 20260701_120000.jsonl  ← Archived history (/new rotation)
-│   │   └── 20260701_120000.archive.jsonl
+│   │   └── 20260701_120000.toolcache.jsonl
 │   ├── __chat__/                  ← Non-workspace sessions
 │   ├── {root-hash}/checkpoints/   ← Git snapshots before file writes
 │   └── *.plan.json, *.pending.json

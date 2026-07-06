@@ -2,7 +2,7 @@
  * Row <-> domain mapping for refined turns.
  */
 
-import type { RefinedRow, RefinedTurn } from './types.js';
+import type { RefinedRow, RefinedTurn } from "./types.js";
 
 export function rowToTurn(row: RefinedRow): RefinedTurn {
   return {
@@ -10,10 +10,10 @@ export function rowToTurn(row: RefinedRow): RefinedTurn {
     turnId: row.turn_id,
     timestamp: row.timestamp ?? undefined,
     summary: row.summary,
-    facts: JSON.parse(row.facts || '[]'),
-    notes: JSON.parse(row.notes || '[]'),
+    facts: JSON.parse(row.facts || "[]"),
+    notes: JSON.parse(row.notes || "[]"),
     entities: JSON.parse(row.entities || '{"files":[],"tools":[],"errors":[]}'),
-    categories: JSON.parse(row.categories || '{}'),
+    categories: JSON.parse(row.categories || "{}"),
   };
 }
 

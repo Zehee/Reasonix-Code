@@ -47,10 +47,7 @@ function snipHintFor(name: string): SnipHint {
  * Unlike `shrinkOversizedToolResults` which truncates by char count,
  * this preserves the most informative lines per tool type.
  */
-export function snipToolResultByTool(
-  content: string,
-  toolName: string,
-): string {
+export function snipToolResultByTool(content: string, toolName: string): string {
   const hint = snipHintFor(toolName);
   const lines = content.split("\n");
   if (lines.length <= hint.head + hint.tail) return content;

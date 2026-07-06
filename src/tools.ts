@@ -2,15 +2,15 @@ import type { PauseGate } from "./core/pause-gate.js";
 import { truncateForModel, truncateForModelByTokens } from "./mcp/registry.js";
 import { sortToolSpecs } from "./memory/runtime.js";
 import { analyzeSchema, flattenSchema, nestArguments } from "./repair/flatten.js";
-import { normalizeToolDescriptor } from "./tools/schema-canon.js";
 import { countTokensBounded } from "./tokenizer.js";
+import { inferToolArgs } from "./tools/arg-inference.js";
 import {
   type NormalizedToolRateLimitConfig,
   type ToolRateLimitOption,
   ToolRateLimiter,
 } from "./tools/rate-limit.js";
-import { inferToolArgs } from "./tools/arg-inference.js";
 import type { ReadTracker } from "./tools/read-tracker.js";
+import { normalizeToolDescriptor } from "./tools/schema-canon.js";
 import { saveTruncatedResult, shouldSkipSave } from "./tools/truncated-result-saver.js";
 import type { JSONSchema, ToolSpec } from "./types.js";
 

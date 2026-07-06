@@ -156,10 +156,10 @@ src/
 ├── sessions/                      ← 所有会话
 │   ├── {workspace-slug}/          ← 按工作区隔离
 │   │   ├── active.jsonl           ← 当前活跃会话
-│   │   ├── active.archive.jsonl   ← 预压缩影子（工具结果原文）
+│   │   ├── active.toolcache.jsonl   ← 预压缩影子（工具结果原文）
 │   │   ├── active.meta.json       ← 元数据
 │   │   ├── 20260701_120000.jsonl  ← 历史归档（/new 轮转）
-│   │   └── 20260701_120000.archive.jsonl
+│   │   └── 20260701_120000.toolcache.jsonl
 │   ├── __chat__/                  ← 无工作区会话
 │   ├── {root-hash}/checkpoints/   ← 文件写入前的 git 快照
 │   └── *.plan.json, *.pending.json
