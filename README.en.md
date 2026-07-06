@@ -15,7 +15,9 @@
   <a href="https://github.com/Zehee/Reasonix-Code/stargazers"><img src="https://img.shields.io/github/stars/Zehee/Reasonix-Code?style=flat-square&color=dbab09&labelColor=161b22&logo=github&logoColor=white" alt="stars"/></a>
 </p>
 
-**Reasonix-Code** is a lightweight, transparent, and controllable coding agent purpose-built for developers who want their AI to remember decisions across sessions — without the overhead of vector databases, knowledge graphs, or opaque "AI memory" black boxes.
+**Reasonix-Code** is a lightweight, transparent, and controllable coding agent for developers who need AI to remember decisions across sessions — no vector databases, knowledge graphs, opaque "AI memory" black boxes, or MCP servers required.
+
+Built-in memory (`remember`, `forget`, `recall_memory`) and 49 native tools covering filesystem, code search, shell, planning, theme tracking, and more — zero external dependencies, ready out of the box.
 
 Built on the cache-first, flash-first loop of DeepSeek-Reasonix, our memory architecture is designed from the ground up for **coding scenarios**: deterministic turn refinement (no LLM), keyword-based search (no embeddings), and cross-session theme tracing in plain JSON files you can read and edit.
 
