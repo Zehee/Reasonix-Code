@@ -64,7 +64,15 @@ desktop/src-tauri/binaries/
 # MiMo Code plans and local state
 .mimocode/
 
+# Desktop app build artifacts
+desktop/node_modules/
+desktop/dist/
+desktop/src-tauri/target/
+desktop/src-tauri/binaries/
+desktop/src-tauri/Cargo.lock
+
 # Standalone binary (bun build --compile, distributed via GitHub Releases)
+build/*.exe
 
 # Atomic-write temp files
 *.tmp
