@@ -61,7 +61,10 @@ desktop/src-tauri/binaries/
 
 .probe-snapshots/
 
-# Standalone binary (bun build --compile, tracked via Git LFS)
+# MiMo Code plans and local state
+.mimocode/
+
+# Standalone binary (bun build --compile, distributed via GitHub Releases)
 
 # Atomic-write temp files
 *.tmp
