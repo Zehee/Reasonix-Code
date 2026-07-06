@@ -1,29 +1,83 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
 const HERE = resolve(import.meta.dirname);
+const DASHBOARD = resolve(HERE, "..", "dashboard");
 
-// Vite builds the dashboard/ frontend, output goes to desktop/dist/
+// Desktop Vite config — builds the dashboard frontend into desktop/dist/
 export default defineConfig({
-  root: resolve(HERE, "..", "dashboard"),
+  root: DASHBOARD,
   base: "./",
+  plugins: [
+    react(),
+    {
+      name: "dev-html-rewrite",
+      transformIndexHtml(html: string) {
+        return html
+          .replace('/assets/app.js?token=__REASONIX_TOKEN__', '/src/main.tsx')
+          .replace('/assets/app.css?token=__REASONIX_TOKEN__', '/src/styles.css');
+      },
+    },
+  ],
   build: {
     outDir: resolve(HERE, "dist"),
     emptyOutDir: true,
+    target: "es2022",
+    minify: "esbuild",
+    sourcemap: true,
+    rollupOptions: {
+      input: {
+        app: resolve(DASHBOARD, "src/main.tsx"),
+      },
+      output: {
+        entryFileNames: "app.js",
+        chunkFileNames: "[name].js",
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name === "app.css" || assetInfo.name === "index.css") return "app.css";
+          if (/\.(woff2?|ttf|otf)$/.test(assetInfo.name ?? "")) return "assets/[name].[ext]";
+          return "[name].[ext]";
+        },
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("/katex/")) return "vendor-katex";
+          if (
+            id.includes("/react-markdown/") ||
+            id.includes("/remark-") ||
+            id.includes("/rehype-") ||
+            id.includes("/mdast-") ||
+            id.includes("/micromark") ||
+            id.includes("/unist-") ||
+            id.includes("/hast-")
+          )
+            return "vendor-markdown";
+          if (id.includes("/prism-react-renderer/")) return "vendor-prism";
+          if (id.includes("/lucide-react/")) return "vendor-icons";
+          if (id.includes("/react-virtuoso/")) return "vendor-virtuoso";
+          if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("/scheduler/"))
+            return "vendor-react";
+        },
+      },
+    },
   },
   resolve: {
     alias: {
-      "@reasonix/core-utils": resolve(HERE, "..", "packages", "core-utils", "src"),
+      "@reasonix/core-utils/compaction": resolve(DASHBOARD, "../packages/core-utils/src/compaction.ts"),
+      "@reasonix/core-utils/derive-prefix": resolve(DASHBOARD, "../packages/core-utils/src/derive-prefix.ts"),
+      "@reasonix/core-utils": resolve(DASHBOARD, "../packages/core-utils/src/index.ts"),
+      "@tauri-apps/api/core": resolve(DASHBOARD, "src/lib/tauri-bridge.ts"),
+      "@tauri-apps/api/event": resolve(DASHBOARD, "src/lib/tauri-bridge.ts"),
+      "@tauri-apps/api/window": resolve(DASHBOARD, "src/lib/tauri-bridge.ts"),
+      "@tauri-apps/api/webview": resolve(DASHBOARD, "src/lib/tauri-bridge.ts"),
+      "@tauri-apps/plugin-dialog": resolve(DASHBOARD, "src/lib/tauri-bridge.ts"),
+      "@tauri-apps/plugin-opener": resolve(DASHBOARD, "src/lib/tauri-bridge.ts"),
+      "@tauri-apps/plugin-process": resolve(DASHBOARD, "src/lib/tauri-bridge.ts"),
     },
   },
   server: {
     port: 1420,
     strictPort: true,
   },
-  // Tauri expects a fixed port in production
   clearScreen: false,
   envPrefix: ["VITE_", "TAURI_"],
-  define: {
-    __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? "0.1.0"),
-  },
 });
