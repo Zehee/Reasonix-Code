@@ -2,7 +2,15 @@ import { countTokens, countTokensBounded } from "../tokenizer.js";
 import { ToolRegistry } from "../tools.js";
 import type { JSONSchema } from "../types.js";
 import type { McpClient } from "./client.js";
+import {
+  buildCachedHandshake,
+  cachedToolsToMcpTools,
+  loadCachedHandshake,
+  saveCachedHandshake,
+  specFingerprint,
+} from "./handshake-cache.js";
 import { LatencyTracker, type SlowEvent } from "./latency.js";
+import type { McpServerSpec } from "./spec.js";
 import type { CallToolResult, McpContentBlock, McpTool } from "./types.js";
 
 export interface BridgeOptions {
@@ -33,6 +41,17 @@ export interface BridgeOptions {
   ready?: Promise<void>;
   /** How long to wait on `ready` before failing the dispatch. Default 30_000ms. */
   readyTimeoutMs?: number;
+  /**
+   * MCP server spec for disk-caching the handshake result.
+   * When provided, `bridgeMcpTools` persists the tool list under
+   * `~/.reasonix/mcp-handshake/` keyed by a deterministic fingerprint
+   * of the spec fields (type, command/url, args, env, headers).
+   *
+   * On the next launch with the same spec, the cached tool list is used
+   * verbatim — same order, same schemas — preserving DeepSeek's prefix
+   * cache so the first API call hits instead of missing.
+   */
+  spec?: McpServerSpec;
 }
 
 /** Mutable holder so `/mcp reconnect` can swap the underlying client without re-bridging tools. */
@@ -81,6 +100,7 @@ export function registerSingleMcpTool(mcpTool: McpTool, env: BridgeEnv): string 
     name: registeredName,
     description: stableTool.description ?? "",
     parameters: stableTool.inputSchema as JSONSchema,
+    tier: "lazy",
     fn: async (args: Record<string, unknown>, ctx) => {
       if (env.ready) {
         await waitForReady(
@@ -191,10 +211,62 @@ export async function bridgeMcpTools(
     readyTimeoutMs: opts.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS,
     serverName,
   };
+  // When a spec is provided, try the disk-cached handshake first.
+  // A cache hit means the tool list is byte-identical to the previous session
+  // (same order, same canonicalized schemas) → DeepSeek prefix cache preserved.
+  let toolsRegistered = false;
+  if (opts.spec) {
+    const fingerprint = specFingerprint(opts.spec);
+    const cached = await loadCachedHandshake(serverName, fingerprint);
+    if (cached && cached.tools.length > 0) {
+      const cachedMcpTools = cachedToolsToMcpTools(cached.tools);
+      const stableCachedTools = cachedMcpTools
+        .map((tool) => canonicalizeMcpToolForCache(tool))
+        .sort((a, b) => `${prefix}${a.name}`.localeCompare(`${prefix}${b.name}`));
+      for (const mcpTool of stableCachedTools) {
+        if (!mcpTool.name) {
+          result.skipped.push({ name: "?", reason: "empty tool name" });
+          continue;
+        }
+        const registeredName = registerSingleMcpTool(mcpTool, env);
+        if (registeredName) result.registeredNames.push(registeredName);
+      }
+      toolsRegistered = true;
+    }
+  }
+
+  // Always fetch live tools: the cached registration above gives us a fast
+  // first pass (same order as last session = cache hit), but we still need
+  // the live list for correctness. If the live list differs, we re-register.
   const listed = await client.listTools();
   const stableTools = listed.tools
     .map((tool) => canonicalizeMcpToolForCache(tool))
     .sort((a, b) => `${prefix}${a.name}`.localeCompare(`${prefix}${b.name}`));
+
+  if (toolsRegistered) {
+    // Check whether live tools match the cached ones. If identical shape and
+    // order, keep the cached registration (already canonical & stable). Only
+    // re-register when something actually changed.
+    const liveNames = new Set(stableTools.map((t) => t.name));
+    const cachedNames = new Set(result.registeredNames.map((n) => n.replace(prefix, "")));
+    const sameSize = liveNames.size === cachedNames.size;
+    const sameMembers = [...liveNames].every((n) => cachedNames.has(n));
+    if (sameSize && sameMembers) {
+      // Update the cache timestamp.
+      if (opts.spec) {
+        const fingerprint = specFingerprint(opts.spec);
+        saveCachedHandshake(serverName, buildCachedHandshake(fingerprint, {}, listed.tools)).catch(() => {});
+      }
+      return { ...result, env };
+    }
+    // Tools changed — clear cached registration and re-bridge from live data.
+    result.registeredNames = [];
+    result.skipped = [];
+    for (const name of [...liveNames].map((n) => `${prefix}${n}`)) {
+      registry.unregister(name);
+    }
+  }
+
   for (const mcpTool of stableTools) {
     if (!mcpTool.name) {
       result.skipped.push({ name: "?", reason: "empty tool name" });
@@ -203,6 +275,13 @@ export async function bridgeMcpTools(
     const registeredName = registerSingleMcpTool(mcpTool, env);
     if (registeredName) result.registeredNames.push(registeredName);
   }
+
+  // Persist the live tool list for the next session's cache hit.
+  if (opts.spec) {
+    const fingerprint = specFingerprint(opts.spec);
+    saveCachedHandshake(serverName, buildCachedHandshake(fingerprint, {}, listed.tools)).catch(() => {});
+  }
+
   return { ...result, env };
 }
 

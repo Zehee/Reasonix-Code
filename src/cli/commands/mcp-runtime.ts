@@ -200,6 +200,7 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
         registry: tools,
         namePrefix,
         serverName: label,
+        spec,  // enables disk-cached handshake for prefix-stable tool registration
         host,
         ready,
         onProgress: (info) => ctx.progressSink.current?.(info),
@@ -214,7 +215,7 @@ export function createMcpRuntime(ctx: RuntimeContext): McpRuntime {
       // Tools are registered — record the bridge NOW so the UI shows
       // "bridged" even if later non-critical steps (inspect, hot-add) fail.
       const ms = Date.now() - t0;
-      const allSpecs = tools.specs();
+      const allSpecs = tools.allSpecs();
       const registeredSpecs = allSpecs.filter((s) =>
         bridge.registeredNames.includes(s.function.name),
       );

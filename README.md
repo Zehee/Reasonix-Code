@@ -3,9 +3,9 @@
 </p>
 
 <p align="center">
-  <strong>English</strong>
+  <a href="./README.en.md">English</a>
   &nbsp;·&nbsp;
-  <a href="./README.zh-CN.md">简体中文</a>
+  <strong>简体中文</strong>
 </p>
 
 <p align="center">
@@ -15,153 +15,241 @@
   <a href="https://github.com/Zehee/Reasonix-Code/stargazers"><img src="https://img.shields.io/github/stars/Zehee/Reasonix-Code?style=flat-square&color=dbab09&labelColor=161b22&logo=github&logoColor=white" alt="stars"/></a>
 </p>
 
-**Reasonix-Code** is a lightweight, transparent, and controllable coding agent purpose-built for developers who want their AI to remember decisions across sessions — without the overhead of vector databases, knowledge graphs, or opaque "AI memory" black boxes.
+**Reasonix-Code** 是一个轻量、透明、可控的编程 agent，专为需要 AI 记住跨 session 决策的开发者设计——不需要向量数据库、知识图谱或黑盒式的"AI 记忆"。
 
-Built on the cache-first, flash-first loop of DeepSeek-Reasonix, our memory architecture is designed from the ground up for **coding scenarios**: deterministic turn refinement (no LLM), keyword-based search (no embeddings), and cross-session theme tracing in plain JSON files you can read and edit.
+基于 DeepSeek-Reasonix 的 cache-first、flash-first 循环核心，我们的记忆架构从零开始为 **编程场景** 设计：确定性提炼（不用 LLM）、关键词搜索（不用 embedding）、跨 session 主题追溯（纯 JSON 文件，可读可改）。
 
-> **Status:** Active development. Independently evolved from the Reasonix TypeScript line (v0.x).
-
----
-
-## The problem
-
-Every coding agent faces the same fundamental fragmentation: **context compaction and session independence tear decisions apart.**
-
-A real example — you spend weeks building an auth module:
-- Day 1: decide on JWT + httpOnly cookie (vs localStorage)
-- Day 3: implement the login endpoint
-- Day 10: adjust cookie policy for Safari compatibility
-- Day 30: a new session, and the Agent suggests putting the refresh token in **localStorage** — contradicting the decision made 29 days ago.
-
-Each decision is in a separate session log. Between sessions, they're invisible to the Agent. This isn't a model capability problem — **it's an architecture problem.**
-
-Reasonix-Code's three-layer memory architecture solves this by automatically capturing, indexing, and linking decisions across sessions, so the Agent sees the full timeline before suggesting a contradictory approach.
+> **状态：** 活跃开发中。基于 Reasonix TypeScript 分支（v0.x），独立演进。
 
 ---
 
-## Key features
+## 问题所在
 
-### Three-layer memory architecture
+每个 coding agent 都面临同一个根本断裂：**上下文压缩和会话独立让决策碎片化。**
 
-Designed for cross-session decision tracing. When you work on a project over weeks, decisions like "why we chose JWT over session cookies" or "Safari cookie policy adjustments" are scattered across multiple sessions. Reasonix-Code automatically captures and links them.
+一个真实的例子——你花数周做一个认证模块：
+- 第 1 天：决定用 JWT + httpOnly cookie（而不是 localStorage）
+- 第 3 天：实现登录接口
+- 第 10 天：为 Safari 兼容调整 cookie 策略
+- 第 30 天：新 session 启动，Agent 竟然建议把 refresh token 放 **localStorage** —— 与 29 天前的决策直接矛盾。
+
+每一条决策都在独立的 session 日志里，跨 session 时 Agent 看不见。这不是模型能力问题——**这是架构问题。**
+
+Reasonix-Code 的三层记忆架构通过自动捕获、索引和关联跨 session 的决策来解决这个问题，让 Agent 在提出矛盾建议前先看到完整的时间线。
+
+---
+
+## 核心能力
+
+### 三层记忆架构
+
+专为跨 session 决策追溯设计。当你花数周做一个项目时，"为什么选 JWT 而不是 session cookie"、"Safari cookie 策略调整"等决策散落在多个 session 中。Reasonix-Code 自动捕获并串联它们。
 
 ```
 ┌──────────────────────────────────────────────┐
-│  Layer 1: Raw (session logs)                  │
+│  第一层：原始日志                              │
 │  ~/.reasonix/sessions/*.jsonl                 │
-│  Read-only audit trail                        │
+│  只读审计                                     │
 ├──────────────────────────────────────────────┤
-│  Layer 2: Material Library                    │
+│  第二层：材料库                                │
 │  ~/.reasonix/refined/<ws>.sqlite              │
 │  ~/.reasonix/searches/*.json                  │
-│  Deterministic turn refinement + search       │
+│  确定性提炼 + 跨 session 搜索                  │
 ├──────────────────────────────────────────────┤
-│  Layer 3: Thematic (topic tracking)           │
+│  第三层：主题关联                               │
 │  ~/.reasonix/themes/*.json                    │
-│  Cross-session topic timelines                │
+│  跨 session 的主题时间线                        │
 └──────────────────────────────────────────────┘
 ```
 
-### Deterministic refinement (no LLM)
+### 确定性提炼（不用 LLM）
 
-Turn extraction uses keyword rules + Markdown structure analysis. Zero LLM calls, zero external dependencies. Fast, reproducible, explainable.
+基于关键词规则 + Markdown 结构分析。零 LLM 调用、零外部依赖。快速、可复现、可解释。
 
 ```json
 {
   "sessionId": "abcd-...",
   "turnId": 12,
-  "summary": "Decided on JWT + httpOnly cookie over localStorage",
-  "facts": ["JWT + httpOnly cookie selected"],
+  "summary": "决定用 JWT + httpOnly cookie，不用 localStorage",
+  "facts": ["JWT + httpOnly cookie 方案胜出"],
   "entities": { "files": ["src/auth/login.ts"], "tools": ["Write", "Edit"], "errors": [] }
 }
 ```
 
-### Search-as-you-scan
+### 搜索即打捞
 
-`search_context "auth JWT cookie"` hits the SQLite index, clusters adjacent turns (90s time window), and auto-refines unprocessed turns. The search itself builds the material library.
+`search_context "auth JWT cookie"` 命中 SQLite 索引后，自动将相邻 turn 按时间窗口聚簇（90 秒），并提炼未处理的 turn。搜索本身就在构建材料库。
 
-### Cross-session theme tracing
+### 跨 session 主题追溯
 
 ```
 tag_theme "auth-flow" with sessionId="..." turnId=12
 trace_theme "auth-flow"
-  → Timeline of all related decisions, sorted chronologically
-  → Even if they span 3 weeks and 8 sessions
+  → 按时间线展示所有相关决策
+  → 即使跨越 3 周、8 个 session
 ```
 
-### Cache-first, flash-first loop
+### Cache-first 循环
 
-The original DeepSeek optimization core: automatic prefix caching, flash-model line for cost control, aggressive context folding only when needed.
+继承 DeepSeek 核心优化：自动前缀缓存、flash 模型成本控制、智能上下文折叠。
 
 ---
 
-## Installation
+## 安装
 
 ### Windows (PowerShell)
 
 ```powershell
-# Download and install (auto-adds to PATH, restart terminal after)
+# 下载并安装（自动加入 PATH，重启终端后生效）
 irm https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.ps1 | iex
 ```
 
-### Manual (standalone binary)
+### 独立二进制
 
 ```powershell
-# Download the latest release
+# 下载最新版本
 iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.0.exe -OutFile reasonix.exe
 ```
 
 ---
 
-## Quick start
+## 快速开始
 
 ```bash
-# First run: setup wizard guides you through API key configuration.
-# After that, cd into your project directory and run:
-reasonix              # auto-detects cwd as workspace, enters code mode
-reasonix chat         # interactive chat (no filesystem)
+# 首次运行：设置向导引导你配置 API Key。
+# 配置完成后，进入项目目录执行：
+reasonix              # 自动将当前目录作为工作区，进入代码模式
+reasonix chat         # 交互式对话（无文件系统）
 ```
 
-### From source (Node.js >=22 required)
+### 源码运行（需 Node.js >=22）
 
 ```bash
 git clone https://github.com/Zehee/Reasonix-Code.git
 cd Reasonix-Code
 npm install
-npm run dev code      # code mode
-npm run dev chat      # interactive chat
+npm run dev code      # 代码模式
+npm run dev chat      # 交互式对话
 ```
 
 ---
 
-## Architecture overview
+## 架构概览
 
 ```
 src/
 ├── cli/           Commander.js + Ink TUI
-├── code/          Code mode toolset setup
-├── tools/         Tool registry (filesystem, shell, memory, refine, theme)
-├── refine/        Turn refinement engine (deterministic, no LLM)
-├── themes/        Cross-session theme tracking
-├── memory/        Session storage, project memory, user memory
-├── loop/          CacheFirstLoop, dispatch, healing
-├── mcp/           MCP client + transports
-└── index/         Index exports
+├── code/          代码模式工具集装配
+├── tools/         工具注册（文件系统、shell、记忆、提炼、主题）
+├── refine/        对话轮次提炼引擎（确定性，不用 LLM）
+├── themes/        跨 session 主题追踪
+├── memory/        会话存储、项目记忆、用户记忆
+├── loop/          CacheFirstLoop、调度、修复
+├── mcp/           MCP 客户端 + 传输层
+└── index/         导出入口
+```
+
+### 存储布局
+
+```
+~/.reasonix/
+├── sessions/{workspace-slug}/    ← 会话按工作区隔离
+│   ├── active.jsonl              ← 当前活跃会话
+│   ├── active.archive.jsonl      ← 预压缩影子（原始工具结果）
+│   ├── active.meta.json          ← 元数据（用量、缓存诊断）
+│   ├── 20260701_120000.jsonl     ← 历史归档（/new 轮转）
+│   └── 20260701_120000.archive.jsonl
+├── refined/{workspace-slug}/     ← 提炼索引（每工作区独立 SQLite）
+│   └── refined.sqlite
+├── mcp-handshake/                ← MCP 握手缓存（全局共享）
+├── memory/                       ← 用户记忆 + 项目记忆
+└── config.json
 ```
 
 ---
 
-## Relationship to upstream
+## 缓存策略
 
-Reasonix-Code is a fork of [DeepSeek-Reasonix](https://github.com/esengine/DeepSeek-Reasonix) (TypeScript v0.x line). Key differences:
+Reasonix-Code 的 **cache-first 循环**最大化 DeepSeek 前缀缓存命中率 —— 每次缓存命中比未命中**便宜 50 倍**（$0.0028 vs $0.14 每 1M 输入 token）。策略分为三层：
 
-- **Independent direction** — not bound to the Go rewrite (main-v2) roadmap
-- **Three-layer memory** — RFC #5539 design, not the v5 memory model
-- **Robustness first** — self-healing session identifiers, redundant metadata, crash-safe writes
-- **No npm publish** — distributed via GitHub Releases + `irm`
+### 1. 前缀稳定性
+
+不可变前缀（系统提示词 + 工具 schema + few-shots）通过哈希保持跨轮次字节一致。关键机制：
+
+- **`sortToolSpecs()`** — 本地编码点排序，工具顺序永不变化
+- **`canonicalizeMcpToolForCache()`** — 递归排序 JSON Schema 键，MCP 工具 schema 字节稳定
+- **`_frozenToolsCache`** — 冻结工具快照，避免重复克隆
+- **推理内容连续性** — 旧 `reasoning_content` 不在轮次间剥离（保持消息内容 ⇒ 缓存命中）
+
+### 2. 主动压缩（归档 + 折叠）
+
+不等 75% 折叠阈值，系统主动压缩旧工具噪音。
+
+```
+┌─ 正常运行 ─────────────────────────────────────┐
+│                                                  │
+│  保留最近 5 轮完整信息                            │
+│  更早轮次：工具噪音 → JSONL 侧边存储              │
+│  主上下文：`[archived: read_file (2841 字符)]`    │
+│                                                  │
+│  ⇒ 每轮减少约 40% token                          │
+│  ⇒ 折叠延迟约 67% 的轮数                          │
+│                                                  │
+└──────────────────────────────────────────────────┘
+┌─ 折叠触发时 ────────────────────────────────────┐
+│                                                  │
+│  摘要器从 JSONL 归档读取原始内容                   │
+│  看到完整工具历史，而非仅引用                      │
+│  生成包含所有细节的更好的摘要                      │
+│                                                  │
+└──────────────────────────────────────────────────┘
+┌─ 缓存对齐折叠 ──────────────────────────────────┐
+│                                                  │
+│  partitionFoldRegion()：                          │
+│  - 保留前序摘要不变                               │
+│  - 保留小用户 turn（用户陈述的事实永不丢失）         │
+│  - 仅折叠工具结果 + 大响应                         │
+│  ⇒ 二次折叠时旧摘要仍在缓存中命中                   │
+│                                                  │
+└──────────────────────────────────────────────────┘
+```
+
+### 3. 错误容忍
+
+工具调用错误被宽容处理，避免浪费轮次：
+
+- **`lenientJsonParse()`** — 5 种修复策略（包裹花括号、去除尾逗号、单引号转双引号、去键引号）
+- **`inferToolArgs()`** — 模糊参数名匹配（`path` ↔ `file` ↔ `filepath`）、函数调用风格解析、Shell KV 格式
+- **`fillMissingRequiredParam()`** — 缺失 required 参数自动填充类型默认值（string → `""`，number → `0`）
+- **`shrinkToolResultForCacheStability()`** — 超大结果在追加时截断，非中间轮次
+
+### MCP 握手缓存
+
+MCP 服务器握手结果持久化到 `~/.reasonix/mcp-handshake/`，以确定性 spec 指纹（类型、command/url、args、env、headers——排序后哈希）为键。重启时工具从缓存以相同顺序注册 —— 无需等待握手，不会前缀缓存失效。
+
+### 基准数据
+
+| 指标 | 无优化 | 带缓存策略 |
+|--------|-------|----------|
+| 输入费用（20 轮会话） | ~$0.037 | ~$0.016（**省 57%**） |
+| 到达 75% 折叠阈值前的轮数 | ~166 | ~277（**+67%**） |
+| 轮次切换缓存未命中 | 100%（reasoning 被剥离） | ~20%（reasoning 保留） |
+| 会话恢复缓存命中 | 0%（内容被愈合改变） | ~80%（内容保持） |
+| MCP 工具重启顺序 | 随机 | 确定性（缓存） |
 
 ---
 
-## License
+## 与上游的关系
 
-MIT — see [LICENSE](./LICENSE).
+Reasonix-Code 是 [DeepSeek-Reasonix](https://github.com/esengine/DeepSeek-Reasonix)（TypeScript v0.x 分支）的一个 fork。主要区别：
+
+- **独立方向** — 不跟随 Go 重写版本（main-v2）的路线
+- **三层记忆** — 实现 RFC #5539 设计，不采用 v5 memory 模型
+- **鲁棒性优先** — 自愈 session ID、冗余元数据、崩溃安全写入
+- **不发 npm 包** — 通过 GitHub Releases + `irm` 分发
+
+---
+
+## 许可证
+
+MIT — 见 [LICENSE](./LICENSE)。

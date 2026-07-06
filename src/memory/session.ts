@@ -40,6 +40,7 @@ import type { ChatMessage } from "../types.js";
 
 const SESSION_SIDECAR_EXTS = [
   ".events.jsonl",
+  ".archive.jsonl",
   ".meta.json",
   ".pending.json",
   ".plan.json",
@@ -102,17 +103,40 @@ export interface SessionMeta {
   importedPath?: string;
 }
 
-export function sessionsDir(): string {
-  return join(homedir(), ".reasonix", "sessions");
+/**
+ * Session storage root. When `subdir` is provided, returns
+ * `sessions/{subdir}/` — used for workspace-isolated sessions.
+ * Without subdir, returns `sessions/` for flat (chat) sessions.
+ */
+export function sessionsDir(subdir?: string): string {
+  const base = join(homedir(), ".reasonix", "sessions");
+  return subdir ? join(base, subdir) : base;
 }
 
+/**
+ * Resolve the path for a session JSONL file.
+ * Name format:
+ *   - `"active"`                  → sessions/active.jsonl (flat, chat mode)
+ *   - `"{workspace}/active"`      → sessions/{workspace}/active.jsonl
+ *   - `"{workspace}/20260701_120000"` → sessions/{workspace}/20260701_120000.jsonl
+ */
 export function sessionPath(name: string): string {
+  const parts = name.split("/");
+  if (parts.length === 2) {
+    const [subdir, base] = parts;
+    return join(sessionsDir(sanitizeName(subdir!)), `${sanitizeName(base!)}.jsonl`);
+  }
   return join(sessionsDir(), `${sanitizeName(name)}.jsonl`);
 }
 
 export function sanitizeName(name: string): string {
   const cleaned = name.replace(/[^\w\-\u4e00-\u9fa5]/g, "_").slice(0, 64);
   return cleaned || "default";
+}
+
+/** Deterministic workspace slug from a project root path. Used for session directory isolation and refined index paths. */
+export function workspaceSlug(root: string): string {
+  return root.replace(/[/\\:]/g, "-").replace(/^-+/, "").toLowerCase();
 }
 
 /** RFC 4122 UUID v4 — stable session identifier that survives file renames and meta.json loss. */
@@ -209,7 +233,7 @@ export function findSessionsByPrefix(prefix: string): string[] {
   if (!existsSync(dir)) return [];
   try {
     const files = readdirSync(dir)
-      .filter((f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && f.startsWith(prefix))
+      .filter((f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".archive.jsonl") && f.startsWith(prefix))
       .sort()
       .reverse();
     return files.map((f) => f.replace(/\.jsonl$/, ""));
@@ -386,24 +410,34 @@ export function listSessions(opts?: {
 }): SessionInfo[] {
   const dir = sessionsDir();
   if (!existsSync(dir)) return [];
-  const want = opts?.workspaceFilter ? normalizeWorkspace(opts.workspaceFilter) : null;
+  const want = opts?.workspaceFilter ? normalizeWorkspace(opts?.workspaceFilter) : null;
   const legacyPrefix =
     want && opts?.includeLegacyWorkspaceMatches
-      ? legacySessionPrefixForWorkspace(opts.workspaceFilter!)
+      ? legacySessionPrefixForWorkspace(opts?.workspaceFilter!)
       : null;
+
   try {
-    // Exclude `.events.jsonl` sidecars — they share the .jsonl suffix.
-    const files = readdirSync(dir).filter(
-      (f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl"),
-    );
-    return files
-      .flatMap((file) => {
-        const path = join(dir, file);
-        const name = file.replace(/\.jsonl$/, "");
+    // Collect all .jsonl files from root + workspace subdirectories
+    const entries: Array<{ name: string; path: string }> = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith(".jsonl") &&
+          !entry.name.endsWith(".events.jsonl") &&
+          !entry.name.endsWith(".archive.jsonl")) {
+        entries.push({ name: entry.name.replace(/\.jsonl$/, ""), path: join(dir, entry.name) });
+      } else if (entry.isDirectory()) {
+        // Workspace subdirectory — scan for .jsonl files
+        const subdir = join(dir, entry.name);
+        for (const f of readdirSync(subdir)) {
+          if (f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".archive.jsonl")) {
+            entries.push({ name: `${entry.name}/${f.replace(/\.jsonl$/, "")}`, path: join(subdir, f) });
+          }
+        }
+      }
+    }
+
+    return entries
+      .flatMap(({ name, path }) => {
         const meta = loadSessionMeta(name);
-        // Workspace pre-filter: cheap meta read first, skip the
-        // (potentially multi-MB) jsonl read for sessions that don't
-        // belong to the current workspace. Issue #1179.
         let workspaceStatus: SessionInfo["workspaceStatus"] | undefined;
         if (want !== null) {
           if (typeof meta.workspace === "string") {
@@ -499,7 +533,7 @@ function listSessionsForPromptHistory(workspace?: string): PromptHistorySessionI
   } else {
     try {
       const files = readdirSync(dir).filter(
-        (f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl"),
+        (f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".archive.jsonl"),
       );
       sessions = files.flatMap((file) => {
         const path = join(dir, file);
@@ -636,7 +670,8 @@ export function patchSessionWorkspaceIfMissing(name: string, workspace: string):
 }
 
 function metaPath(name: string): string {
-  return join(sessionsDir(), `${sanitizeName(name)}.meta.json`);
+  const base = name.includes("/") ? sanitizeName(name.split("/")[1]!) : sanitizeName(name);
+  return join(dirname(sessionPath(name)), `${base}.meta.json`);
 }
 
 export function loadSessionMeta(name: string): SessionMeta {
@@ -759,10 +794,11 @@ export function archiveSession(name: string): string | null {
   } catch {
     return null;
   }
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const target = `${name}__archive_${timestampSuffix()}${attempt > 0 ? `_${attempt}` : ""}`;
-    if (renameSession(name, target)) return target;
-  }
+  const dir = dirname(path);
+  const ts = timestampSuffix();
+  const target = `${ts}`; // sessions/{workspace}/20260701_120000
+  const fullName = name.includes("/") ? `${name.split("/")[0]}/${target}` : target;
+  if (renameSession(name, fullName)) return fullName;
   return null;
 }
 
@@ -894,7 +930,7 @@ export async function findSessionsByPrefixAsync(prefix: string): Promise<string[
   const dir = sessionsDir();
   try {
     const files = (await readdir(dir))
-      .filter((f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && f.startsWith(prefix))
+      .filter((f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".archive.jsonl") && f.startsWith(prefix))
       .sort()
       .reverse();
     return files.map((f) => f.replace(/\.jsonl$/, ""));
@@ -1059,7 +1095,7 @@ export async function listSessionsAsync(opts?: {
       : null;
   try {
     const files = (await readdir(dir)).filter(
-      (f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl"),
+      (f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".archive.jsonl"),
     );
     const results = await Promise.all(
       files.flatMap(async (file) => {

@@ -6,17 +6,14 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ToolRegistry, ToolCallContext } from "../tools.js";
 import { RefinedManager } from "../refine/refined-manager.js";
-import { existsSync, readdirSync } from "node:fs";
-import { sessionsDir, loadSessionMessages, loadSessionMeta } from "../memory/session.js";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { sessionsDir, sessionPath, workspaceSlug, loadSessionMessages, loadSessionMeta } from "../memory/session.js";
+import { ARCHIVE_MARKER } from "../memory/archiver.js";
 import type { RawTurn, RawAction, RefinedTurn } from "../refine/types.js";
-
-function workspaceslug(root: string): string {
-  return root.replace(/[/\\:]/g, "-").replace(/^-+/, "").toLowerCase();
-}
 
 function getRefinedRoot(): string {
   const cwd = process.cwd();
-  const slug = workspaceslug(cwd);
+  const slug = workspaceSlug(cwd);
   return join(homedir(), ".reasonix", "refined", slug);
 }
 
@@ -184,7 +181,7 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
         const dir = sessionsDir();
         if (existsSync(dir)) {
           const files = readdirSync(dir)
-            .filter((f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl"))
+            .filter((f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".archive.jsonl"))
             .sort()
             .reverse();
           if (files.length > 0) {
@@ -213,5 +210,147 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
     },
   });
 
+  registry.register({
+    name: "load_turns_context",
+    description: `批量加载指定会话轮次的完整原始内容。读取 session JSONL 和归档 JSONL，还原被压缩的工具结果。
+
+参数:
+- references: 要加载的 { sessionName, turnId } 引用数组（必填，最多 20 个）
+
+返回每轮的完整对话内容（user + assistant + tool 消息原文）。
+找不到的引用会列在 notFound 中。
+
+典型用途：
+1. 先用 search_context 搜索到匹配的轮次
+2. 然后用 load_turns_context 加载这些轮次的完整内容
+3. 基于完整内容做分析或决策`,
+    parameters: {
+      type: "object",
+      properties: {
+        references: {
+          type: "array",
+          description: "{ sessionName, turnId } 引用数组",
+          items: {
+            type: "object",
+            properties: {
+              sessionName: { type: "string", description: "会话名称" },
+              turnId: { type: "number", description: "轮次编号" },
+            },
+            required: ["sessionName", "turnId"],
+          },
+        },
+      },
+      required: ["references"],
+    },
+    fn: async (args: Record<string, unknown>, _ctx?: ToolCallContext): Promise<string> => {
+      const rawRefs = args.references;
+      if (!Array.isArray(rawRefs) || rawRefs.length === 0) {
+        return JSON.stringify({ error: "references must be a non-empty array", rounds: [], notFound: [] });
+      }
+
+      const refs = rawRefs
+        .filter((r): r is { sessionName: string; turnId: number } =>
+          r !== null && typeof r === "object" &&
+          typeof (r as Record<string, unknown>).sessionName === "string" &&
+          typeof (r as Record<string, unknown>).turnId === "number",
+        )
+        .slice(0, 20);
+
+      if (refs.length === 0) {
+        return JSON.stringify({ error: "no valid references", rounds: [], notFound: [] });
+      }
+
+      // Group by sessionName
+      const bySession = new Map<string, Set<number>>();
+      for (const ref of refs) {
+        if (!bySession.has(ref.sessionName)) {
+          bySession.set(ref.sessionName, new Set<number>());
+        }
+        bySession.get(ref.sessionName)!.add(ref.turnId);
+      }
+
+      const rounds: Array<{ sessionName: string; turnId: number; messages: import("../types.js").ChatMessage[] }> = [];
+      const notFound: Array<{ sessionName: string; turnId: number }> = [];
+
+      for (const [sessionName, turnIds] of bySession.entries()) {
+        let messages: import("../types.js").ChatMessage[];
+        try {
+          messages = loadSessionMessages(sessionName);
+        } catch {
+          for (const turnId of turnIds) notFound.push({ sessionName, turnId });
+          continue;
+        }
+
+        // Restore archived content
+        restoreArchivedContentSync(sessionName, messages);
+
+        // Group messages by turn: user → … → next user or end
+        let currentTurnMessages: import("../types.js").ChatMessage[] = [];
+        let currentTurnId: number | undefined;
+        const turnMap = new Map<number, import("../types.js").ChatMessage[]>();
+
+        for (const msg of messages) {
+          const msgTurnId = msg.turnId ?? 0;
+          if (msg.role === "user" && currentTurnId !== undefined && currentTurnMessages.length > 0) {
+            turnMap.set(currentTurnId, currentTurnMessages);
+            currentTurnMessages = [];
+          }
+          if (msg.role === "user") {
+            currentTurnId = msgTurnId;
+          }
+          currentTurnMessages.push(msg);
+        }
+        if (currentTurnId !== undefined && currentTurnMessages.length > 0) {
+          turnMap.set(currentTurnId, currentTurnMessages);
+        }
+
+        for (const turnId of turnIds) {
+          const turnMessages = turnMap.get(turnId);
+          if (turnMessages) {
+            rounds.push({ sessionName, turnId, messages: turnMessages });
+          } else {
+            notFound.push({ sessionName, turnId });
+          }
+        }
+      }
+
+      return JSON.stringify({ rounds, notFound });
+    },
+  });
+
   return registry;
+}
+
+/**
+ * Synchronously load archive entries and restore archived tool content
+ * in a messages array. Used by `sessionToRawTurns` to ensure the refined
+ * index captures full detail even after proactive archiving.
+ */
+function restoreArchivedContentSync(sessionName: string, messages: import("../types.js").ChatMessage[]): void {
+  // Archive path = sessionPath + .archive.jsonl
+  const archivePath = sessionPath(sessionName) + ".archive.jsonl";
+  try {
+    if (!existsSync(archivePath)) return;
+    const raw = readFileSync(archivePath, "utf-8");
+    const entries = new Map<string, string>();
+    for (const line of raw.split("\n").filter(Boolean)) {
+      const parsed = JSON.parse(line) as { toolCallId: string; content: string };
+      if (parsed.toolCallId) {
+        entries.set(parsed.toolCallId, parsed.content);
+      }
+    }
+    if (entries.size === 0) return;
+    for (const msg of messages) {
+      if (msg.role !== "tool") continue;
+      if (typeof msg.content !== "string") continue;
+      if (!msg.content.startsWith(ARCHIVE_MARKER)) continue;
+      const id = msg.tool_call_id ?? "";
+      const original = entries.get(id);
+      if (original) {
+        msg.content = original;
+      }
+    }
+  } catch {
+    // Best-effort.
+  }
 }

@@ -6,6 +6,8 @@
 import { Box } from "ink";
 import React from "react";
 
+import type { PlanStep } from "../../tools/plan.js";
+import { PlanProposalCard } from "./cards/PlanProposalCard.js";
 import { OngoingToolRow, SubagentLiveStack, ThinkingRow, UndoBanner } from "./layout/LiveRows.js";
 import { ToastRail } from "./layout/ToastRail.js";
 import { PlanLiveRow } from "./layout/plan-live-row.js";
@@ -33,6 +35,10 @@ export interface LiveActivityAreaProps {
   activityLabel: string;
   undoBanner: UndoBannerState | null;
   hideUndo: boolean;
+  /** When set, renders the inline PlanProposalCard in the live area. */
+  pendingPlan?: string;
+  planSteps?: PlanStep[];
+  planSummary?: string;
 }
 
 // ── Component ─────────────────────────────────────────────────────
@@ -50,10 +56,16 @@ export const LiveActivityArea: React.FC<LiveActivityAreaProps> = React.memo(
     activityLabel,
     undoBanner,
     hideUndo,
+    pendingPlan,
+    planSteps,
+    planSummary,
   }) => {
     useRenderTrace("LiveActivityArea");
     return (
       <Box flexDirection="column" flexShrink={0} flexWrap="nowrap">
+        {pendingPlan ? (
+          <PlanProposalCard body={pendingPlan} steps={planSteps} summary={planSummary} />
+        ) : null}
         {noTakeoverOverlay && ongoingTool ? (
           <OngoingToolRow
             tool={ongoingTool}

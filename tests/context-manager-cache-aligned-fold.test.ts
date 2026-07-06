@@ -238,7 +238,7 @@ describe("ContextManager fold sends cache-aligned summary request", () => {
     expect(instruction).toContain('"explore"');
   });
 
-  it("trailing instruction is the only message after the head — everything before is cache prefix", async () => {
+  it("summarizer receives only foldable messages + trailing instruction", async () => {
     const captured: CapturedRequest[] = [];
     const client = new DeepSeekClient({
       apiKey: "sk-test",
@@ -255,12 +255,16 @@ describe("ContextManager fold sends cache-aligned summary request", () => {
     await loop.compactHistory({ keepRecentTokens: 40 });
     const req = captured[0]!;
     const last = req.messages[req.messages.length - 1]!;
-    const secondLast = req.messages[req.messages.length - 2]!;
 
     expect(last.role).toBe("user");
-    // The instruction sits adjacent to the original head's final message —
-    // no separator / wrapper that would push the cache-miss boundary inward.
-    expect(secondLast).toBeDefined();
-    expect(secondLast.role === "assistant" || secondLast.role === "tool").toBe(true);
+    // With partitionFold, the foldable messages (before the trailing
+    // instruction) are only the items that weren't kept verbatim —
+    // prior summaries and small user turns are excluded from the
+    // summarizer's request. The messages sent are a contiguous subset
+    // of the original log (fewer messages than the head).
+    expect(last.content).toContain("Summarize");
+    // At least one foldable message exists before the instruction.
+    const beforeLast = req.messages[req.messages.length - 2];
+    expect(beforeLast).toBeDefined();
   });
 });

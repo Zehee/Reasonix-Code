@@ -2857,13 +2857,19 @@ function AppInner({
       // Slash-argument picker intercept —same shape as @-picker. For
       // file pickers (/edit) we splice + trailing space so the user
       // keeps typing the instruction. For enum pickers (/effort,
-      // /model, /plan) we splice without trailing space; those
-      // commands take no further args, so the user presses Enter a
-      // second time to run.
+      // /model, /plan, /mode) we splice the value AND submit
+      // immediately — one Enter to pick + run.
       if (slashArgMatches && slashArgMatches.length > 0 && slashArgContext) {
         const sel = slashArgMatches[slashArgSelected] ?? slashArgMatches[0];
         if (sel) {
+          const isEnum = Array.isArray(slashArgContext.spec.argCompleter);
           pickSlashArg(sel);
+          if (isEnum) {
+            // Enum picker: value inserted (no trailing space), submit now.
+            const submitted = `${input.slice(0, slashArgContext.partialOffset)}${sel}`;
+            setInput("");
+            handleSubmit(submitted);
+          }
           return;
         }
       }
@@ -4493,6 +4499,9 @@ function AppInner({
                       pendingCheckpoint
                     )
                   }
+                  pendingPlan={pendingPlan ?? undefined}
+                  planSteps={planStepsRef.current ?? undefined}
+                  planSummary={planSummaryRef.current ?? undefined}
                 />
               </Box>
               {pendingPlan && !stagedInput && !pendingReviseEditor ? (

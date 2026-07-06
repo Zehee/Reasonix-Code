@@ -11,6 +11,7 @@ import {
 } from "./mcp/registry.js";
 
 import { ContextManager, TURN_START_FOLD_THRESHOLD } from "./context-manager.js";
+import { resolveContextTokens } from "./telemetry/stats.js";
 import { InflightSet } from "./core/inflight.js";
 import { t } from "./i18n/index.js";
 import { dispatchToolCallsChunked } from "./loop/dispatch.js";
@@ -31,7 +32,6 @@ import {
 } from "./loop/healing.js";
 import { hookWarnings, safeParseToolArgs } from "./loop/hook-events.js";
 import { buildAssistantMessage, buildSyntheticAssistantMessage } from "./loop/messages.js";
-import { stripDroppableReasoningContent } from "./loop/reasoning-retention.js";
 import {
   looksLikeCompleteJson,
   shrinkOversizedToolCallArgsByTokens,
@@ -46,6 +46,7 @@ import {
 } from "./loop/thinking.js";
 import type { LoopEvent } from "./loop/types.js";
 import { AppendOnlyLog, type ImmutablePrefix, VolatileScratch } from "./memory/runtime.js";
+import { TurnArchiver } from "./memory/archiver.js";
 import {
   appendSessionMessage,
   archiveSession,
@@ -149,6 +150,18 @@ function shrinkMessageForRetention(message: ChatMessage): ChatMessage {
   );
 }
 
+/** Shrink oversized tool results on append so the content is stable from the
+ *  first API call — the healing pipeline (healActiveLogBeforeSend) would
+ *  otherwise truncate oversized results between API calls, changing message
+ *  content mid-turn and invalidating DeepSeek's prefix cache. */
+function shrinkToolResultForCacheStability(message: ChatMessage): ChatMessage {
+  if (message.role !== "tool") return message;
+  const content = typeof message.content === "string" ? message.content : "";
+  if (content.length <= DEFAULT_MAX_RESULT_CHARS) return message;
+  const [shrunk] = shrinkOversizedToolResults([message], DEFAULT_MAX_RESULT_CHARS).messages;
+  return shrunk ?? message;
+}
+
 export class CacheFirstLoop {
   readonly client: DeepSeekClient;
   readonly prefix: ImmutablePrefix;
@@ -222,6 +235,8 @@ export class CacheFirstLoop {
   private _foldedThisTurn = false;
   private context!: ContextManager;
   private _lastCacheShape: CacheShapeSnapshot | null = null;
+  /** Proactive turn archiver — strips old tool noise from the main context. */
+  private readonly _archiver: TurnArchiver;
 
   /** Subscribe API so UI hooks can derive `running` from finally-guaranteed insertions. */
   get inflight(): InflightSet {
@@ -271,15 +286,23 @@ export class CacheFirstLoop {
       stormWindow: parsePositiveIntEnv(process.env.REASONIX_STORM_WINDOW),
     });
 
+    // Proactive archiver — must be initialized before session loading
+    // so the startup archive pass can use it.
+    this._archiver = new TurnArchiver(this.sessionName);
+
     // Heal-on-load: oversized tool results would 400 the next call before the user types.
     if (this.sessionName) {
       const prior = loadSessionMessages(this.sessionName);
       const shrunk = healLoadedMessagesByTokens(prior, DEFAULT_MAX_RESULT_TOKENS);
-      // Thinking-mode sessions still need tool-call reasoning_content, while stale
-      // plain-turn reasoning can be dropped before it bloats long-session requests.
-      const stamped = stampMissingReasoningForThinkingMode(shrunk.messages, this.model);
-      const pruned = stripDroppableReasoningContent(stamped.messages);
-      const messages = pruned.messages;
+      // Stamp only tool-call messages (the minimum needed for round-trip
+      // safety). Plain-turn reasoning is NOT stripped on resume — it was
+      // preserved during the session for cache continuity, and stripping
+      // it here would change message content vs what DeepSeek cached from
+      // the previous session's last API call.
+      const stamped = stampMissingReasoningForThinkingMode(shrunk.messages, this.model, {
+        toolCallsOnly: true,
+      });
+      const messages = stamped.messages;
       const healedCount = shrunk.healedCount + stamped.stampedCount;
       const tokensSaved = shrunk.tokensSaved;
       this.log.initWindow(messages);
@@ -298,7 +321,7 @@ export class CacheFirstLoop {
           lastPromptTokens: meta.lastPromptTokens,
         });
       }
-      if (healedCount > 0 || pruned.prunedCount > 0) {
+      if (healedCount > 0) {
         // Persist healed log so the same break isn't re-noticed every restart.
         try {
           rewriteSession(this.sessionName, messages);
@@ -311,6 +334,19 @@ export class CacheFirstLoop {
           );
         }
       }
+
+      // Archive old tool noise at startup so the session is loaded in
+      // compressed form — this is the main contributor to fast start.
+      this._archiver.archivePreviousTurnNoise(messages, this._turn).then((archived) => {
+        if (archived > 0) {
+          this.log.compactInPlace(messages);
+          if (this.sessionName) {
+            try {
+              rewriteSession(this.sessionName, messages);
+            } catch { /* best-effort */ }
+          }
+        }
+      }).catch(() => {});
     } else {
       this.resumedMessageCount = 0;
     }
@@ -345,7 +381,10 @@ export class CacheFirstLoop {
   }
 
   appendAndPersist(message: ChatMessage): void {
-    const retained = shrinkMessageForRetention(message);
+    // Shrink oversized content on append so the message is byte-identical from
+    // the first API call — deferred shrinking in the healing pipeline would
+    // change content between calls and invalidate DeepSeek's prefix cache.
+    const retained = shrinkToolResultForCacheStability(shrinkMessageForRetention(message));
     this.log.append(retained);
     if (this.sessionName) {
       try {
@@ -609,7 +648,7 @@ export class CacheFirstLoop {
   }
 
   private healActiveLogBeforeSend(): ChatMessage[] {
-    // Skip the expensive 4-pass healing pipeline when the log hasn't
+    // Skip the expensive healing pipeline when the log hasn't
     // changed since the last call — the common case between iterations
     // where no new messages were appended.
     if (this._healedCache && this._healedVersion === this.log.version) {
@@ -621,18 +660,18 @@ export class CacheFirstLoop {
       healed.messages,
       DEFAULT_MAX_RESULT_TOKENS,
     );
-    const pruned = stripDroppableReasoningContent(argsShrunk.messages);
-    // stripDroppableReasoningContent removes reasoning_content from stale plain
-    // assistant turns. Re-stamp only tool-call turns that need round-trip-safe
-    // reasoning fields for thinking-mode models.
-    const stamped = stampMissingReasoningForThinkingMode(pruned.messages, this.model, {
+    // NOTE: reasoning_content is NOT stripped mid-session to preserve
+    // DeepSeek prefix cache continuity. Stripping old reasoning between
+    // API calls changes message content and invalidates the cached prefix.
+    // Reasoning is only stripped during session load (constructor) or
+    // folding (context-manager.ts).
+    const stamped = stampMissingReasoningForThinkingMode(argsShrunk.messages, this.model, {
       toolCallsOnly: true,
     });
     const final = stamped.messages;
     if (
       healed.healedCount === 0 &&
       argsShrunk.healedCount === 0 &&
-      pruned.prunedCount === 0 &&
       stamped.stampedCount === 0
     ) {
       this._healedCache = current;
@@ -1168,6 +1207,8 @@ export class CacheFirstLoop {
         restoreModelIfNeeded();
         yield { turn: this._turn, role: "done", content: assistantContent };
         this._steerQueue.length = 0;
+        // Archive old tool noise from previous turns (proactive compression).
+        this.archiveAfterTurn().catch(() => {});
         return;
       }
 
@@ -1239,6 +1280,30 @@ export class CacheFirstLoop {
     // loop via return statements when it produces no more tool calls,
     // when the context guard fires, when an abort fires, or when a fatal
     // error escapes the inner try blocks.
+  }
+
+  private async archiveAfterTurn(): Promise<void> {
+    // Only compress when context is under meaningful pressure (>= 60%).
+    // Below that, let the recent 5 turns accumulate naturally.
+    const lastUsage = this.stats.turns.length > 0
+      ? this.stats.turns[this.stats.turns.length - 1]?.usage
+      : null;
+    const ctxMax = resolveContextTokens(this.model);
+    const promptTokens = lastUsage?.promptTokens ?? 0;
+    if (promptTokens < ctxMax * 0.6) return;
+
+    const log = this.log.toFullHistory();
+    const archived = await this._archiver.archivePreviousTurnNoise(log, this._turn);
+    if (archived > 0) {
+      this.log.compactInPlace(log);
+      if (this.sessionName) {
+        try {
+          rewriteSession(this.sessionName, log);
+        } catch {
+          /* best-effort */
+        }
+      }
+    }
   }
 
   private summaryContext(): ForceSummaryContext {

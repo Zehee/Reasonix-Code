@@ -700,7 +700,7 @@ describe("ToolRegistry", () => {
       expect(parsed.consecutiveMalformed).toBeUndefined();
     });
 
-    it("different malformed args to the same tool do not trip the guard", async () => {
+    it("different malformed args to the same tool: missing params are auto-filled", async () => {
       const reg = new ToolRegistry();
       reg.register({
         name: "edit",
@@ -709,12 +709,17 @@ describe("ToolRegistry", () => {
           properties: { path: { type: "string" }, body: { type: "string" } },
           required: ["path", "body"],
         },
-        fn: () => "edited",
+        fn: ({ path, body }: { path: string; body: string }) =>
+          `edited ${path} — ${body}`,
       });
-      await reg.dispatch("edit", '{"path": "x"}'); // missing body
-      const out = await reg.dispatch("edit", '{"body": "y"}'); // missing path — different shape
-      const parsed = JSON.parse(out);
-      expect(parsed.consecutiveMalformed).toBeUndefined();
+      // First call: missing body — gets auto-filled with default ("").
+      const out1 = await reg.dispatch("edit", '{"path": "x"}');
+      expect(typeof out1).toBe("string");
+      expect(out1).toContain("edited");
+      // Second call: missing path — also auto-filled.
+      const out2 = await reg.dispatch("edit", '{"body": "y"}');
+      expect(typeof out2).toBe("string");
+      expect(out2).toContain("edited");
     });
 
     it("invalid JSON, identical twice, also short-circuits", async () => {

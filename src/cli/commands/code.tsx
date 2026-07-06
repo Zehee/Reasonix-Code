@@ -1,7 +1,7 @@
 /** `reasonix code [dir]` — native filesystem tools + code system prompt, wraps `chat`. */
 
 import { readFileSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { resolve } from "node:path";
 import { buildCodeToolset } from "../../code/setup.js";
 import {
   DEFAULT_MODEL,
@@ -14,7 +14,7 @@ import { loadDotenv } from "../../env.js";
 import { t } from "../../i18n/index.js";
 import { specToRaw } from "../../mcp/spec.js";
 import { detectForeignAgentPlatform } from "../../memory/project.js";
-import { sanitizeName } from "../../memory/session.js";
+import { workspaceSlug } from "../../memory/session.js";
 import { markPhase } from "../startup-profile.js";
 import { chatCommand } from "./chat.js";
 
@@ -68,15 +68,12 @@ export async function codeCommand(opts: CodeOptions = {}): Promise<void> {
   const { codeSystemPrompt } = await import("../../code/prompt.js");
   const rootDir = resolve(opts.dir ?? process.cwd());
   // Per-directory session so switching projects doesn't mix histories.
-  // `code-<sanitized-basename>` fits the session name rules without
-  // truncating most project names.
-  // Per-directory session unless --no-session or autoResumeSession:false in config (#2238).
-  // Explicit -r/--resume or --new flags override autoResumeSession so users can still
-  // manually resume or start fresh even when the default behaviour has been toggled.
+  // Sessions stored in sessions/{workspace-slug}/active.jsonl.
+  // Use --no-session for ephemeral, --new to archive active into {timestamp}.jsonl.
   const cfg = readConfig();
   const explicitResume = opts.forceResume || opts.forceNew;
   const autoResume = opts.noSession ? false : explicitResume || cfg.autoResumeSession !== false;
-  const session = autoResume ? `code-${sanitizeName(basename(rootDir))}` : undefined;
+  const session = autoResume ? `${workspaceSlug(rootDir)}/active` : undefined;
 
   markPhase("semantic_bootstrap_start");
   const { tools, jobs, registerRooted, reBootstrapSemantic, semantic } = await buildCodeToolset({

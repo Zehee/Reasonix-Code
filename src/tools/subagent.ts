@@ -578,7 +578,7 @@ export function forkRegistryExcluding(
   exclude: ReadonlySet<string>,
 ): ToolRegistry {
   const child = new ToolRegistry({ rateLimit: parent.rateLimitPolicy });
-  for (const spec of parent.specs()) {
+  for (const spec of parent.allSpecs()) {
     const name = spec.function.name;
     if (exclude.has(name)) continue;
     const def = parent.get(name);
@@ -599,7 +599,7 @@ export function forkRegistryWithAllowList(
   alsoExclude: ReadonlySet<string>,
 ): ToolRegistry {
   const child = new ToolRegistry({ rateLimit: parent.rateLimitPolicy });
-  for (const spec of parent.specs()) {
+  for (const spec of parent.allSpecs()) {
     const name = spec.function.name;
     if (!allow.has(name)) continue;
     if (alsoExclude.has(name)) continue;

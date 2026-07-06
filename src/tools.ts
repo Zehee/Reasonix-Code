@@ -2,12 +2,14 @@ import type { PauseGate } from "./core/pause-gate.js";
 import { truncateForModel, truncateForModelByTokens } from "./mcp/registry.js";
 import { sortToolSpecs } from "./memory/runtime.js";
 import { analyzeSchema, flattenSchema, nestArguments } from "./repair/flatten.js";
+import { normalizeToolDescriptor } from "./tools/schema-canon.js";
 import { countTokensBounded } from "./tokenizer.js";
 import {
   type NormalizedToolRateLimitConfig,
   type ToolRateLimitOption,
   ToolRateLimiter,
 } from "./tools/rate-limit.js";
+import { inferToolArgs } from "./tools/arg-inference.js";
 import type { ReadTracker } from "./tools/read-tracker.js";
 import { saveTruncatedResult, shouldSkipSave } from "./tools/truncated-result-saver.js";
 import type { JSONSchema, ToolSpec } from "./types.js";
@@ -34,6 +36,14 @@ export interface ToolDefinition<A = any, R = any> {
   stormExempt?: boolean;
   /** When true, skip saving full result to disk on truncation. Use for tools that might leak secrets (get_env) or return trivial data. */
   skipTruncationSave?: boolean;
+  /**
+   * Tool tier for prefix-cache management.
+   * - "eager" (default): schema included in ImmutablePrefix → sent every turn.
+   * - "lazy": registered but NOT in prefix → model can still call it; first
+   *   call promotes to eager (one cache-miss turn). Use for rarely-used tools
+   *   or MCP tools whose schema would bloat the prefix.
+   */
+  tier?: "eager" | "lazy";
   fn: (args: A, ctx?: ToolCallContext) => R | Promise<R>;
 }
 
@@ -81,6 +91,8 @@ export class ToolRegistry {
   private readonly _lastMalformed = new Map<string, string>();
   /** Per-tool fingerprint of the last host-side gate rejection. */
   private readonly _lastGateRejection = new Map<string, string>();
+  /** Tracks how many times missing required params were auto-filled per tool. */
+  private readonly _fillDefaults = new Map<string, number>();
 
   constructor(opts: ToolRegistryOptions = {}) {
     this._autoFlatten = opts.autoFlatten !== false;
@@ -163,6 +175,21 @@ export class ToolRegistry {
     return this._tools.size;
   }
 
+  /** Return the full ToolSpec for a tool, used by argument inference. */
+  toolSpec(name: string): ToolSpec | undefined {
+    const t = this._tools.get(name);
+    if (!t) return undefined;
+    const params = t.flatSchema ?? t.parameters ?? { type: "object", properties: {} };
+    return {
+      type: "function",
+      function: {
+        name: t.name,
+        description: t.description ?? "",
+        parameters: params as Record<string, unknown>,
+      },
+    };
+  }
+
   /** True if a registered tool's schema was flattened for the model. */
   wasFlattened(name: string): boolean {
     return Boolean(this._tools.get(name)?.flatSchema);
@@ -173,16 +200,57 @@ export class ToolRegistry {
     return this._tools.get(name)?.parallelSafe === true;
   }
 
+  /** All tools (eager + lazy) — for dispatch, schema audit, etc. */
+  allSpecs(): ToolSpec[] {
+    return this._specsFrom(this._tools.values());
+  }
+
+  /** Only eager tools — these enter the ImmutablePrefix and are sent every turn. */
+  eagerSpecs(): ToolSpec[] {
+    return this._specsFrom(
+      [...this._tools.values()].filter((t) => (t as InternalTool).tier !== "lazy"),
+    );
+  }
+
+  /** Only lazy tools — registered for dispatch but NOT in the prefix. */
+  lazySpecs(): ToolSpec[] {
+    return this._specsFrom(
+      [...this._tools.values()].filter((t) => (t as InternalTool).tier === "lazy"),
+    );
+  }
+
+  /** Compact alias — eager tools only (the common case for prefix/request building). */
   specs(): ToolSpec[] {
+    return this.eagerSpecs();
+  }
+
+  /** Promote a lazy tool to eager on first use. Triggers one cache-miss turn. */
+  promoteTool(name: string): boolean {
+    const t = this._tools.get(name);
+    if (!t) return false;
+    if ((t as InternalTool).tier !== "lazy") return false;
+    (t as InternalTool).tier = "eager";
+    return true;
+  }
+
+  private _specsFrom(tools: Iterable<InternalTool>): ToolSpec[] {
     return sortToolSpecs(
-      [...this._tools.values()].map((t) => ({
-        type: "function",
-        function: {
+      [...tools].map((t) => {
+        const params = t.flatSchema ?? t.parameters ?? { type: "object", properties: {} };
+        const canonical = normalizeToolDescriptor({
           name: t.name,
           description: t.description ?? "",
-          parameters: t.flatSchema ?? t.parameters ?? { type: "object", properties: {} },
-        },
-      })),
+          parameters: params,
+        });
+        return {
+          type: "function",
+          function: {
+            name: t.name,
+            description: canonical.description,
+            parameters: canonical.parameters as Record<string, unknown>,
+          },
+        };
+      }),
     );
   }
 
@@ -222,11 +290,28 @@ export class ToolRegistry {
             : {}
           : (argumentsRaw ?? {});
     } catch (err) {
-      return this._noteMalformed(
-        name,
-        rawFingerprint,
-        `invalid tool arguments JSON: ${(err as Error).message}`,
-      );
+      // Attempt lenient JSON repair before giving up.
+      const lenient = lenientJsonParse(argumentsRaw);
+      if (lenient !== null) {
+        args = lenient;
+      } else {
+        // Try intelligent inference: understand what the model intended
+        // from function-call-style, shell-kv, or positional arguments.
+        const spec = this.toolSpec(name);
+        const inferred = inferToolArgs(
+          typeof argumentsRaw === "string" ? argumentsRaw : "",
+          spec ?? undefined,
+        );
+        if (inferred !== null) {
+          args = inferred;
+        } else {
+          return this._noteMalformed(
+            name,
+            rawFingerprint,
+            `invalid tool arguments JSON: ${(err as Error).message}`,
+          );
+        }
+      }
     }
 
     // Re-nest dot-notation args back to the original shape, but only when
@@ -239,8 +324,12 @@ export class ToolRegistry {
     }
     const fingerprint = fingerprintArgs(args);
 
-    const missing = tool.parameters ? missingRequiredParam(tool.parameters, args) : null;
+    const missing = tool.parameters ? fillMissingRequiredParam(tool.parameters, args) : null;
     if (missing) {
+      // If we couldn't fill all required params, reject the call.
+      // (fillMissingRequiredParam only fills when at least one param
+      // was provided — an empty {} for a tool expecting params gets
+      // the strict rejection.)
       return this._noteMalformed(
         name,
         fingerprint,
@@ -528,5 +617,125 @@ function missingRequiredParam(schema: JSONSchema, args: Record<string, unknown>)
   for (const key of required) {
     if (args[key] === undefined) return key;
   }
+  return null;
+}
+
+/**
+ * Lenient variant: fill missing required parameters with type-appropriate
+ * defaults instead of rejecting the call. Only applies when at least one
+ * parameter was provided — if ALL required params are missing, it's more
+ * likely a confused call than a minor omission.
+ * Returns the missing param name (or null if none missing), and mutates
+ * `args` in place to add defaults.
+ */
+function fillMissingRequiredParam(
+  schema: JSONSchema,
+  args: Record<string, unknown>,
+): string | null {
+  const required = schema.required;
+  if (!required || required.length === 0) return null;
+  // Only auto-fill when at least one param was provided — an empty call
+  // is likely confused and should still get the strict error.
+  const hasAnyParam = Object.keys(args).length > 0;
+  if (!hasAnyParam) {
+    for (const key of required) {
+      if (args[key] === undefined) return key;
+    }
+    return null;
+  }
+  const props = schema.properties ?? {};
+  for (const key of required) {
+    if (args[key] !== undefined) continue;
+    // Fill a type-appropriate default from the schema.
+    const prop = props[key] as JSONSchema | undefined;
+    args[key] = defaultForSchema(prop);
+  }
+  // Re-check — if we filled everything, return null (no missing).
+  for (const key of required) {
+    if (args[key] === undefined) return key;
+  }
+  return null;
+}
+
+/** Best-effort default value for a JSON Schema type. */
+function defaultForSchema(schema: JSONSchema | undefined): unknown {
+  if (!schema) return "";
+  switch (schema.type) {
+    case "string":
+      return schema.default ?? "";
+    case "number":
+    case "integer":
+      return schema.default ?? 0;
+    case "boolean":
+      return schema.default ?? false;
+    case "array":
+      return schema.default ?? [];
+    case "object":
+      return schema.default ?? {};
+    default:
+      return schema.default ?? "";
+  }
+}
+
+/**
+ * Lenient JSON parse: tries common model-generated JSON issues before giving up.
+ * Returns parsed object or null on failure.
+ */
+function lenientJsonParse(raw: string | Record<string, unknown>): Record<string, unknown> | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  // Strategy 1: Already valid JSON (fast path).
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+  } catch {
+    // Fall through.
+  }
+
+  // Strategy 2: Wrap in braces — model sometimes emits `"key": value` without `{}`.
+  if (!trimmed.startsWith("{")) {
+    try {
+      const wrapped = JSON.parse(`{${trimmed}}`);
+      if (wrapped && typeof wrapped === "object" && !Array.isArray(wrapped)) return wrapped;
+    } catch {
+      // Fall through.
+    }
+  }
+
+  // Strategy 3: Strip trailing comma before closing brace.
+  const noTrailing = trimmed.replace(/,\s*}/g, "}").replace(/,\s*\]/g, "]");
+  if (noTrailing !== trimmed) {
+    try {
+      const parsed = JSON.parse(noTrailing);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+    } catch {
+      // Fall through.
+    }
+  }
+
+  // Strategy 4: Replace single quotes with double quotes.
+  const doubleQuoted = trimmed.replace(/'/g, '"');
+  if (doubleQuoted !== trimmed) {
+    try {
+      const parsed = JSON.parse(doubleQuoted);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+    } catch {
+      // Fall through.
+    }
+  }
+
+  // Strategy 5: Unquote keys (model sometimes emits `{key: "value"}`).
+  const unquoted = trimmed.replace(/(\s*)(\w+)(\s*):/g, '$1"$2"$3:');
+  if (unquoted !== trimmed) {
+    try {
+      const parsed = JSON.parse(unquoted);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+    } catch {
+      // Fall through.
+    }
+  }
+
   return null;
 }
