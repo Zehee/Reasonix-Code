@@ -654,43 +654,16 @@ export class CacheFirstLoop {
   }
 
   private healActiveLogBeforeSend(): ChatMessage[] {
-    // Skip the expensive healing pipeline when the log hasn't
-    // changed since the last call — the common case between iterations
-    // where no new messages were appended.
-    if (this._healedCache && this._healedVersion === this.log.version) {
-      return this._healedCache;
-    }
+    // NOTE: No healing pipeline between turns — oversized content is
+    // already shrunk on append (shrinkToolResultForCacheStability +
+    // shrinkMessageForRetention). A per-iteration healing pass would
+    // modify already-sent messages and invalidate DeepSeek's prefix
+    // cache. Constructor healing (healLoadedMessagesByTokens) handles
+    // the one-time fix-up for sessions loaded from disk.
     const current = this.log.toFullHistory();
-    const healed = healLoadedMessages(current, DEFAULT_MAX_RESULT_CHARS);
-    const argsShrunk = shrinkOversizedToolCallArgsByTokens(
-      healed.messages,
-      DEFAULT_MAX_RESULT_TOKENS,
-    );
-    // NOTE: reasoning_content is NOT stripped mid-session to preserve
-    // DeepSeek prefix cache continuity. Stripping old reasoning between
-    // API calls changes message content and invalidates the cached prefix.
-    // Reasoning is only stripped during session load (constructor) or
-    // folding (context-manager.ts).
-    const stamped = stampMissingReasoningForThinkingMode(argsShrunk.messages, this.model, {
-      toolCallsOnly: true,
-    });
-    const final = stamped.messages;
-    if (healed.healedCount === 0 && argsShrunk.healedCount === 0 && stamped.stampedCount === 0) {
-      this._healedCache = current;
-      this._healedVersion = this.log.version;
-      return current;
-    }
-    this.log.compactInPlace(final);
-    this._healedCache = final;
+    this._healedCache = current;
     this._healedVersion = this.log.version;
-    if (this.sessionName) {
-      try {
-        rewriteSession(this.sessionName, final);
-      } catch {
-        /* disk issue shouldn't block the in-memory heal */
-      }
-    }
-    return final;
+    return current;
   }
 
   abort(opts: LoopAbortOptions = {}): void {
