@@ -1258,18 +1258,25 @@ export class CacheFirstLoop {
   }
 
   private async archiveAfterTurn(): Promise<void> {
-    // Only compress when context is under meaningful pressure (>= 60%).
-    // Below that, let the recent 5 turns accumulate naturally.
     const lastUsage =
       this.stats.turns.length > 0 ? this.stats.turns[this.stats.turns.length - 1]?.usage : null;
-    const ctxMax = resolveContextTokens(this.model);
     const promptTokens = lastUsage?.promptTokens ?? 0;
-    if (promptTokens < ctxMax * 0.6) return;
+
+    // Only archive when prompt is under meaningful pressure.
+    if (promptTokens < 100_000) return;
 
     const log = this.log.toFullHistory();
+
+    // Insert cache-boundary marker on first pass. The marker sits at the
+    // 100K boundary — content before it is the stable cache prefix and
+    // is NEVER archived.
+    const markerInserted = this._archiver.ensureBoundaryMarker(log, Math.floor(log.length * 0.4));
+
     const archived = await this._archiver.archivePreviousTurnNoise(log, this._turn);
-    if (archived > 0) {
-      process.stderr.write(`▸ turn ${this._turn}: archived ${archived} old tool results.\n`);
+    if (markerInserted || archived > 0) {
+      if (archived > 0) {
+        process.stderr.write(`▸ turn ${this._turn}: archived ${archived} old tool results.\n`);
+      }
       this.log.compactInPlace(log);
       if (this.sessionName) {
         try {

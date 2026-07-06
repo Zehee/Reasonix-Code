@@ -26,12 +26,16 @@ const SESSIONS_SUBDIR = "sessions";
 const ARCHIVE_SIZE_THRESHOLD = 512;
 
 /** Keep the last N turns with full fidelity (all tool results intact).
- *  Turns older than this threshold get their tool noise (errors, file reads,
- *  edit diffs) archived to JSONL and replaced with short references.
- *  User messages and assistant conclusions are ALWAYS preserved verbatim.
- *  Default: 5 turns. Can be overridden via env REASONIX_KEEP_TURNS or
- *  by setting the config value at session start. */
+ *  Turns older than this threshold but after the cache-boundary marker
+ *  get their tool noise archived. Default: 5 turns. */
 export const DEFAULT_RECENT_TURN_KEEP = 5;
+
+/**
+ * Marker injected at the ~100K prompt boundary. Content before this
+ * marker is the stable cache prefix and is NEVER touched by archiving.
+ * Content between marker and recent keep window may be archived.
+ */
+export const ARCHIVE_BOUNDARY_MARKER = "[cache-stable boundary — content before this point is preserved verbatim]";
 
 /**
  * Resolve the keep-turns count from env or default.
@@ -134,13 +138,35 @@ export class TurnArchiver {
     if (!this._archivePath) return 0;
     if (currentTurn <= this.keepTurns) return 0;
 
+    // Find the cache-boundary marker — archiving only operates on messages
+    // AFTER this marker. No marker means the prompt hasn't reached 100K yet
+    // and nothing should be archived (cache prefix is still building).
+    const markerIdx = log.findIndex(
+      (m) => typeof m.content === "string" && m.content.startsWith(ARCHIVE_BOUNDARY_MARKER),
+    );
+    if (markerIdx < 0) return 0;
+
+    // Find the recent-keep boundary: where the last keepTurns start.
+    // Walk backwards from end, counting user messages (turn starts).
+    let recentCutoff = log.length;
+    let seenTurns = 0;
+    for (let i = log.length - 1; i >= 0; i--) {
+      if (log[i]!.role === "user") {
+        seenTurns++;
+        if (seenTurns > this.keepTurns) {
+          recentCutoff = i + 1;
+          break;
+        }
+      }
+    }
+
+    if (recentCutoff <= markerIdx) return 0;
+
     let archived = 0;
 
-    // Full scan: `isAlreadyArchived` (startsWith) is O(1) per message.
-    // Already-archived entries are skipped in microseconds;
-    // unarchived tool results get archived and replaced with a reference.
-    // No cursor/index tracking needed — simpler and more robust.
-    for (const msg of log) {
+    // Only archive tool results between marker and recent keep window.
+    for (let i = markerIdx; i < recentCutoff && i < log.length; i++) {
+      const msg = log[i]!;
       if (msg.role !== "tool") continue;
       if (typeof msg.content !== "string") continue;
       if (isAlreadyArchived(msg.content)) continue;
@@ -174,6 +200,18 @@ export class TurnArchiver {
     }
 
     return archived;
+  }
+
+  /**
+   * Ensure the cache-boundary marker exists. Inserts before `insertAtIndex`.
+   */
+  ensureBoundaryMarker(log: ChatMessage[], insertAtIndex: number): boolean {
+    const hasMarker = log.some(
+      (m) => typeof m.content === "string" && m.content.startsWith(ARCHIVE_BOUNDARY_MARKER),
+    );
+    if (hasMarker) return false;
+    log.splice(insertAtIndex, 0, { role: "assistant", content: ARCHIVE_BOUNDARY_MARKER });
+    return true;
   }
 
   /**
