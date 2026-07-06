@@ -72,7 +72,7 @@ export function healLoadedMessages(
   return { messages: paired.messages, healedCount, healedFrom: shrunk.healedFrom };
 }
 
-/** Back-fills "" on bare assistant turns; skipped on non-thinking to avoid prefix-cache churn. */
+/** Go v2 compatible: never adds empty reasoning_content. Only preserves non-empty reasoning. */
 export function stampMissingReasoningForThinkingMode(
   messages: ChatMessage[],
   model: string,
@@ -81,17 +81,11 @@ export function stampMissingReasoningForThinkingMode(
   if (!isThinkingModeModel(model)) {
     return { messages, stampedCount: 0 };
   }
-  let stampedCount = 0;
-  const out = messages.map((msg) => {
-    if (msg.role !== "assistant") return msg;
-    if (options.toolCallsOnly && (!Array.isArray(msg.tool_calls) || msg.tool_calls.length === 0)) {
-      return msg;
-    }
-    if (Object.hasOwn(msg, "reasoning_content")) return msg;
-    stampedCount += 1;
-    return { ...msg, reasoning_content: "" };
-  });
-  return { messages: out, stampedCount };
+  // Go v2 omits empty reasoning_content entirely (struct field has omitempty).
+  // DeepSeek only requires it when actual reasoning was produced by the model.
+  // Empty `reasoning_content: ""` adds 23 bytes per message vs Go's serialization.
+  // We preserve non-empty reasoning but never add empty placeholders.
+  return { messages, stampedCount: 0 };
 }
 
 /** Token-cap variant — char cap would let CJK slip past at 2× the intended token cost. */
