@@ -1,6 +1,6 @@
 {
   "name": "reasonix-code",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "DeepSeek-native coding agent: cache-first loop, flash-first cost control, tool-call repair.",
   "type": "module",
   "bin": {
