@@ -21,6 +21,9 @@ export interface StatusBarConfig {
   showFeedbackHint: boolean;
 }
 
+/** Edit gate modes — shown in the status bar when available. */
+export type EditGateMode = "review" | "auto" | "yolo" | "plan";
+
 const WALLET_MIN_COLS = 90;
 const VERSION_MIN_COLS = 70;
 const FEEDBACK_HINT_MIN_COLS = 100;
@@ -55,7 +58,8 @@ function Gap(): React.ReactElement {
 
 export function StatusRow({
   statusBar = DEFAULT_STATUS_BAR_CONFIG,
-}: { statusBar?: StatusBarConfig }): React.ReactElement {
+  editMode,
+}: { statusBar?: StatusBarConfig; editMode?: EditGateMode }): React.ReactElement {
   const status = useAgentState((s) => s.status);
   const session = useAgentState((s) => s.session);
   const { stdout } = useStdout();
@@ -68,9 +72,9 @@ export function StatusRow({
     ((hasSession && statusBar.showSessionCost) || (hasBalance && statusBar.showBalance));
 
   return (
-    <Box flexDirection="row" flexShrink={0} marginTop={1}>
-      <Box flexDirection="row" flexGrow={1}>
-        {/* Left: mode + session */}
+    <Box flexDirection="column" flexShrink={0} marginTop={1}>
+      {/* Row 1: mode + session + cost + cache + version */}
+      <Box flexDirection="row">
         {status.recording ? (
           <Pill>
             <RecordingPill rec={status.recording} />
@@ -81,14 +85,13 @@ export function StatusRow({
           </Pill>
         ) : (
           <Pill>
-            <ModePill mode={status.mode} network={status.network} detail={status.networkDetail} />
+            <ModePill mode={editMode ?? status.mode} network={status.network} detail={status.networkDetail} />
           </Pill>
         )}
         <Gap />
         <Pill>
           <Text color={FG.sub}>{`${session.id} · ${session.branch}`}</Text>
         </Pill>
-        {/* Center: costs + cache + ctx */}
         {hasTurn && statusBar.showTurnCost && (
           <>
             <Gap />
@@ -112,18 +115,6 @@ export function StatusRow({
             </Pill>
           </>
         )}
-        {statusBar.showCtxUsage && status.promptTokens !== undefined && status.promptTokens > 0 && (
-          <>
-            <Gap />
-            <Pill>
-              <CtxUsagePill
-                tokens={status.promptTokens}
-                cap={status.promptCap ?? resolveContextTokens(session.model)}
-                cols={cols}
-              />
-            </Pill>
-          </>
-        )}
         {status.mcpLoading && status.mcpLoading.ready < status.mcpLoading.total && (
           <>
             <Gap />
@@ -132,26 +123,36 @@ export function StatusRow({
             </Pill>
           </>
         )}
-        {showWallet && (
-          <>
-            <Gap />
-            <Pill>
-              <WalletPill
-                sessionCostUsd={status.sessionCost}
-                balance={status.balance}
-                currency={status.balanceCurrency}
-                showSessionCost={statusBar.showSessionCost}
-                showBalance={statusBar.showBalance}
-              />
-            </Pill>
-          </>
-        )}
-        {/* Spacer to push right items to the end */}
         <Box flexGrow={1} />
-        {/* Right: version + help */}
         {statusBar.showVersion && cols >= VERSION_MIN_COLS && (
           <Pill>
             <Text color={FG.faint}>{`v${VERSION}`}</Text>
+          </Pill>
+        )}
+      </Box>
+      {/* Row 2: context usage + wallet */}
+      <Box flexDirection="row">
+        {statusBar.showCtxUsage && status.promptTokens !== undefined && status.promptTokens > 0 && (
+          <>
+            <Pill>
+              <CtxUsagePill
+                tokens={status.promptTokens}
+                cap={status.promptCap ?? resolveContextTokens(session.model)}
+                cols={cols}
+              />
+            </Pill>
+            <Gap />
+          </>
+        )}
+        {showWallet && (
+          <Pill>
+            <WalletPill
+              sessionCostUsd={status.sessionCost}
+              balance={status.balance}
+              currency={status.balanceCurrency}
+              showSessionCost={statusBar.showSessionCost}
+              showBalance={statusBar.showBalance}
+            />
           </Pill>
         )}
         {statusBar.showFeedbackHint && cols >= FEEDBACK_HINT_MIN_COLS && (
@@ -376,7 +377,12 @@ function modeGlyph(mode: Mode): { glyph: string; color: Color } {
       return { glyph: "⊞", color: TONE.accent };
     case "edit":
       return { glyph: "±", color: TONE.ok };
+    case "review":
+      return { glyph: "●", color: TONE.brand };
+    case "yolo":
+      return { glyph: "●", color: TONE.err };
   }
+  return { glyph: "●", color: FG.sub };
 }
 
 function networkDot(state: NetworkState): { glyph: string; color: Color } {

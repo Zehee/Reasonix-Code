@@ -2,7 +2,7 @@ import { getLanguage } from "../../../i18n/index.js";
 import type { LanguageCode } from "../../../i18n/types.js";
 import type { Card, CardId } from "./cards.js";
 
-export type Mode = "auto" | "ask" | "plan" | "edit";
+export type Mode = "auto" | "ask" | "plan" | "edit" | "review" | "yolo";
 export type NetworkState = "online" | "slow" | "disconnected" | "reconnecting";
 export type ToastTone = "ok" | "info" | "warn" | "err";
 
