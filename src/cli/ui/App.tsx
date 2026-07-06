@@ -2013,7 +2013,19 @@ function AppInner({
       if (key.tab) {
         const entries = atState.entries;
         const sel = entries[atSelected] ?? entries[0];
-        if (sel) pickAtMention(sel, sel.isDir ? "drill" : "commit");
+        if (sel) {
+          pickAtMention(sel, sel.isDir ? "drill" : "commit");
+          key.consumed = true;
+        }
+        return;
+      }
+      if (key.return && !key.shift && !key.ctrl && !key.meta) {
+        const entries = atState.entries;
+        const sel = entries[atSelected] ?? entries[0];
+        if (sel) {
+          pickAtMention(sel, sel.isDir ? "drill" : "commit");
+          key.consumed = true;
+        }
         return;
       }
     }
@@ -2021,7 +2033,18 @@ function AppInner({
     if (slashArgMatches && slashArgMatches.length > 0) {
       if (key.tab) {
         const sel = slashArgMatches[slashArgSelected] ?? slashArgMatches[0];
-        if (sel) pickSlashArg(sel);
+        if (sel) {
+          pickSlashArg(sel);
+          key.consumed = true;
+        }
+        return;
+      }
+      if (key.return && !key.shift && !key.ctrl && !key.meta) {
+        const sel = slashArgMatches[slashArgSelected] ?? slashArgMatches[0];
+        if (sel) {
+          pickSlashArg(sel);
+          key.consumed = true;
+        }
         return;
       }
     }
@@ -2029,7 +2052,19 @@ function AppInner({
     if (slashMatches && slashMatches.length > 0) {
       if (key.tab) {
         const sel = slashMatches[slashSelected] ?? slashMatches[0];
-        if (sel) setInput(`/${sel.cmd}`);
+        if (sel) {
+          setInput(`/${sel.cmd}`);
+          key.consumed = true;
+        }
+        return;
+      }
+      // Enter also completes the slash instead of submitting the partial command.
+      if (key.return && !key.shift && !key.ctrl && !key.meta) {
+        const sel = slashMatches[slashSelected] ?? slashMatches[0];
+        if (sel) {
+          setInput(`/${sel.cmd}`);
+          key.consumed = true;
+        }
         return;
       }
     }

@@ -71,7 +71,11 @@ export function KeystrokeProvider({
     const unsubscribe = reader.subscribe((ev) => {
       // Snapshot the handler set so handlers added/removed during
       // dispatch don't perturb iteration. Cheap — typical N=1-3.
-      for (const fn of [...handlersRef.current]) fn(ev);
+      const snapshot = [...handlersRef.current];
+      for (const fn of snapshot) {
+        fn(ev);
+        if (ev.consumed) break;  // stopPropagation support
+      }
     });
     return () => {
       unsubscribe();

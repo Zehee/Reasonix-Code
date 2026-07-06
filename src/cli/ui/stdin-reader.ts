@@ -27,6 +27,8 @@ export interface KeyEvent {
   mouseScrollUp?: boolean;
   /** Mouse wheel down — symmetric to `mouseScrollUp`. */
   mouseScrollDown?: boolean;
+  /** Set by a handler to signal the event is consumed — subsequent handlers skip it. */
+  consumed?: boolean;
   /** Left-button press; row/col are 1-based. */
   mouseClick?: boolean;
   /** Left-button motion (button held during drag). Mode 1002 only. */
