@@ -26,8 +26,7 @@ import {
   t,
 } from "../../i18n/index.js";
 import type { LanguageCode } from "../../i18n/types.js";
-import { type CatalogEntry, MCP_CATALOG } from "../../mcp/catalog.js";
-import { MultiSelect, type SelectItem, SingleSelect } from "./Select.js";
+import { type SelectItem, SingleSelect } from "./Select.js";
 import { ThemeProvider, useTheme } from "./theme/context.js";
 import { themeChoiceLabel } from "./theme/labels.js";
 import { FG, type ThemeName, listThemeNames, resolveThemeName } from "./theme/tokens.js";
@@ -45,7 +44,6 @@ export interface WizardProps {
   validateApiKey?: (apiKey: string) => Promise<ApiKeyValidationResult>;
   /** Pre-fill selections when re-running (reconfigure flow). */
   initial?: {
-    mcp?: string[];
     theme?: ThemeName | "auto";
   };
 }
@@ -54,17 +52,15 @@ export type ApiKeyValidationResult =
   | { ok: true }
   | { ok: false; reason: "rejected" | "failed"; message?: string };
 
-type Step = "language" | "theme" | "apiKey" | "mcp" | "mcpArgs" | "review" | "saved";
+type Step = "language" | "theme" | "apiKey" | "review" | "saved";
 
 interface WizardData {
   language: LanguageCode;
   theme: ThemeName;
   apiKey: string;
-  selectedCatalog: string[];
-  catalogArgs: Record<string, string>;
 }
 
-const CATALOG_BY_NAME = new Map(MCP_CATALOG.map((e) => [e.name, e]));
+
 
 const LANGUAGE_LABELS: Record<LanguageCode, string> = {
   EN: "English",
@@ -95,8 +91,6 @@ export function Wizard({
     language: getLanguage(),
     theme: resolveThemePreference(initial?.theme ?? loadTheme(), process.env.REASONIX_THEME),
     apiKey: existingApiKey ?? "",
-    selectedCatalog: deriveInitialCatalog(initial?.mcp ?? []),
-    catalogArgs: {},
   }));
   const [error, setError] = useState<string | null>(null);
 
@@ -126,7 +120,7 @@ export function Wizard({
           onPreview={setPreviewTheme}
           onSubmit={(theme) => {
             setData((d) => ({ ...d, theme }));
-            setStep(existingApiKey && !forceApiKeyStep ? "mcp" : "apiKey");
+            setStep(existingApiKey && !forceApiKeyStep ? "review" : "apiKey");
           }}
         />
       );
@@ -140,62 +134,17 @@ export function Wizard({
           onSubmit={(key) => {
             setData((d) => ({ ...d, apiKey: key }));
             setError(null);
-            setStep("mcp");
+            setStep("review");
           }}
           error={error}
-          onError={setError}
-        />
-      );
-    }
-
-    if (step === "mcp") {
-      return (
-        <StepFrame title={t("wizard.mcpTitle")} step={1} total={2}>
-          <MultiSelect
-            items={mcpItems()}
-            initialSelected={data.selectedCatalog}
-            onSubmit={(selected) => {
-              setData((d) => ({ ...d, selectedCatalog: selected }));
-              const needsArgs = selected.some((name) => CATALOG_BY_NAME.get(name)?.userArgs);
-              setStep(needsArgs ? "mcpArgs" : "review");
-            }}
-            footer={t("wizard.mcpFooterMulti")}
-          />
-        </StepFrame>
-      );
-    }
-
-    if (step === "mcpArgs") {
-      const pending = data.selectedCatalog.filter((name) => {
-        const entry = CATALOG_BY_NAME.get(name);
-        return entry?.userArgs && !data.catalogArgs[name];
-      });
-      if (pending.length === 0) {
-        setStep("review");
-        return null;
-      }
-      const currentName = pending[0]!;
-      const entry = CATALOG_BY_NAME.get(currentName)!;
-      return (
-        <McpArgsStep
-          entry={entry}
-          error={error}
-          onSubmit={(value) => {
-            setData((d) => ({
-              ...d,
-              catalogArgs: { ...d.catalogArgs, [currentName]: value },
-            }));
-            setError(null);
-          }}
           onError={setError}
         />
       );
     }
 
     if (step === "review") {
-      const specs = data.selectedCatalog.map((name) => buildSpec(name, data.catalogArgs));
       return (
-        <StepFrame title={t("wizard.reviewTitle")} step={2} total={2}>
+        <StepFrame title={t("wizard.reviewTitle")} step={1} total={0}>
           <Box flexDirection="column">
             <SummaryLine
               label={t("wizard.reviewLabelLanguage")}
@@ -203,20 +152,6 @@ export function Wizard({
             />
             <SummaryLine label={t("wizard.reviewLabelApiKey")} value={redactKey(data.apiKey)} />
             <SummaryLine label={t("wizard.reviewLabelTheme")} value={data.theme} />
-            <SummaryLine
-              label={t("wizard.reviewLabelMcp")}
-              value={
-                specs.length === 0
-                  ? t("wizard.reviewMcpNone")
-                  : t("wizard.reviewMcpServers", { count: specs.length })
-              }
-            />
-            {specs.map((spec, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: review-only render, order fixed
-              <Box key={i} paddingLeft={14}>
-                <Text color={FG.faint}>· {spec}</Text>
-              </Box>
-            ))}
             <Box marginTop={1}>
               <Text>{t("wizard.reviewSavesTo", { path: defaultConfigPath() })}</Text>
             </Box>
@@ -232,15 +167,11 @@ export function Wizard({
           <ReviewConfirm
             onConfirm={() => {
               try {
-                const specsNow = data.selectedCatalog.map((name) =>
-                  buildSpec(name, data.catalogArgs),
-                );
                 const prev = readConfig();
                 const next: ReasonixConfig = {
                   ...prev,
                   apiKey: data.apiKey,
                   theme: data.theme,
-                  mcp: specsNow,
                   setupCompleted: true,
                 };
                 writeConfig(next);
@@ -517,125 +448,7 @@ export async function validateDeepSeekApiKey(
   }
 }
 
-function McpArgsStep({
-  entry,
-  error,
-  onSubmit,
-  onError,
-}: {
-  entry: CatalogEntry;
-  error: string | null;
-  onSubmit: (value: string) => void;
-  onError: (e: string | null) => void;
-}) {
-  const [value, setValue] = useState("");
-  const [pendingCreate, setPendingCreate] = useState<string | null>(null);
 
-  useInput((input, key) => {
-    if (!pendingCreate) return;
-    const ch = input.toLowerCase();
-    if (ch === "y" || key.return) {
-      try {
-        mkdirSync(pendingCreate, { recursive: true });
-        const created = pendingCreate;
-        setPendingCreate(null);
-        setValue("");
-        onError(null);
-        onSubmit(created);
-      } catch (e) {
-        onError(
-          t("wizard.mcpArgsDirCreateFailed", {
-            path: pendingCreate,
-            message: (e as Error).message,
-          }),
-        );
-        setPendingCreate(null);
-      }
-    } else if (ch === "n" || key.escape) {
-      setPendingCreate(null);
-      onError(null);
-    }
-  });
-
-  if (pendingCreate) {
-    return (
-      <StepFrame title={t("wizard.mcpArgsTitle", { name: entry.name })} step={2} total={3}>
-        <Box flexDirection="column">
-          <Text>{t("wizard.mcpArgsDirMissing", { path: pendingCreate })}</Text>
-          <Box marginTop={1}>
-            <Text color={FG.faint}>{t("wizard.mcpArgsDirCreateHint")}</Text>
-          </Box>
-          {error ? (
-            <Box marginTop={1}>
-              <Text color="ansi:red">{error}</Text>
-            </Box>
-          ) : null}
-        </Box>
-      </StepFrame>
-    );
-  }
-
-  return (
-    <StepFrame title={t("wizard.mcpArgsTitle", { name: entry.name })} step={2} total={3}>
-      <Box flexDirection="column">
-        <Text>{entry.summary}</Text>
-        {entry.note ? (
-          <Box marginTop={1}>
-            <Text color={FG.faint}>{entry.note}</Text>
-          </Box>
-        ) : null}
-        <Box marginTop={1}>
-          <Text>{t("wizard.mcpArgsRequiredParam")}</Text>
-          <Text bold>{entry.userArgs}</Text>
-        </Box>
-        <Box marginTop={1}>
-          <Text bold color="ansi:cyan">
-            {entry.userArgs}
-            {" › "}
-          </Text>
-          <TextInput
-            value={value}
-            onChange={setValue}
-            onSubmit={(raw) => {
-              const trimmed = raw.trim();
-              if (!trimmed) {
-                onError(t("wizard.mcpArgsEmpty", { name: entry.name }));
-                return;
-              }
-              if (entry.name === "filesystem") {
-                const check = checkFilesystemPath(trimmed);
-                if (check.kind === "missing") {
-                  setPendingCreate(trimmed);
-                  return;
-                }
-                if (check.kind === "not-a-dir") {
-                  onError(t("wizard.mcpArgsNotADir", { path: trimmed }));
-                  return;
-                }
-              }
-              onSubmit(trimmed);
-              setValue("");
-            }}
-            placeholder={placeholderFor(entry)}
-          />
-        </Box>
-        {error ? (
-          <Box marginTop={1}>
-            <Text color="ansi:red">{error}</Text>
-          </Box>
-        ) : null}
-      </Box>
-    </StepFrame>
-  );
-}
-
-function checkFilesystemPath(p: string): { kind: "ok" | "missing" | "not-a-dir" } {
-  try {
-    return { kind: statSync(p).isDirectory() ? "ok" : "not-a-dir" };
-  } catch {
-    return { kind: "missing" };
-  }
-}
 
 function ReviewConfirm({ onConfirm }: { onConfirm: () => void }) {
   useInput((_i, key) => {
@@ -686,55 +499,3 @@ function SummaryLine({ label, value }: { label: string; value: string }) {
   );
 }
 
-function mcpItems(): SelectItem<string>[] {
-  return MCP_CATALOG.map((entry) => {
-    const hintParts: string[] = [entry.summary];
-    if (entry.userArgs) hintParts.push(t("wizard.mcpUserArgsHint", { arg: entry.userArgs }));
-    if (entry.note) hintParts.push(entry.note);
-    return {
-      value: entry.name,
-      label: entry.name,
-      hint: hintParts.join(" · "),
-    };
-  });
-}
-
-function placeholderFor(entry: CatalogEntry): string {
-  if (entry.name === "filesystem") return "e.g. /tmp/reasonix-sandbox";
-  if (entry.name === "sqlite") return "e.g. ./notes.sqlite";
-  return entry.userArgs ?? "";
-}
-
-function deriveInitialCatalog(existingSpecs: string[]): string[] {
-  const packageToName = new Map(MCP_CATALOG.map((e) => [e.package, e.name]));
-  const out: string[] = [];
-  for (const spec of existingSpecs) {
-    for (const [pkg, name] of packageToName) {
-      if (spec.includes(pkg)) {
-        out.push(name);
-        break;
-      }
-    }
-  }
-  return out;
-}
-
-/**
- * Build the `--mcp` spec string for a catalog entry. Same format
- * `mcpCommandFor` produces for `reasonix mcp list`, minus the leading
- * `--mcp "..."` wrapper — we store the inner spec directly.
- */
-export function buildSpec(name: string, argsByName: Record<string, string>): string {
-  const entry = CATALOG_BY_NAME.get(name);
-  if (!entry) return name;
-  const userArg = entry.userArgs ? argsByName[name] : undefined;
-  const tail = userArg ? ` ${quoteIfNeeded(userArg)}` : "";
-  return `${entry.name}=npx -y ${entry.package}${tail}`;
-}
-
-function quoteIfNeeded(s: string): string {
-  // Escape backslashes BEFORE quotes — otherwise a trailing `\` in the
-  // input would consume the closing quote when a downstream parser
-  // un-escapes the output (CodeQL js/incomplete-sanitization).
-  return /\s|"/.test(s) ? `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"` : s;
-}

@@ -21,7 +21,7 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
   const { waitUntilExit, unmount } = render(
     <Wizard
       existingApiKey={existingKey}
-      initial={{ mcp: existing.mcp, theme: existing.theme }}
+      initial={{ theme: existing.theme }}
       forceApiKeyStep={opts.forceKeyStep}
       onComplete={() => undefined}
       onCancel={() => {
