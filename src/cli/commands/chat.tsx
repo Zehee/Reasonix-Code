@@ -428,6 +428,15 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
   // path so N cards don't accumulate N native stdout listeners.
   installResizeBroadcaster();
 
+  // Catch unhandled promise rejections so they don't crash the process.
+  // The root error is in the App component's handleSubmit flow.
+  process.on("unhandledRejection", (reason) => {
+    const err = reason instanceof Error ? reason : new Error(String(reason));
+    try {
+      process.stderr.write(`[unhandledRejection] ${err.stack ?? err.message}\n`);
+    } catch {}
+  });
+
   // Wheel scrolling. Opt-out via `mouseTracking: false` for users who
   // prefer native drag-select copy (Shift+drag still selects with mouse
   // mode on in most terminals). exit hooks cover hard kills so the
