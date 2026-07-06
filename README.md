@@ -15,6 +15,15 @@
   <a href="https://github.com/Zehee/Reasonix-Code/stargazers"><img src="https://img.shields.io/github/stars/Zehee/Reasonix-Code?style=flat-square&color=dbab09&labelColor=161b22&logo=github&logoColor=white" alt="stars"/></a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/Zehee/Reasonix-Code/releases/latest">
+    <img src="https://img.shields.io/badge/Download_CLI-blue?style=for-the-badge&logo=github&label=CLI%20.exe" alt="Download CLI"/>
+  </a>
+  <a href="https://github.com/Zehee/Reasonix-Code/releases/latest">
+    <img src="https://img.shields.io/badge/Download_Desktop-blue?style=for-the-badge&logo=windows&label=Desktop%20.msi" alt="Download Desktop"/>
+  </a>
+</p>
+
 **Reasonix-Code** 是一个轻量、透明、可控的编程 agent，专为需要 AI 记住跨 session 决策的开发者设计——不需要向量数据库、知识图谱、黑盒式的"AI 记忆"，也不需要安装任何 MCP 服务器。
 
 内置完整的记忆系统（`remember`、`forget`、`recall_memory`），无需任何外部依赖即可跨会话追溯决策。同时内置 49 个原生工具，覆盖文件操作、代码搜索、Shell 执行、计划管理、主题追踪等场景，开箱即用。

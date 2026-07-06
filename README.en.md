@@ -15,6 +15,15 @@
   <a href="https://github.com/Zehee/Reasonix-Code/stargazers"><img src="https://img.shields.io/github/stars/Zehee/Reasonix-Code?style=flat-square&color=dbab09&labelColor=161b22&logo=github&logoColor=white" alt="stars"/></a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/Zehee/Reasonix-Code/releases/latest">
+    <img src="https://img.shields.io/badge/Download_CLI-blue?style=for-the-badge&logo=github&label=CLI%20.exe" alt="Download CLI"/>
+  </a>
+  <a href="https://github.com/Zehee/Reasonix-Code/releases/latest">
+    <img src="https://img.shields.io/badge/Download_Desktop-blue?style=for-the-badge&logo=windows&label=Desktop%20.msi" alt="Download Desktop"/>
+  </a>
+</p>
+
 **Reasonix-Code** is a lightweight, transparent, and controllable coding agent for developers who need AI to remember decisions across sessions — no vector databases, knowledge graphs, opaque "AI memory" black boxes, or MCP servers required.
 
 Built-in memory (`remember`, `forget`, `recall_memory`) and 49 native tools covering filesystem, code search, shell, planning, theme tracking, and more — zero external dependencies, ready out of the box.
