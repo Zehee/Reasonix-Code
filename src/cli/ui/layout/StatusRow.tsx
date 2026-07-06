@@ -69,8 +69,8 @@ export function StatusRow({
 
   return (
     <Box flexDirection="row" flexShrink={0} marginTop={1}>
-      <Box flexDirection="row" flexWrap="wrap" flexGrow={1}>
-        <Text> </Text>
+      <Box flexDirection="row" flexGrow={1}>
+        {/* Left: mode + session */}
         {status.recording ? (
           <Pill>
             <RecordingPill rec={status.recording} />
@@ -88,6 +88,7 @@ export function StatusRow({
         <Pill>
           <Text color={FG.sub}>{`${session.id} · ${session.branch}`}</Text>
         </Pill>
+        {/* Center: costs + cache + ctx */}
         {hasTurn && statusBar.showTurnCost && (
           <>
             <Gap />
@@ -145,8 +146,9 @@ export function StatusRow({
             </Pill>
           </>
         )}
-      </Box>
-      <Box flexDirection="row" flexShrink={0}>
+        {/* Spacer to push right items to the end */}
+        <Box flexGrow={1} />
+        {/* Right: version + help */}
         {statusBar.showVersion && cols >= VERSION_MIN_COLS && (
           <Pill>
             <Text color={FG.faint}>{`v${VERSION}`}</Text>
