@@ -16,11 +16,12 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --ignore-scripts
 
       - name: Build binary
-        run: bun build ./src/cli/index.ts --compile --outfile build/reasonix-code-nightly.exe
-
+        run: |
+          mkdir build -Force
+          bun build ./src/cli/index.ts --compile --outfile build/reasonix-code-nightly.exe
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
