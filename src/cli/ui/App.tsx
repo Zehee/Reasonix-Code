@@ -4449,7 +4449,7 @@ function AppInner({
       <TickerProvider disabled={tickerSuspended}>
         <InflightProvider inflight={loop.inflight}>
           <Box flexDirection="column" height={stdout.rows} backgroundColor={SURFACE.bg}>
-            <Box flexDirection="column">
+            <Box flexDirection="column" flexGrow={1} overflow="hidden">
               <Box flexDirection="column" flexGrow={1}>
                 <LiveExpandContext.Provider value={liveExpand}>
                   <VerboseContext.Provider value={verboseMode}>
