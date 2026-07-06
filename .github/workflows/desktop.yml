@@ -1,0 +1,43 @@
+name: Build desktop
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      VCToolsVersion: "14.44.35207"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Node dependencies
+        run: bun install
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: bun install
+
+      - name: Build Node binary
+        run: bun build ./src/cli/index.ts --compile --outfile desktop/src-tauri/binaries/node.exe
+
+      - name: Build Tauri app
+        working-directory: desktop
+        run: npm run tauri build
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: reasonix-desktop-windows
+          path: desktop/src-tauri/target/release/bundle/msi/*.msi
