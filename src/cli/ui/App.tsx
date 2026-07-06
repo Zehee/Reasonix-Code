@@ -4448,8 +4448,9 @@ function AppInner({
     <>
       <TickerProvider disabled={tickerSuspended}>
         <InflightProvider inflight={loop.inflight}>
-          <Box flexDirection="column" height={stdout.rows} backgroundColor={SURFACE.bg}>
-            <Box flexDirection="column" flexGrow={1} overflow="hidden">
+          <Box flexDirection="column" backgroundColor={SURFACE.bg}>
+            {/* Content area: constrained to available viewport minus input area (~4 rows) */}
+            <Box flexDirection="column" height={Math.max(1, (stdout.rows ?? 30) - 4)} overflow="hidden">
               <Box flexDirection="column" flexGrow={1}>
                 <LiveExpandContext.Provider value={liveExpand}>
                   <VerboseContext.Provider value={verboseMode}>
