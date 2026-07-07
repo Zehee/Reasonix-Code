@@ -169,8 +169,8 @@ src/
 ~/.reasonix/
 ├── sessions/                      ← All sessions
 │   ├── {workspace-slug}/          ← Workspace-isolated
-│   │   ├── active.jsonl           ← Active conversation
-│   │   ├── active.denoised.jsonl  ← Denoised evolution skeleton
+│   │   ├── active.jsonl           ← Active conversation (append-only, no skeleton/shadow)
+│   │   ├── active.denoised.jsonl  ← Denoised skeleton generated at fold time (not live content)
 │   │   ├── active.toolcache.jsonl   ← Pre-compressed shadow (raw tool results)
 │   │   ├── active.meta.json       ← Metadata
 │   │   ├── 20260701_120000.jsonl  ← Archived history (/new rotation)

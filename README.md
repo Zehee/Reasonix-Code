@@ -169,8 +169,8 @@ src/
 ~/.reasonix/
 ├── sessions/                      ← 所有会话
 │   ├── {workspace-slug}/          ← 按工作区隔离
-│   │   ├── active.jsonl           ← 当前活跃会话
-│   │   ├── active.denoised.jsonl  ← 降噪后的演化骨架
+│   │   ├── active.jsonl           ← 当前活跃会话（纯追加，无骨架/无影子）
+│   │   ├── active.denoised.jsonl  ← fold 时从 active.jsonl 生成的降噪骨架（非 live 内容）
 │   │   ├── active.toolcache.jsonl   ← 预压缩影子（工具结果原文）
 │   │   ├── active.meta.json       ← 元数据
 │   │   ├── 20260701_120000.jsonl  ← 历史归档（/new 轮转）
