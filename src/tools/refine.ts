@@ -9,7 +9,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { ARCHIVE_MARKER } from "../memory/archiver.js";
-import { saveSearchView, type SearchCluster, type SearchView } from "../memory/search-view.js";
+import { type SearchCluster, type SearchView, saveSearchView } from "../memory/search-view.js";
 import {
   loadSessionMessages,
   loadSessionMeta,
@@ -17,8 +17,8 @@ import {
   sessionsDir,
 } from "../memory/session.js";
 import { denoiseTurn } from "../refine/denoise.js";
-import { getRefinedManager } from "../refine/refined-manager.js";
 import { messagesToRawTurns } from "../refine/raw-turns.js";
+import { getRefinedManager } from "../refine/refined-manager.js";
 import { scoreText } from "../refine/utils/search.js";
 import type { ToolCallContext, ToolRegistry } from "../tools.js";
 
@@ -47,7 +47,10 @@ function resolveCurrentSessionName(sessionName?: string): string | undefined {
  * Parse a session's JSONL file into RawTurns.
  * Each user→assistant cycle is grouped as one turn (turnId from the messages).
  */
-function sessionToRawTurns(sessionName: string): { sessionId: string; turns: import("../refine/types.js").RawTurn[] } {
+function sessionToRawTurns(sessionName: string): {
+  sessionId: string;
+  turns: import("../refine/types.js").RawTurn[];
+} {
   const messages = loadSessionMessages(sessionName);
   const meta = loadSessionMeta(sessionName);
   const sessionId = meta.sessionId ?? sessionName;
@@ -72,9 +75,7 @@ async function searchLiveSession(
     .filter((t) => t.length > 0);
   if (terms.length === 0) return [];
 
-  const denoised = turns.map((turn) =>
-    denoiseTurn(turn, { sessionId, source: "search" }),
-  );
+  const denoised = turns.map((turn) => denoiseTurn(turn, { sessionId, source: "search" }));
 
   const scored = denoised
     .map((turn) => {
@@ -146,19 +147,30 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
       const refinedMatches = manager.searchRefinedTurns({ query, limit: maxClusters * 4 });
 
       // 2. Search the current live session (on-demand denoise).
-      const currentSessionName = resolveCurrentSessionName(
-        explicitSessionName || undefined,
-      );
-      let liveMatches: Array<{ sessionId: string; turnId: number; score: number; timestamp?: string }> = [];
+      const currentSessionName = resolveCurrentSessionName(explicitSessionName || undefined);
+      let liveMatches: Array<{
+        sessionId: string;
+        turnId: number;
+        score: number;
+        timestamp?: string;
+      }> = [];
       if (currentSessionName) {
         liveMatches = await searchLiveSession(currentSessionName, query, maxClusters * 4);
       }
 
       // 3. Merge and deduplicate.
-      const merged = new Map<string, { sessionId: string; turnId: number; score: number; timestamp?: string }>();
+      const merged = new Map<
+        string,
+        { sessionId: string; turnId: number; score: number; timestamp?: string }
+      >();
       for (const m of refinedMatches) {
         const key = `${m.sessionId}:${m.turnId}`;
-        merged.set(key, { sessionId: m.sessionId, turnId: m.turnId, score: m.score, timestamp: m.timestamp });
+        merged.set(key, {
+          sessionId: m.sessionId,
+          turnId: m.turnId,
+          score: m.score,
+          timestamp: m.timestamp,
+        });
       }
       for (const m of liveMatches) {
         const key = `${m.sessionId}:${m.turnId}`;
@@ -227,10 +239,10 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
           } else {
             lines.push(`\n### Turn ${m.turnId} (score: ${m.score})`);
             lines.push(`Summary: ${refined?.summary ?? ""}`);
-            if (refined?.facts.length ?? 0 > 0) {
+            if ((refined?.facts.length ?? 0) > 0) {
               lines.push(`Facts:\n${refined!.facts.map((f: string) => `  - ${f}`).join("\n")}`);
             }
-            if (refined?.notes.length ?? 0 > 0) {
+            if ((refined?.notes.length ?? 0) > 0) {
               lines.push(`Notes:\n${refined!.notes.map((n: string) => `  - ${n}`).join("\n")}`);
             }
           }
@@ -376,7 +388,7 @@ function restoreArchivedContentSync(
   messages: import("../types.js").ChatMessage[],
 ): void {
   // Archive path = sessionPath + .toolcache.jsonl
-  const archivePath = sessionPath(sessionName) + ".toolcache.jsonl";
+  const archivePath = `${sessionPath(sessionName)}.toolcache.jsonl`;
   try {
     if (!existsSync(archivePath)) return;
     const raw = readFileSync(archivePath, "utf-8");

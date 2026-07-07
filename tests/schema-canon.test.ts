@@ -5,7 +5,7 @@ describe("canonicalizeSchema", () => {
   it("sorts properties keys alphabetically", () => {
     const input = { properties: { z: { type: "string" }, a: { type: "number" } } };
     const out = canonicalizeSchema(input) as Record<string, unknown>;
-    expect(Object.keys((out.properties as Record<string, unknown>))).toEqual(["a", "z"]);
+    expect(Object.keys(out.properties as Record<string, unknown>)).toEqual(["a", "z"]);
   });
 
   it("sorts required array", () => {
@@ -14,7 +14,10 @@ describe("canonicalizeSchema", () => {
   });
 
   it("removes $schema", () => {
-    const out = canonicalizeSchema({ $schema: "http://json-schema.org/draft-07/schema", type: "string" }) as Record<string, unknown>;
+    const out = canonicalizeSchema({
+      $schema: "http://json-schema.org/draft-07/schema",
+      type: "string",
+    }) as Record<string, unknown>;
     expect(out).not.toHaveProperty("$schema");
     expect(out).toHaveProperty("type");
   });
@@ -25,7 +28,10 @@ describe("canonicalizeSchema", () => {
   });
 
   it("keeps non-empty description", () => {
-    const out = canonicalizeSchema({ type: "string", description: "hello" }) as Record<string, unknown>;
+    const out = canonicalizeSchema({ type: "string", description: "hello" }) as Record<
+      string,
+      unknown
+    >;
     expect(out.description).toBe("hello");
   });
 
@@ -50,7 +56,8 @@ describe("canonicalizeSchema", () => {
 
 describe("shrinkDescription", () => {
   it("keeps first sentence when self-contained", () => {
-    const desc = "Mark one approved-plan step as done. Call exactly once after finishing each step.";
+    const desc =
+      "Mark one approved-plan step as done. Call exactly once after finishing each step.";
     expect(shrinkDescription(desc)).toBe("Mark one approved-plan step as done.");
   });
 

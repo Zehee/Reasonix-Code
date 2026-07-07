@@ -7,15 +7,11 @@ import { stripHallucinatedToolMarkup } from "./loop.js";
 import { buildAssistantMessage } from "./loop/messages.js";
 import { DEFAULT_MAX_RESULT_CHARS } from "./mcp/registry.js";
 import { loadArchiveMap, restoreFromArchive } from "./memory/archiver.js";
-import {
-  buildFoldSummaryText,
-  type FoldView,
-  saveFoldView,
-} from "./memory/fold-view.js";
+import { type FoldView, buildFoldSummaryText, saveFoldView } from "./memory/fold-view.js";
 import type { AppendOnlyLog } from "./memory/runtime.js";
 import { loadSessionId, rewriteSession } from "./memory/session.js";
-import { clusterDenoisedTurns, type DecisionCluster } from "./refine/cluster.js";
-import { denoiseTurn, type DenoisedTurn } from "./refine/denoise.js";
+import { type DecisionCluster, clusterDenoisedTurns } from "./refine/cluster.js";
+import { type DenoisedTurn, denoiseTurn } from "./refine/denoise.js";
 import { messagesToRawTurns } from "./refine/raw-turns.js";
 import { getRefinedManager } from "./refine/refined-manager.js";
 import {
@@ -363,7 +359,6 @@ function partitionFoldRegion(
   return { kept, fold };
 }
 
-
 export class ContextManager {
   private _logTokensCache = -1;
   private _logTokensVersion = -1;
@@ -703,7 +698,7 @@ export class ContextManager {
   ): Promise<void> {
     if (!this.deps.sessionName) return;
     const { sessionPath, timestampSuffix } = await import("./memory/session.js");
-    const path = sessionPath(sessionName) + ".denoised.jsonl";
+    const path = `${sessionPath(sessionName)}.denoised.jsonl`;
     const fs = await import("node:fs/promises");
     const { dirname } = await import("node:path");
     await fs.mkdir(dirname(path), { recursive: true });
@@ -777,13 +772,9 @@ export class ContextManager {
     const { dirname, join } = await import("node:path");
     const livePath = sessionPath(sessionName);
     const dir = dirname(livePath);
-    const base = sessionName.includes("/")
-      ? sessionName.split("/")[1]!
-      : sessionName;
+    const base = sessionName.includes("/") ? sessionName.split("/")[1]! : sessionName;
     const archiveName = `${base}__archive_${timestampSuffix()}.jsonl`;
-    const archivePath = sessionName.includes("/")
-      ? join(dir, archiveName)
-      : join(dir, archiveName);
+    const archivePath = sessionName.includes("/") ? join(dir, archiveName) : join(dir, archiveName);
     try {
       await copyFile(livePath, archivePath);
     } catch {

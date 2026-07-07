@@ -102,7 +102,11 @@ export function denoiseTurn(turn: RawTurn, opts: DenoiseOptions): DenoisedTurn {
   const errors = new Set<string>();
 
   for (const action of turn.actions || []) {
-    const { files: actionFiles, tools: actionTools, errors: actionErrors } = extractEntitiesFromAction(action);
+    const {
+      files: actionFiles,
+      tools: actionTools,
+      errors: actionErrors,
+    } = extractEntitiesFromAction(action);
     for (const f of actionFiles) files.add(f);
     for (const t of actionTools) tools.add(t);
     for (const e of actionErrors) errors.add(e);

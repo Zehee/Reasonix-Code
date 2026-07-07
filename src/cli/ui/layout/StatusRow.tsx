@@ -85,7 +85,11 @@ export function StatusRow({
           </Pill>
         ) : (
           <Pill>
-            <ModePill mode={editMode ?? status.mode} network={status.network} detail={status.networkDetail} />
+            <ModePill
+              mode={editMode ?? status.mode}
+              network={status.network}
+              detail={status.networkDetail}
+            />
           </Pill>
         )}
         <Gap />

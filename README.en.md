@@ -64,8 +64,9 @@ Designed for cross-session decision tracing. When you work on a project over wee
 ├──────────────────────────────────────────────┤
 │  Layer 2: Material Library                    │
 │  ~/.reasonix/refined/<ws>.sqlite              │
-│  ~/.reasonix/searches/*.json                  │
-│  Deterministic turn refinement + search       │
+│  ~/.reasonix/refined/<ws>/searches/*.json     │
+│  ~/.reasonix/refined/<ws>/folds/*.json        │
+│  Deterministic refinement + search + folds    │
 ├──────────────────────────────────────────────┤
 │  Layer 3: Thematic (topic tracking)           │
 │  ~/.reasonix/themes/*.json                    │
@@ -76,6 +77,8 @@ Designed for cross-session decision tracing. When you work on a project over wee
 ### Deterministic refinement (no LLM)
 
 Turn extraction uses keyword rules + Markdown structure analysis. Zero LLM calls, zero external dependencies. Fast, reproducible, explainable.
+
+> Note: refinement no longer runs as a separate gradual denoising loop; it is invoked on demand by `fold()` and `search_context`.
 
 ```json
 {
@@ -119,7 +122,7 @@ irm https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.ps1 | iex
 
 ```powershell
 # Download the latest release
-iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.0.exe -OutFile reasonix.exe
+iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.3.exe -OutFile reasonix.exe
 ```
 
 ---
@@ -167,6 +170,7 @@ src/
 ├── sessions/                      ← All sessions
 │   ├── {workspace-slug}/          ← Workspace-isolated
 │   │   ├── active.jsonl           ← Active conversation
+│   │   ├── active.denoised.jsonl  ← Denoised evolution skeleton
 │   │   ├── active.toolcache.jsonl   ← Pre-compressed shadow (raw tool results)
 │   │   ├── active.meta.json       ← Metadata
 │   │   ├── 20260701_120000.jsonl  ← Archived history (/new rotation)
@@ -174,8 +178,10 @@ src/
 │   ├── __chat__/                  ← Non-workspace sessions
 │   ├── {root-hash}/checkpoints/   ← Git snapshots before file writes
 │   └── *.plan.json, *.pending.json
-├── refined/{workspace-slug}/      ← Refined index (per-workspace SQLite)
-│   └── refined.sqlite
+├── refined/{workspace-slug}/      ← Refined index + fold/search views
+│   ├── refined.sqlite
+│   ├── folds/*.json               ← Fold views (decision clusters, turn refs)
+│   └── searches/*.json            ← search_context snapshots
 ├── mcp-handshake/                 ← MCP handshake cache (global)
 ├── memory/                        ← User memory + project memory
 └── config.json
@@ -196,39 +202,31 @@ The immutable prefix (system prompt + tool schemas + few-shots) is hashed and ke
 - **`_frozenToolsCache`** — frozen tool-spec snapshot avoids repeated cloning
 - **Reasoning continuity** — old `reasoning_content` is not stripped between turns (preserves message content ⇒ cache hit)
 
-### 2. Proactive compression (archive + fold)
+### 2. Single-jump folding (no gradual denoising)
 
-Instead of waiting for the 75% fold threshold, the system proactively compresses old tool noise.
+**Gradual denoising loops have been removed.** Context management now has only two states:
+
+- **Phase 1: Append-only.** No compression; full tool results are kept.
+- **Phase 2: Trigger Fold.** When the context nears its threshold, the entire history is denoised, clustered, and persisted as a fold view; the live prompt then cold-starts with a new four-layer structure.
+
+Post-fold prompt structure:
 
 ```
-┌─ Normal operation ──────────────────────────────┐
-│                                                  │
-│  Keep recent 5 turns full fidelity               │
-│  Older turns: tool noise → JSONL sidecar         │
-│  Main context: `[archived: read_file (2841 c)]`  │
-│                                                  │
-│  ⇒ ~40% fewer tokens per turn                    │
-│  ⇒ Folding delayed by ~67% more turns            │
-│                                                  │
-└──────────────────────────────────────────────────┘
-┌─ When fold triggers ────────────────────────────┐
-│                                                  │
-│  Summarizer reads archived content from JSONL     │
-│  Sees COMPLETE tool history, not just references   │
-│  Produces better summaries with all details      │
-│                                                  │
-└──────────────────────────────────────────────────┘
-┌─ Cache-aligned fold ────────────────────────────┐
-│                                                  │
-│  partitionFoldRegion():                           │
-│  - Keeps prior summaries verbatim                 │
-│  - Keeps small user turns (stated facts never     │
-│    summarized away)                               │
-│  - Only folds tool results + large responses      │
-│  ⇒ Second fold still hits cache for old summary   │
-│                                                  │
-└──────────────────────────────────────────────────┘
+[Fold recursive summary]
+  → [Decision clusters / related turn IDs]
+  → [Evolution framework: last 30 denoised turns]
+  → [Hot zone: last 5 turns full fidelity]
+  → [Current turn]
 ```
+
+| Layer | Scope | Contents | Cache role |
+|------|------|------|----------|
+| Fold summary | Earlier folds | Recursive strategic summary | Long-term stable, cache hit |
+| Decision clusters | Across folds | Decision facts, file refs, turn IDs | Highly stable, cache hit |
+| Evolution framework | Pre-fold 30 turns | User intent, tool calls, conclusions | Hits within stable window |
+| Hot zone | Last 5 turns | Full user/assistant/tool content | Changes every turn, expected miss |
+
+A fold is a single jump, not a continuous process. After the jump the prefix enters a new stable window and the cache hit rate recovers. Every compressed turn remains restorable via its `turnId` from the archived JSONL or `fold_view.json`.
 
 ### 3. Error tolerance
 

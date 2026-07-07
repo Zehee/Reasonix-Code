@@ -31,7 +31,7 @@ export function messagesToRawTurns(messages: ChatMessage[]): RawTurn[] {
       currentActions = [];
       currentTimestamp = undefined;
     } else if (msg.role === "assistant") {
-      currentAgent = (currentAgent + "\n" + String(msg.content ?? "")).trim();
+      currentAgent = `${currentAgent}\n${String(msg.content ?? "")}`.trim();
       if (msg.tool_calls) {
         for (const tc of msg.tool_calls) {
           currentActions.push({

@@ -51,11 +51,13 @@ const FILES = ROOTS.flatMap((root) => {
   } catch {
     return [];
   }
-}).map((p) => ({
-  path: p,
-  rel: relative(process.cwd(), p),
-  src: readFileSync(p, "utf8"),
-})).filter(({ rel }) => !GRANDFATHERED.has(rel.replace(/\\/g, "/")));
+})
+  .map((p) => ({
+    path: p,
+    rel: relative(process.cwd(), p),
+    src: readFileSync(p, "utf8"),
+  }))
+  .filter(({ rel }) => !GRANDFATHERED.has(rel.replace(/\\/g, "/")));
 
 /** Returns block comments as { startLine, lineCount, body }. */
 function blockComments(src: string): Array<{ start: number; lines: number; body: string }> {

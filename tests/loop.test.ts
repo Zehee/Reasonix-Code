@@ -826,7 +826,10 @@ describe("CacheFirstLoop (non-streaming)", () => {
 
     const entries = loop.log.entries;
     const summaryEntry = entries.find(
-      (m) => m.role === "assistant" && typeof m.content === "string" && m.content.includes("HISTORY SUMMARY"),
+      (m) =>
+        m.role === "assistant" &&
+        typeof m.content === "string" &&
+        m.content.includes("HISTORY SUMMARY"),
     );
     expect(summaryEntry).toBeDefined();
     expect(entries[entries.length - 1]!.content).toMatch(/answer number 5/);
@@ -921,7 +924,10 @@ describe("CacheFirstLoop (non-streaming)", () => {
     expect(foldWarn!.content).toMatch(/folded \d+ messages/);
     // The log is rewritten with a summary plus denoised framework turns.
     const hasSummary = loop.log.entries.some(
-      (m) => m.role === "assistant" && typeof m.content === "string" && m.content.includes("HISTORY SUMMARY"),
+      (m) =>
+        m.role === "assistant" &&
+        typeof m.content === "string" &&
+        m.content.includes("HISTORY SUMMARY"),
     );
     expect(hasSummary).toBe(true);
   }, 30_000);

@@ -6,13 +6,13 @@
  * concerns such as the write mutex.
  */
 
-import { denoisedToRefined, type DenoisedTurn } from "./denoise.js";
-import { extract } from "./extractor.js";
-import { RefinedStore } from "./store.js";
-import type { RawTurn, RefinedSearchMatch, RefinedSearchOptions, RefinedTurn } from "./types.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { workspaceSlug } from "../memory/session.js";
+import { type DenoisedTurn, denoisedToRefined } from "./denoise.js";
+import { extract } from "./extractor.js";
+import { RefinedStore } from "./store.js";
+import type { RawTurn, RefinedSearchMatch, RefinedSearchOptions, RefinedTurn } from "./types.js";
 import { Mutex } from "./utils/mutex.js";
 
 function refinedRootForCwd(): string {
@@ -72,7 +72,11 @@ export class RefinedManager {
       }
       for (const [sessionId, turns] of bySession) {
         const refined = turns.map(denoisedToRefined);
-        this.store.saveRefinedTurns(sessionId, refined, turns.map((t) => t.source));
+        this.store.saveRefinedTurns(
+          sessionId,
+          refined,
+          turns.map((t) => t.source),
+        );
       }
     });
   }
@@ -113,10 +117,7 @@ export class RefinedManager {
     });
   }
 
-  recordTurnAttention(
-    query: string,
-    refs: Array<{ sessionId: string; turnId: number }>,
-  ): void {
+  recordTurnAttention(query: string, refs: Array<{ sessionId: string; turnId: number }>): void {
     this.store.recordTurnAttention(query, refs);
   }
 

@@ -842,9 +842,7 @@ export function archiveSession(name: string): string | null {
   // Disambiguate if the same-minute target already exists.
   for (let n = 2; n < 100; n++) {
     const disambiguated = `${target}-${n}`;
-    const candidate = name.includes("/")
-      ? `${name.split("/")[0]}/${disambiguated}`
-      : disambiguated;
+    const candidate = name.includes("/") ? `${name.split("/")[0]}/${disambiguated}` : disambiguated;
     if (renameSession(name, candidate)) return candidate;
   }
   return null;
@@ -1157,7 +1155,8 @@ export async function listSessionsAsync(opts?: {
       : null;
   try {
     const files = (await readdir(dir)).filter(
-      (f) => f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".toolcache.jsonl"),
+      (f) =>
+        f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".toolcache.jsonl"),
     );
     const results = await Promise.all(
       files.flatMap(async (file) => {

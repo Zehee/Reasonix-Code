@@ -62,7 +62,7 @@ describe("ContextManager fold timeout", () => {
       expect(hasClusters).toBe(true);
     } finally {
       if (prevTimeout === undefined) {
-        delete process.env.REASONIX_FOLD_SUMMARY_TIMEOUT_MS;
+        process.env.REASONIX_FOLD_SUMMARY_TIMEOUT_MS = undefined;
       } else {
         process.env.REASONIX_FOLD_SUMMARY_TIMEOUT_MS = prevTimeout;
       }

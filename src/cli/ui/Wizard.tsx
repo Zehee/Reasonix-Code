@@ -68,9 +68,10 @@ export function buildSpec(name: string, args: Record<string, string>): string {
   let body = `npx -y ${entry.package}`;
   if (entry.userArgs) {
     const value = args[name] ?? "";
-    const arg = value.includes(" ") || value.includes('"') || value.includes("\t")
-      ? `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
-      : value;
+    const arg =
+      value.includes(" ") || value.includes('"') || value.includes("\t")
+        ? `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
+        : value;
     if (arg) body += ` ${arg}`;
   }
   return `${entry.name}=${body}`;
@@ -462,8 +463,6 @@ export async function validateDeepSeekApiKey(
   }
 }
 
-
-
 function ReviewConfirm({ onConfirm }: { onConfirm: () => void }) {
   useInput((_i, key) => {
     if (key.return) onConfirm();
@@ -512,4 +511,3 @@ function SummaryLine({ label, value }: { label: string; value: string }) {
     </Box>
   );
 }
-

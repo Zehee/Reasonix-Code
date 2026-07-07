@@ -35,7 +35,8 @@ export const DEFAULT_RECENT_TURN_KEEP = 5;
  * marker is the stable cache prefix and is NEVER touched by archiving.
  * Content between marker and recent keep window may be archived.
  */
-export const ARCHIVE_BOUNDARY_MARKER = "[cache-stable boundary — content before this point is preserved verbatim]";
+export const ARCHIVE_BOUNDARY_MARKER =
+  "[cache-stable boundary — content before this point is preserved verbatim]";
 
 /**
  * Resolve the keep-turns count from env or default.
@@ -74,7 +75,7 @@ export interface ArchiveEntry {
 
 function archivePathFor(sessionName: string): string {
   // Archive path = sessionPath + .toolcache.jsonl
-  return sessionPath(sessionName) + ".toolcache.jsonl";
+  return `${sessionPath(sessionName)}.toolcache.jsonl`;
 }
 
 // ---------------------------------------------------------------------------
@@ -188,7 +189,7 @@ export class TurnArchiver {
       // Write to archive.
       try {
         await mkdir(dirname(this._archivePath), { recursive: true });
-        await appendFile(this._archivePath, JSON.stringify(entry) + "\n", "utf-8");
+        await appendFile(this._archivePath, `${JSON.stringify(entry)}\n`, "utf-8");
       } catch {
         // Best-effort — if we can't write, don't strip.
         continue;

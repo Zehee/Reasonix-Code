@@ -74,7 +74,7 @@ export function KeystrokeProvider({
       const snapshot = [...handlersRef.current];
       for (const fn of snapshot) {
         fn(ev);
-        if (ev.consumed) break;  // stopPropagation support
+        if (ev.consumed) break; // stopPropagation support
       }
     });
     return () => {

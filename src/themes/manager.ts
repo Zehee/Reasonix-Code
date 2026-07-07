@@ -2,8 +2,8 @@
  * Theme association storage (theme -> turns / memories).
  */
 
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import { Mutex } from "../refine/utils/mutex.js";
 import { sanitizeKey, toTitle } from "../refine/utils/validation.js";
 
@@ -64,7 +64,7 @@ export class ThemeManager {
   saveTheme(theme: string, association: ThemeAssociation): void {
     const filePath = this.themeFilePath(theme);
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    const tmpPath = filePath + ".tmp";
+    const tmpPath = `${filePath}.tmp`;
     fs.writeFileSync(tmpPath, JSON.stringify(association, null, 2), "utf8");
     fs.renameSync(tmpPath, filePath);
   }

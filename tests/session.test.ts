@@ -117,7 +117,9 @@ describe("session persistence", () => {
     writeFileSync(`${p}.bak`, readFileSync(p, "utf8"));
     writeFileSync(p, "not json\nalso not json\n");
 
-    expect(loadSessionMessages("recover-corrupt")).toMatchObject([{ role: "user", content: "saved" }]);
+    expect(loadSessionMessages("recover-corrupt")).toMatchObject([
+      { role: "user", content: "saved" },
+    ]);
   });
 
   it("loadSessionMessages does not resurrect backup when the live transcript is empty", () => {
@@ -573,7 +575,9 @@ describe("session persistence", () => {
     });
     loop.appendAndPersist({ role: "user", content: "[!ls]\n$ ls\n[exit 0]\nfile1 file2" });
     const reloaded = loadSessionMessages("bang-persist");
-    expect(reloaded).toMatchObject([{ role: "user", content: "[!ls]\n$ ls\n[exit 0]\nfile1 file2" }]);
+    expect(reloaded).toMatchObject([
+      { role: "user", content: "[!ls]\n$ ls\n[exit 0]\nfile1 file2" },
+    ]);
   });
 
   describe("timestampSuffix", () => {

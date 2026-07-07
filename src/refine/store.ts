@@ -2,8 +2,8 @@
  * SQLite storage for refined turns.
  */
 
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import Database from "better-sqlite3";
 import { turnToRow } from "./adapter.js";
 import { rowToTurn } from "./adapter.js";
@@ -44,7 +44,7 @@ export class RefinedStore {
     `);
     // Migration: add source column if table was created before this version.
     try {
-      this.db.exec(`ALTER TABLE refined_turns ADD COLUMN source TEXT`);
+      this.db.exec("ALTER TABLE refined_turns ADD COLUMN source TEXT");
     } catch {
       // Column already exists.
     }

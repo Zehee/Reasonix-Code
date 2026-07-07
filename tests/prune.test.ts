@@ -25,7 +25,10 @@ describe("pruneStaleToolResults", () => {
 
   it("skips already-pruned messages", () => {
     const msgs: ChatMessage[] = [
-      toolMsg("[elided tool result — read_file, 2000 bytes dropped — re-run if data is needed again]", "read_file"),
+      toolMsg(
+        "[elided tool result — read_file, 2000 bytes dropped — re-run if data is needed again]",
+        "read_file",
+      ),
     ];
     const saved = pruneStaleToolResults(msgs, 1024);
     expect(saved).toBe(0);

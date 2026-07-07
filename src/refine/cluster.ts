@@ -58,9 +58,7 @@ function sharedTokenScore(a: string, b: string): number {
 function mergeClusters(a: DecisionCluster, b: DecisionCluster): DecisionCluster {
   const allTurns = [...a.turns, ...b.turns];
   allTurns.sort((x, y) => x.turnid - y.turnid);
-  const uniqueTurns = allTurns.filter(
-    (t, i, arr) => i === 0 || t.turnid !== arr[i - 1]!.turnid,
-  );
+  const uniqueTurns = allTurns.filter((t, i, arr) => i === 0 || t.turnid !== arr[i - 1]!.turnid);
   const times = uniqueTurns.map((t) => t.createdtime);
   const allFiles = new Set([...a.file_refs, ...b.file_refs]);
   const allFacts = new Set([...a.facts, ...b.facts]);

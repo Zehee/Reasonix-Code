@@ -64,8 +64,9 @@ Reasonix-Code 的三层记忆架构通过自动捕获、索引和关联跨 sessi
 ├──────────────────────────────────────────────┤
 │  第二层：材料库                                │
 │  ~/.reasonix/refined/<ws>.sqlite              │
-│  ~/.reasonix/searches/*.json                  │
-│  确定性提炼 + 跨 session 搜索                  │
+│  ~/.reasonix/refined/<ws>/searches/*.json     │
+│  ~/.reasonix/refined/<ws>/folds/*.json        │
+│  确定性提炼 + 跨 session 搜索 + fold 视图      │
 ├──────────────────────────────────────────────┤
 │  第三层：主题关联                               │
 │  ~/.reasonix/themes/*.json                    │
@@ -76,6 +77,8 @@ Reasonix-Code 的三层记忆架构通过自动捕获、索引和关联跨 sessi
 ### 确定性提炼（不用 LLM）
 
 基于关键词规则 + Markdown 结构分析。零 LLM 调用、零外部依赖。快速、可复现、可解释。
+
+> 注意：提炼不再作为独立的渐进降噪循环运行，而是内聚到 `fold()` 和 `search_context` 中按需触发。
 
 ```json
 {
@@ -119,7 +122,7 @@ irm https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.ps1 | iex
 
 ```powershell
 # 下载最新版本
-iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.0.exe -OutFile reasonix.exe
+iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.3.exe -OutFile reasonix.exe
 ```
 
 ---
@@ -167,6 +170,7 @@ src/
 ├── sessions/                      ← 所有会话
 │   ├── {workspace-slug}/          ← 按工作区隔离
 │   │   ├── active.jsonl           ← 当前活跃会话
+│   │   ├── active.denoised.jsonl  ← 降噪后的演化骨架
 │   │   ├── active.toolcache.jsonl   ← 预压缩影子（工具结果原文）
 │   │   ├── active.meta.json       ← 元数据
 │   │   ├── 20260701_120000.jsonl  ← 历史归档（/new 轮转）
@@ -174,8 +178,10 @@ src/
 │   ├── __chat__/                  ← 无工作区会话
 │   ├── {root-hash}/checkpoints/   ← 文件写入前的 git 快照
 │   └── *.plan.json, *.pending.json
-├── refined/{workspace-slug}/      ← 提炼索引
-│   └── refined.sqlite
+├── refined/{workspace-slug}/      ← 提炼索引 + 折叠视图
+│   ├── refined.sqlite
+│   ├── folds/*.json               ← fold 视图（决策簇、turn 引用）
+│   └── searches/*.json            ← search_context 搜索视图
 ├── mcp-handshake/                 ← MCP 握手缓存（全局共享）
 ├── memory/                        ← 用户记忆 + 项目记忆
 └── config.json
@@ -196,38 +202,31 @@ Reasonix-Code 的 **cache-first 循环**最大化 DeepSeek 前缀缓存命中率
 - **`_frozenToolsCache`** — 冻结工具快照，避免重复克隆
 - **推理内容连续性** — 旧 `reasoning_content` 不在轮次间剥离（保持消息内容 ⇒ 缓存命中）
 
-### 2. 主动压缩（归档 + 折叠）
+### 2. 单跳折叠（无渐进降噪）
 
-不等 75% 折叠阈值，系统主动压缩旧工具噪音。
+**已废除渐进降噪循环。** 上下文管理只有两种状态：
+
+- **阶段一：纯追加。** 不压缩，完整保留所有工具结果。
+- **阶段二：触发 Fold。** 当上下文接近阈值时，一次性全量 denoise、聚簇、生成 fold 视图，然后以新的四层结构重新冷启动 prompt。
+
+折叠后的主 prompt 结构：
 
 ```
-┌─ 正常运行 ─────────────────────────────────────┐
-│                                                  │
-│  保留最近 5 轮完整信息                            │
-│  更早轮次：工具噪音 → JSONL 侧边存储              │
-│  主上下文：`[archived: read_file (2841 字符)]`    │
-│                                                  │
-│  ⇒ 每轮减少约 40% token                          │
-│  ⇒ 折叠延迟约 67% 的轮数                          │
-│                                                  │
-└──────────────────────────────────────────────────┘
-┌─ 折叠触发时 ────────────────────────────────────┐
-│                                                  │
-│  摘要器从 JSONL 归档读取原始内容                   │
-│  看到完整工具历史，而非仅引用                      │
-│  生成包含所有细节的更好的摘要                      │
-│                                                  │
-└──────────────────────────────────────────────────┘
-┌─ 缓存对齐折叠 ──────────────────────────────────┐
-│                                                  │
-│  partitionFoldRegion()：                          │
-│  - 保留前序摘要不变                               │
-│  - 保留小用户 turn（用户陈述的事实永不丢失）         │
-│  - 仅折叠工具结果 + 大响应                         │
-│  ⇒ 二次折叠时旧摘要仍在缓存中命中                   │
-│                                                  │
-└──────────────────────────────────────────────────┘
+[Fold 递归摘要]
+  → [决策簇 / 相关 turn IDs]
+  → [演化框架：最近 30 轮降噪骨架]
+  → [热区原文：最近 5 轮完整内容]
+  → [当前 turn]
 ```
+
+| 层级 | 范围 | 内容 | 缓存角色 |
+|------|------|------|----------|
+| Fold 摘要 | 更早 fold | 递归战略摘要 | 长期稳定，缓存命中 |
+| 决策簇 | 跨 fold | 决策事实、文件引用、turn IDs | 高稳定，缓存命中 |
+| 演化框架 | fold 前 30 轮 | 用户意图、工具调用、结论 | 稳定期内缓存命中 |
+| 热区原文 | 最近 5 轮 | 完整 user/assistant/tool 内容 | 每轮变化，接受 miss |
+
+折叠是一次性跳变，不是持续渐进过程。fold 完成后前缀进入新的稳定期，缓存命中率重新上升。所有被压缩的历史都可以通过 `turnId` 从归档 JSONL 或 `fold_view.json` 中精确还原。
 
 ### 3. 错误容忍
 

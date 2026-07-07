@@ -8,8 +8,10 @@ describe("denoiseTurn", () => {
       turnId: 7,
       timestamp: "2026-07-07T10:00:00Z",
       user: "Can you fix the auth bug? The login fails on Safari.",
-      agentText: "Decision: use httpOnly cookie instead of localStorage.\n\nI'll investigate the Safari auth issue.",
-      agent: "Decision: use httpOnly cookie instead of localStorage.\n\nI'll investigate the Safari auth issue.",
+      agentText:
+        "Decision: use httpOnly cookie instead of localStorage.\n\nI'll investigate the Safari auth issue.",
+      agent:
+        "Decision: use httpOnly cookie instead of localStorage.\n\nI'll investigate the Safari auth issue.",
       actions: [
         { name: "read_file", args: { path: "src/auth.ts" } },
         { name: "tool", args: {}, result: "file content here" },

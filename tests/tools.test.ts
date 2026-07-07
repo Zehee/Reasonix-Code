@@ -709,8 +709,7 @@ describe("ToolRegistry", () => {
           properties: { path: { type: "string" }, body: { type: "string" } },
           required: ["path", "body"],
         },
-        fn: ({ path, body }: { path: string; body: string }) =>
-          `edited ${path} — ${body}`,
+        fn: ({ path, body }: { path: string; body: string }) => `edited ${path} — ${body}`,
       });
       // First call: missing body — gets auto-filled with default ("").
       const out1 = await reg.dispatch("edit", '{"path": "x"}');

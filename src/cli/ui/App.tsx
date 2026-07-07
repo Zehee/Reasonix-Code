@@ -2835,6 +2835,7 @@ function AppInner({
     onChoiceResolveRef: handleChoiceResolveRef,
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: input.slice is stable via the input state variable; adding it would force-reserialize the callback on every keystroke.
   const handleSubmit = useCallback(
     async (raw: string) => {
       const qqIncoming = qq.parseSubmit(raw);
