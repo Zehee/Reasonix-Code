@@ -1,109 +1,117 @@
 /**
- * Refine tools: search_context and refine_session_turns.
+ * Refine / search tools: search_context and load_turns_context.
+ *
+ * Denoising is now performed automatically during fold and on-demand when a
+ * live session turn is searched. There is no standalone refine_session_turns
+ * tool.
  */
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { ARCHIVE_MARKER } from "../memory/archiver.js";
+import { saveSearchView, type SearchCluster, type SearchView } from "../memory/search-view.js";
 import {
   loadSessionMessages,
   loadSessionMeta,
   sessionPath,
   sessionsDir,
-  workspaceSlug,
 } from "../memory/session.js";
-import { RefinedManager } from "../refine/refined-manager.js";
-import type { RawAction, RawTurn, RefinedTurn } from "../refine/types.js";
+import { denoiseTurn } from "../refine/denoise.js";
+import { getRefinedManager } from "../refine/refined-manager.js";
+import { messagesToRawTurns } from "../refine/raw-turns.js";
+import { scoreText } from "../refine/utils/search.js";
 import type { ToolCallContext, ToolRegistry } from "../tools.js";
 
-function getRefinedRoot(): string {
-  const cwd = process.cwd();
-  const slug = workspaceSlug(cwd);
-  return join(homedir(), ".reasonix", "refined", slug);
-}
-
-let _refinedManager: RefinedManager | null = null;
-
-function refinedManager(): RefinedManager {
-  if (!_refinedManager) {
-    _refinedManager = new RefinedManager(getRefinedRoot());
-  }
-  return _refinedManager;
+/**
+ * Find the most recent session name in the current workspace if no explicit
+ * session name is provided to search_context.
+ */
+function resolveCurrentSessionName(sessionName?: string): string | undefined {
+  if (sessionName) return sessionName;
+  const dir = sessionsDir();
+  if (!existsSync(dir)) return undefined;
+  const files = readdirSync(dir)
+    .filter(
+      (f) =>
+        f.endsWith(".jsonl") &&
+        !f.endsWith(".events.jsonl") &&
+        !f.endsWith(".toolcache.jsonl") &&
+        !f.endsWith(".denoised.jsonl"),
+    )
+    .sort()
+    .reverse();
+  return files.length > 0 ? files[0]!.replace(/\.jsonl$/, "") : undefined;
 }
 
 /**
  * Parse a session's JSONL file into RawTurns.
  * Each user→assistant cycle is grouped as one turn (turnId from the messages).
  */
-function sessionToRawTurns(sessionName: string): { sessionId: string; turns: RawTurn[] } {
+function sessionToRawTurns(sessionName: string): { sessionId: string; turns: import("../refine/types.js").RawTurn[] } {
   const messages = loadSessionMessages(sessionName);
   const meta = loadSessionMeta(sessionName);
   const sessionId = meta.sessionId ?? sessionName;
+  return { sessionId, turns: messagesToRawTurns(messages) };
+}
 
-  const turns: RawTurn[] = [];
-  let currentTurnId = 0;
-  let currentUser = "";
-  let currentAgent = "";
-  let currentActions: RawAction[] = [];
+/**
+ * Search the current (live) session's messages and return denoised turns that
+ * match the query. Also persists those live turns to the refined index.
+ */
+async function searchLiveSession(
+  sessionName: string,
+  query: string,
+  limit: number,
+): Promise<Array<{ sessionId: string; turnId: number; score: number; timestamp?: string }>> {
+  const { sessionId, turns } = sessionToRawTurns(sessionName);
+  if (turns.length === 0) return [];
 
-  for (const msg of messages) {
-    if (msg.role === "user") {
-      // Flush previous turn
-      if (currentUser || currentAgent) {
-        turns.push({
-          turnId: currentTurnId,
-          timestamp: undefined,
-          user: currentUser,
-          agent: currentAgent,
-          agentText: currentAgent,
-          actions: currentActions,
-        });
-      }
-      currentTurnId = msg.turnId ?? currentTurnId + 1;
-      currentUser = msg.content ?? "";
-      currentAgent = "";
-      currentActions = [];
-    } else if (msg.role === "assistant") {
-      currentAgent = (currentAgent + "\n" + (msg.content ?? "")).trim();
-      if (msg.tool_calls) {
-        for (const tc of msg.tool_calls) {
-          currentActions.push({
-            name: tc.function?.name ?? "unknown",
-            args: tc.function?.arguments,
-          });
-        }
-      }
-    } else if (msg.role === "tool") {
-      currentActions.push({
-        name: msg.name ?? "tool",
-        args: {},
-        result: msg.content,
-      });
-    }
-  }
-  // Flush last turn
-  if (currentUser || currentAgent) {
-    turns.push({
-      turnId: currentTurnId,
-      timestamp: undefined,
-      user: currentUser,
-      agent: currentAgent,
-      agentText: currentAgent,
-      actions: currentActions,
-    });
+  const terms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t.length > 0);
+  if (terms.length === 0) return [];
+
+  const denoised = turns.map((turn) =>
+    denoiseTurn(turn, { sessionId, source: "search" }),
+  );
+
+  const scored = denoised
+    .map((turn) => {
+      const haystack = [
+        turn.userIntent,
+        turn.assistantConclusion,
+        ...turn.files,
+        ...turn.toolsCalled.map((t) => t.name),
+        ...turn.errors,
+      ].join(" ");
+      const score = scoreText(haystack, terms);
+      return { sessionId, turnId: turn.turnId, score, timestamp: turn.timestamp };
+    })
+    .filter((m) => m.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+
+  if (scored.length > 0) {
+    const manager = getRefinedManager();
+    await manager.saveDenoisedTurns(denoised);
+    manager.recordTurnAttention(
+      query,
+      scored.map((s) => ({ sessionId: s.sessionId, turnId: s.turnId })),
+    );
   }
 
-  return { sessionId, turns };
+  return scored;
 }
 
 export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
   registry.register({
     name: "search_context",
-    description: `跨会话搜索历史对话，返回匹配的对话轮次（按时间窗口聚簇）。搜索命中未提炼的 turn 时自动提炼入库。
+    description: `跨会话搜索历史对话，返回匹配的对话轮次（按时间窗口聚簇）。搜索会先查已降噪的索引库；如果涉及当前未折叠的会话，会按需降噪并入库，同时记录搜索权重。
 
 参数:
 - query: 搜索关键词（必填）
+- sessionName: 当前会话名称（可选，不填则使用最近会话）
 - maxClusters: 最多返回多少个簇（默认 5）
 - detail: "compact" | "normal"（默认 "normal"）
 
@@ -112,6 +120,7 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
       type: "object",
       properties: {
         query: { type: "string", description: "搜索关键词" },
+        sessionName: { type: "string", description: "当前会话名称，可选" },
         maxClusters: { type: "number", description: "最多返回簇数，默认 5" },
         detail: {
           type: "string",
@@ -123,6 +132,7 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
     },
     fn: async (args: Record<string, unknown>, _ctx?: ToolCallContext): Promise<string> => {
       const query = String(args.query ?? "");
+      const explicitSessionName = String(args.sessionName ?? "");
       const maxClusters = Number(args.maxClusters ?? 5);
       const detail = String(args.detail ?? "normal");
 
@@ -130,16 +140,49 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
         return "search_context: query is required";
       }
 
-      const manager = refinedManager();
+      const manager = getRefinedManager();
 
-      // Search refined turns
-      const matches = await manager.searchRefinedTurns({ query, limit: maxClusters * 4 });
+      // 1. Search the denoised/refined corpus.
+      const refinedMatches = manager.searchRefinedTurns({ query, limit: maxClusters * 4 });
+
+      // 2. Search the current live session (on-demand denoise).
+      const currentSessionName = resolveCurrentSessionName(
+        explicitSessionName || undefined,
+      );
+      let liveMatches: Array<{ sessionId: string; turnId: number; score: number; timestamp?: string }> = [];
+      if (currentSessionName) {
+        liveMatches = await searchLiveSession(currentSessionName, query, maxClusters * 4);
+      }
+
+      // 3. Merge and deduplicate.
+      const merged = new Map<string, { sessionId: string; turnId: number; score: number; timestamp?: string }>();
+      for (const m of refinedMatches) {
+        const key = `${m.sessionId}:${m.turnId}`;
+        merged.set(key, { sessionId: m.sessionId, turnId: m.turnId, score: m.score, timestamp: m.timestamp });
+      }
+      for (const m of liveMatches) {
+        const key = `${m.sessionId}:${m.turnId}`;
+        const existing = merged.get(key);
+        if (existing) {
+          existing.score = Math.max(existing.score, m.score);
+        } else {
+          merged.set(key, m);
+        }
+      }
+
+      const matches = Array.from(merged.values()).sort((a, b) => b.score - a.score);
 
       if (matches.length === 0) {
         return `No matches found for "${query}".`;
       }
 
-      // Group by session
+      // Record attention weights for all returned matches.
+      manager.recordTurnAttention(
+        query,
+        matches.map((m) => ({ sessionId: m.sessionId, turnId: m.turnId })),
+      );
+
+      // 4. Build search view and save it.
       const bySession = new Map<string, typeof matches>();
       for (const m of matches) {
         const list = bySession.get(m.sessionId) ?? [];
@@ -147,6 +190,29 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
         bySession.set(m.sessionId, list);
       }
 
+      const clusters: SearchCluster[] = [];
+      for (const [sid, ms] of bySession) {
+        const picked = ms.slice(0, maxClusters);
+        for (const m of picked) {
+          clusters.push({
+            sessionId: sid,
+            hitTurnId: m.turnId,
+            memberCount: 1,
+            members: [{ sessionId: sid, turnId: m.turnId, timestamp: m.timestamp }],
+          });
+        }
+      }
+
+      const searchView: SearchView = {
+        query,
+        createdAt: new Date().toISOString(),
+        totalMatches: matches.length,
+        totalRefined: refinedMatches.length,
+        clusters,
+      };
+      await saveSearchView(searchView);
+
+      // 5. Format response.
       const lines: string[] = [
         `Found ${matches.length} matches in ${bySession.size} sessions for "${query}":`,
       ];
@@ -155,75 +221,23 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
         lines.push(`\n## Session: ${sid} (${ms.length} matches)`);
         const cluster = ms.slice(0, maxClusters);
         for (const m of cluster) {
+          const refined = manager.loadRefinedTurn(m.sessionId, m.turnId);
           if (detail === "compact") {
-            lines.push(`  turn ${m.turnId}: ${m.summary.slice(0, 120)}`);
+            lines.push(`  turn ${m.turnId}: ${refined?.summary.slice(0, 120) ?? ""}`);
           } else {
             lines.push(`\n### Turn ${m.turnId} (score: ${m.score})`);
-            lines.push(`Summary: ${m.summary}`);
-            if (m.facts.length > 0) {
-              lines.push(`Facts:\n${m.facts.map((f: string) => `  - ${f}`).join("\n")}`);
+            lines.push(`Summary: ${refined?.summary ?? ""}`);
+            if (refined?.facts.length ?? 0 > 0) {
+              lines.push(`Facts:\n${refined!.facts.map((f: string) => `  - ${f}`).join("\n")}`);
             }
-            if (m.notes.length > 0) {
-              lines.push(`Notes:\n${m.notes.map((n: string) => `  - ${n}`).join("\n")}`);
+            if (refined?.notes.length ?? 0 > 0) {
+              lines.push(`Notes:\n${refined!.notes.map((n: string) => `  - ${n}`).join("\n")}`);
             }
           }
         }
       }
 
       return lines.join("\n");
-    },
-  });
-
-  registry.register({
-    name: "refine_session_turns",
-    description: `手动触发某个 session 的提炼。读取 session 的 JSONL 文件 → 提取结构化摘要 → 存入 SQLite 索引库。
-
-参数:
-- sessionName: 会话名称（如 "20260701-120000-deepseek-chat"），不填则提炼当前 session`,
-    parameters: {
-      type: "object",
-      properties: {
-        sessionName: { type: "string", description: "会话名称，不填则尝试当前 session" },
-      },
-    },
-    fn: async (args: Record<string, unknown>, _ctx?: ToolCallContext): Promise<string> => {
-      let sessionName = String(args.sessionName ?? "");
-      if (!sessionName) {
-        // Try to find the latest session
-        const dir = sessionsDir();
-        if (existsSync(dir)) {
-          const files = readdirSync(dir)
-            .filter(
-              (f) =>
-                f.endsWith(".jsonl") &&
-                !f.endsWith(".events.jsonl") &&
-                !f.endsWith(".toolcache.jsonl"),
-            )
-            .sort()
-            .reverse();
-          if (files.length > 0) {
-            sessionName = files[0]!.replace(/\.jsonl$/, "");
-          }
-        }
-      }
-
-      if (!sessionName) {
-        return "refine_session_turns: no session found";
-      }
-
-      const { sessionId, turns } = sessionToRawTurns(sessionName);
-      if (turns.length === 0) {
-        return `Session "${sessionName}" has no turns to refine.`;
-      }
-
-      const manager = refinedManager();
-      const refined: RefinedTurn[] = [];
-      for (const turn of turns) {
-        refined.push(manager.refineTurn(turn, sessionId));
-      }
-      await manager.saveRefinedTurns(sessionId, refined);
-
-      return `Refined ${refined.length} turns from session "${sessionName}" (${sessionId}).`;
     },
   });
 
@@ -354,8 +368,8 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
 
 /**
  * Synchronously load archive entries and restore archived tool content
- * in a messages array. Used by `sessionToRawTurns` to ensure the refined
- * index captures full detail even after proactive archiving.
+ * in a messages array. Used by load_turns_context so the full original
+ * content is available even after proactive archiving.
  */
 function restoreArchivedContentSync(
   sessionName: string,

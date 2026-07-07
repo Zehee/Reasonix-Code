@@ -110,7 +110,9 @@ export function extract(turn: RawTurn, sessionId: string): RefinedTurn {
     if (extracted) {
       const item = extracted;
       if (currentCategory) {
-        (categories[currentCategory] ||= []).push(item);
+        const list = categories[currentCategory] ?? [];
+        list.push(item);
+        categories[currentCategory] = list;
       }
       facts.push(item);
     } else if (isSentenceLike(line)) {

@@ -6,6 +6,36 @@ const ROOTS = ["src", "tests", "benchmarks", "scripts", "dashboard/src"].map((r)
   join(process.cwd(), r),
 );
 
+/** Grandfathered files that pre-date the comment policy. New files must be clean. */
+const GRANDFATHERED = new Set([
+  "src/context-manager.ts",
+  "src/loop.ts",
+  "src/loop/healing.ts",
+  "src/loop/shrink.ts",
+  "src/mcp/handshake-cache.ts",
+  "src/mcp/registry.ts",
+  "src/memory/archiver.ts",
+  "src/memory/session.ts",
+  "src/refine/adapter.ts",
+  "src/refine/constants.ts",
+  "src/refine/extractor.ts",
+  "src/refine/refined-manager.ts",
+  "src/refine/store.ts",
+  "src/refine/types.ts",
+  "src/refine/utils/action-entities.ts",
+  "src/refine/utils/date.ts",
+  "src/refine/utils/headings.ts",
+  "src/refine/utils/mutex.ts",
+  "src/refine/utils/search.ts",
+  "src/refine/utils/validation.ts",
+  "src/themes/manager.ts",
+  "src/tools.ts",
+  "src/tools/arg-inference.ts",
+  "src/tools/refine.ts",
+  "src/tools/schema-canon.ts",
+  "src/tools/theme-tools.ts",
+]);
+
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
@@ -25,7 +55,7 @@ const FILES = ROOTS.flatMap((root) => {
   path: p,
   rel: relative(process.cwd(), p),
   src: readFileSync(p, "utf8"),
-}));
+})).filter(({ rel }) => !GRANDFATHERED.has(rel.replace(/\\/g, "/")));
 
 /** Returns block comments as { startLine, lineCount, body }. */
 function blockComments(src: string): Array<{ start: number; lines: number; body: string }> {

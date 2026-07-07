@@ -49,9 +49,9 @@ export function registerJavaSourceTool(
         );
       }
 
-      const jarKeyword = args.jarKeyword.trim();
+      const jarKeyword = String(args?.jarKeyword ?? "").trim();
       if (!jarKeyword) {
-        throw new Error("java_source: `jarKeyword` must not be empty");
+        throw new Error("java_source: missing required parameter `jarKeyword` — must not be empty");
       }
 
       const projectRoot = opts.projectRoot || process.cwd();

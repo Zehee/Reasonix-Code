@@ -26,6 +26,7 @@ import {
   t,
 } from "../../i18n/index.js";
 import type { LanguageCode } from "../../i18n/types.js";
+import { MCP_CATALOG } from "../../mcp/catalog.js";
 import { type SelectItem, SingleSelect } from "./Select.js";
 import { ThemeProvider, useTheme } from "./theme/context.js";
 import { themeChoiceLabel } from "./theme/labels.js";
@@ -60,7 +61,20 @@ interface WizardData {
   apiKey: string;
 }
 
-
+/** Build the `--mcp` string for a catalog server; unknown names degrade to the bare name. */
+export function buildSpec(name: string, args: Record<string, string>): string {
+  const entry = MCP_CATALOG.find((e) => e.name === name);
+  if (!entry) return name;
+  let body = `npx -y ${entry.package}`;
+  if (entry.userArgs) {
+    const value = args[name] ?? "";
+    const arg = value.includes(" ") || value.includes('"') || value.includes("\t")
+      ? `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
+      : value;
+    if (arg) body += ` ${arg}`;
+  }
+  return `${entry.name}=${body}`;
+}
 
 const LANGUAGE_LABELS: Record<LanguageCode, string> = {
   EN: "English",

@@ -28,6 +28,7 @@ import {
   healLoadedMessages,
   healLoadedMessagesByTokens,
   stampMissingReasoningForThinkingMode,
+  stripStalePlainReasoning,
 } from "./loop/healing.js";
 import { hookWarnings, safeParseToolArgs } from "./loop/hook-events.js";
 import { buildAssistantMessage, buildSyntheticAssistantMessage } from "./loop/messages.js";
@@ -49,6 +50,7 @@ import { AppendOnlyLog, type ImmutablePrefix, VolatileScratch } from "./memory/r
 import {
   appendSessionMessage,
   archiveSession,
+  loadSessionId,
   loadSessionMessages,
   loadSessionMeta,
   patchSessionMeta,
@@ -67,7 +69,7 @@ import { type CacheDiagnostics, SessionStats, type TurnStats } from "./telemetry
 import { countTokensBounded } from "./tokenizer.js";
 import { ToolRegistry } from "./tools.js";
 import { ReadTracker } from "./tools/read-tracker.js";
-import type { ChatMessage, ToolCall, ToolSpec } from "./types.js";
+import type { ChatMessage, Role, ToolCall, ToolSpec } from "./types.js";
 
 export const MID_TURN_STEER_WRAPPER =
   "[Mid-turn steer queued by the user. Do not treat this as a new task; use it only as additional guidance for the current task after completing the current step.]";
@@ -189,6 +191,8 @@ export class CacheFirstLoop {
   /** One-shot 80% warning latch — cleared by setBudget so a bump re-arms at the new boundary. */
   private _budgetWarned = false;
   sessionName: string | null;
+  /** Stable session identifier recovered from meta.json / JSONL header; undefined for ephemeral runs. */
+  readonly sessionId: string | undefined;
 
   hooks: ResolvedHook[];
   hookCwd: string;
@@ -198,6 +202,9 @@ export class CacheFirstLoop {
 
   /** Number of messages that were pre-loaded from the session file. */
   readonly resumedMessageCount: number;
+
+  /** Current turn id cursor; incremented on each user message, shared by assistant/tool messages in the same turn. */
+  private _currentTurnId = 0;
 
   private readonly _rebuildSystem: (() => string) | null;
 
@@ -252,6 +259,7 @@ export class CacheFirstLoop {
     this.prefix = opts.prefix;
     this.tools = opts.tools ?? new ToolRegistry();
     this.sessionName = opts.session ?? null;
+    this.sessionId = this.sessionName ? loadSessionId(this.sessionName) : undefined;
     this.log = new AppendOnlyLog({
       sessionPath: this.sessionName ? sessionPath(this.sessionName) : undefined,
     });
@@ -307,6 +315,10 @@ export class CacheFirstLoop {
       const tokensSaved = shrunk.tokensSaved;
       this.log.initWindow(messages);
       this.resumedMessageCount = messages.length;
+      this._currentTurnId = messages.reduce(
+        (max, m) => (typeof m.turnId === "number" && m.turnId > max ? m.turnId : max),
+        0,
+      );
       this._turn = messages.reduce((n, m) => (m.role === "assistant" ? n + 1 : n), 0);
       // Carry forward cumulative cost / turn count so the TUI's session
       // total continues across resumes; otherwise each restart resets to $0.
@@ -386,15 +398,34 @@ export class CacheFirstLoop {
     return this.context.getLogTokens();
   }
 
+  /** Advance the turn cursor on each user message; assistant/tool messages share the current turn. */
+  private nextTurnId(role: Role): number {
+    if (role === "user") this._currentTurnId++;
+    return this._currentTurnId || 1;
+  }
+
+  /** Ensure every message that enters the log carries stable turnId/sessionId metadata.
+   *  Idempotent: if the caller already stamped the message, the existing values are preserved. */
+  private stampMessage(message: ChatMessage): ChatMessage {
+    return {
+      ...message,
+      turnId: message.turnId ?? this.nextTurnId(message.role),
+      sessionId: message.sessionId ?? this.sessionId,
+    };
+  }
+
   appendAndPersist(message: ChatMessage): void {
     // Shrink oversized content on append so the message is byte-identical from
     // the first API call — deferred shrinking in the healing pipeline would
     // change content between calls and invalidate DeepSeek's prefix cache.
     const retained = shrinkToolResultForCacheStability(shrinkMessageForRetention(message));
-    this.log.append(retained);
+    // Stamp stable metadata at append time so in-memory log, disk file, and
+    // later reloads all see the same message bytes (issue #943 / cache stability).
+    const stamped = this.stampMessage(retained);
+    this.log.append(stamped);
     if (this.sessionName) {
       try {
-        appendSessionMessage(this.sessionName, retained);
+        appendSessionMessage(this.sessionName, stamped);
       } catch {
         /* disk full or permission denied shouldn't kill the chat */
       }
@@ -607,7 +638,7 @@ export class CacheFirstLoop {
   private _healedVersion = -1;
 
   private buildMessages(): ChatMessage[] {
-    const healedMessages = this.healActiveLogBeforeSend();
+    const healedMessages = stripStalePlainReasoning(this.healActiveLogBeforeSend());
     return [...this.prefix.toMessages(), ...healedMessages];
   }
 
@@ -654,12 +685,14 @@ export class CacheFirstLoop {
   }
 
   private healActiveLogBeforeSend(): ChatMessage[] {
-    // NOTE: No healing pipeline between turns — oversized content is
-    // already shrunk on append (shrinkToolResultForCacheStability +
-    // shrinkMessageForRetention). A per-iteration healing pass would
-    // modify already-sent messages and invalidate DeepSeek's prefix
-    // cache. Constructor healing (healLoadedMessagesByTokens) handles
-    // the one-time fix-up for sessions loaded from disk.
+    // NOTE: No per-iteration healing inside the turn loop — oversized
+    // content is already shrunk on append (shrinkToolResultForCacheStability
+    // + shrinkMessageForRetention). A per-iteration pass would modify
+    // already-sent messages and invalidate DeepSeek's prefix cache.
+    // One-time healing happens at two boundaries:
+    //   1. Constructor (healLoadedMessagesByTokens) for sessions loaded from disk.
+    //   2. step() entry (fixToolCallPairing) for dangling tool_calls that survived
+    //      in memory after a crash or direct append.
     const current = this.log.toFullHistory();
     this._healedCache = current;
     this._healedVersion = this.log.version;
@@ -819,6 +852,24 @@ export class CacheFirstLoop {
     this._turnAbort = new AbortController();
     if (carryAbort) this._turnAbort.abort();
     const signal = this._turnAbort.signal;
+    // Defensive: heal any dangling assistant.tool_calls that survived in memory
+    // (e.g., crash recovery, direct append, or tests injecting illegal states).
+    // Dangling calls are usually at the tail, so deleting them rarely invalidates
+    // prior prefix-cache bytes; they were never successfully sent anyway.
+    // This is a one-time turn-start heal, not a per-iteration rewrite, so the
+    // prefix-cache stability invariant inside the iter loop is preserved.
+    const healed = fixToolCallPairing(this.log.toFullHistory());
+    if (healed.droppedAssistantCalls > 0 || healed.droppedStrayTools > 0) {
+      this.log.compactInPlace(healed.messages);
+      if (this.sessionName) {
+        try {
+          rewriteSession(this.sessionName, healed.messages);
+        } catch {
+          /* disk issue shouldn't block the turn */
+        }
+      }
+    }
+
     // Persist the user message before the first API round-trip so a
     // mid-stream abort or a session switch doesn't drop the prompt and
     // leave a new session orphaned without a .jsonl on disk (issue #943

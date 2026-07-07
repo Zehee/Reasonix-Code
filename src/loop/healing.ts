@@ -88,6 +88,26 @@ export function stampMissingReasoningForThinkingMode(
   return { messages, stampedCount: 0 };
 }
 
+/**
+ * Strip stale reasoning_content from plain-text assistant messages before
+ * sending the next request. Tool-call turns keep their reasoning so the model
+ * can trace why a call was made; plain-text reasoning is only relevant for the
+ * turn it was produced on.
+ */
+export function stripStalePlainReasoning(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((m) => {
+    if (
+      m.role === "assistant" &&
+      (!Array.isArray(m.tool_calls) || m.tool_calls.length === 0) &&
+      Object.hasOwn(m, "reasoning_content")
+    ) {
+      const { reasoning_content: _, ...rest } = m;
+      return rest as ChatMessage;
+    }
+    return m;
+  });
+}
+
 /** Token-cap variant — char cap would let CJK slip past at 2× the intended token cost. */
 export function healLoadedMessagesByTokens(
   messages: ChatMessage[],

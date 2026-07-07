@@ -1,0 +1,13 @@
+.msg-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg-text .markdown {
+  white-space: normal;
+}
+
+.markdown .codeview {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}

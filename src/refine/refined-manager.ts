@@ -6,10 +6,33 @@
  * concerns such as the write mutex.
  */
 
+import { denoisedToRefined, type DenoisedTurn } from "./denoise.js";
 import { extract } from "./extractor.js";
 import { RefinedStore } from "./store.js";
 import type { RawTurn, RefinedSearchMatch, RefinedSearchOptions, RefinedTurn } from "./types.js";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { workspaceSlug } from "../memory/session.js";
 import { Mutex } from "./utils/mutex.js";
+
+function refinedRootForCwd(): string {
+  const cwd = process.cwd();
+  const slug = workspaceSlug(cwd);
+  return join(homedir(), ".reasonix", "refined", slug);
+}
+
+let _sharedRefinedManager: RefinedManager | null = null;
+
+/**
+ * Shared RefinedManager for the current workspace.
+ * Tools and ContextManager both use this instance.
+ */
+export function getRefinedManager(): RefinedManager {
+  if (!_sharedRefinedManager) {
+    _sharedRefinedManager = new RefinedManager(refinedRootForCwd());
+  }
+  return _sharedRefinedManager;
+}
 
 export type {
   RawAction,
@@ -18,6 +41,7 @@ export type {
   RefinedSearchOptions,
   RefinedSearchMatch,
 } from "./types.js";
+export type { DenoisedTurn, DenoiseSource } from "./denoise.js";
 
 export class RefinedManager {
   refinedRoot: string;
@@ -32,6 +56,25 @@ export class RefinedManager {
 
   refineTurn(turn: RawTurn, sessionId: string): RefinedTurn {
     return extract(turn, sessionId);
+  }
+
+  /**
+   * Save denoised turns by converting them to the legacy RefinedTurn shape.
+   * This keeps the SQLite schema stable while the internal model evolves.
+   */
+  async saveDenoisedTurns(denoisedTurns: DenoisedTurn[]): Promise<void> {
+    return this.mutex.runExclusive(() => {
+      const bySession = new Map<string, DenoisedTurn[]>();
+      for (const turn of denoisedTurns) {
+        const list = bySession.get(turn.sessionId) ?? [];
+        list.push(turn);
+        bySession.set(turn.sessionId, list);
+      }
+      for (const [sessionId, turns] of bySession) {
+        const refined = turns.map(denoisedToRefined);
+        this.store.saveRefinedTurns(sessionId, refined, turns.map((t) => t.source));
+      }
+    });
   }
 
   async saveRefinedTurns(sessionId: string, refinedTurns: RefinedTurn[]): Promise<void> {
@@ -68,6 +111,13 @@ export class RefinedManager {
     return this.mutex.runExclusive(() => {
       return this.store.deleteRefinedTurns(refs);
     });
+  }
+
+  recordTurnAttention(
+    query: string,
+    refs: Array<{ sessionId: string; turnId: number }>,
+  ): void {
+    this.store.recordTurnAttention(query, refs);
   }
 
   close(): void {

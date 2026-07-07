@@ -45,6 +45,15 @@ function pin(name: string, body: string): string {
   return `<skill-pin name="${name}">\n${body}\n</skill-pin>`;
 }
 
+function findSummary(entries: readonly ChatMessage[]): ChatMessage | undefined {
+  return entries.find(
+    (m) =>
+      m.role === "assistant" &&
+      typeof m.content === "string" &&
+      m.content.includes("HISTORY SUMMARY"),
+  );
+}
+
 function seedTurns(loop: CacheFirstLoop, pairs: Array<{ user: string; assistant: string }>): void {
   for (const { user, assistant } of pairs) {
     loop.log.append({ role: "user", content: user });
@@ -84,7 +93,7 @@ describe("ContextManager fold preserves skill-pin bodies", () => {
     const result = await loop.compactHistory({ keepRecentTokens: 40 });
     expect(result.folded).toBe(true);
 
-    const head = loop.log.entries[0]!;
+    const head = findSummary(loop.log.entries)!;
     expect(head.role).toBe("assistant");
     const content = head.content as string;
     expect(content).toMatch(/HISTORY SUMMARY/);
@@ -129,7 +138,7 @@ describe("ContextManager fold preserves skill-pin bodies", () => {
     const result = await loop.compactHistory({ keepRecentTokens: 40 });
     expect(result.folded).toBe(true);
 
-    const head = loop.log.entries[0]!;
+    const head = findSummary(loop.log.entries)!;
     const content = head.content as string;
     expect(content).toContain("Second version of the body");
     expect(content).not.toContain("First version of the body");
@@ -198,7 +207,7 @@ describe("ContextManager fold preserves skill-pin bodies", () => {
     const result = await loop.compactHistory({ keepRecentTokens: 40 });
     expect(result.folded).toBe(true);
 
-    const head = loop.log.entries[0]!;
+    const head = findSummary(loop.log.entries)!;
     const content = head.content as string;
     expect(content).toMatch(/HISTORY SUMMARY/);
     expect(content).not.toContain(SKILL_PIN_MEMO_HEADER);
@@ -233,7 +242,7 @@ describe("ContextManager fold preserves skill-pin bodies", () => {
 
     const r1 = await loop.compactHistory({ keepRecentTokens: 40 });
     expect(r1.folded).toBe(true);
-    expect(loop.log.entries[0]!.content as string).toContain(skillBody);
+    expect(findSummary(loop.log.entries)!.content as string).toContain(skillBody);
 
     seedTurns(loop, [
       { user: "q4 second round of weight", assistant: "a4 second round of weight" },
@@ -243,7 +252,7 @@ describe("ContextManager fold preserves skill-pin bodies", () => {
 
     const r2 = await loop.compactHistory({ keepRecentTokens: 40 });
     expect(r2.folded).toBe(true);
-    expect(loop.log.entries[0]!.content as string).toContain(skillBody);
+    expect(findSummary(loop.log.entries)!.content as string).toContain(skillBody);
   });
 
   it("e2e: post-fold step sends the skill body verbatim to the model", async () => {

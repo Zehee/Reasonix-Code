@@ -36,6 +36,15 @@ function makeClient(responses: FakeResponseShape[]) {
   return new DeepSeekClient({ apiKey: "sk-test", fetch: fakeFetch(responses) });
 }
 
+function findSummary(entries: readonly ChatMessage[]): ChatMessage | undefined {
+  return entries.find(
+    (m) =>
+      m.role === "assistant" &&
+      typeof m.content === "string" &&
+      m.content.includes("HISTORY SUMMARY"),
+  );
+}
+
 function seedTurns(loop: CacheFirstLoop, n: number): void {
   for (let i = 0; i < n; i++) {
     loop.log.append({ role: "user", content: `q${i} bulk text padding to weigh the turn` });
@@ -63,14 +72,14 @@ describe("ContextManager fold preserves reasoning_content for thinking-mode (#10
     const result = await loop.compactHistory({ keepRecentTokens: 40 });
     expect(result.folded).toBe(true);
 
-    const head = loop.log.entries[0]!;
+    const head = findSummary(loop.log.entries)!;
     expect(head.role).toBe("assistant");
     expect(head.content).toMatch(/HISTORY SUMMARY/);
     expect(head.reasoning_content).toBeDefined();
     expect(head.reasoning_content).toBe("thought");
   });
 
-  it("stamps empty reasoning_content when the summarizer response omitted it (thinking-mode contract)", async () => {
+  it("omits reasoning_content when the summarizer response omitted it (Go v2 omits empty fields)", async () => {
     const client = makeClient([{ content: "earlier turns happened." }]);
     const loop = new CacheFirstLoop({
       client,
@@ -83,8 +92,8 @@ describe("ContextManager fold preserves reasoning_content for thinking-mode (#10
     const result = await loop.compactHistory({ keepRecentTokens: 40 });
     expect(result.folded).toBe(true);
 
-    const head = loop.log.entries[0]!;
-    expect(head.reasoning_content).toBe("");
+    const head = findSummary(loop.log.entries)!;
+    expect(head.reasoning_content).toBeUndefined();
   });
 
   it("omits reasoning_content for non-thinking-mode session models when summarizer returned none", async () => {
@@ -100,7 +109,7 @@ describe("ContextManager fold preserves reasoning_content for thinking-mode (#10
     const result = await loop.compactHistory({ keepRecentTokens: 40 });
     expect(result.folded).toBe(true);
 
-    const head = loop.log.entries[0]!;
+    const head = findSummary(loop.log.entries)!;
     expect(head.reasoning_content).toBeUndefined();
   });
 });

@@ -104,7 +104,7 @@ function capturingFetch(responses: FakeResponseShape[]): {
 }
 
 describe("stampMissingReasoningForThinkingMode (session-load heal)", () => {
-  it("stamps empty reasoning_content on assistant turns missing the field for thinking-mode sessions", () => {
+  it("does not stamp empty reasoning_content for thinking-mode sessions (Go v2 omits empty fields)", () => {
     const msgs: ChatMessage[] = [
       { role: "user", content: "hi" },
       // Pre-fix session: no reasoning_content attached.
@@ -116,8 +116,8 @@ describe("stampMissingReasoningForThinkingMode (session-load heal)", () => {
       msgs,
       "deepseek-reasoner",
     );
-    expect(stampedCount).toBe(1);
-    expect(messages[1]!.reasoning_content).toBe("");
+    expect(stampedCount).toBe(0);
+    expect(Object.hasOwn(messages[1]!, "reasoning_content")).toBe(false);
     expect(messages[3]!.reasoning_content).toBe("kept");
   });
 

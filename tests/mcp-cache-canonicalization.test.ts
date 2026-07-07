@@ -21,7 +21,8 @@ describe("MCP cache canonicalization", () => {
     );
 
     expect(bridged.registeredNames).toEqual(["srv_alpha", "srv_zeta"]);
-    expect(bridged.registry.specs().map((spec) => spec.function.name)).toEqual([
+    // Bridged MCP tools are lazy (not in the prefix), so inspect lazySpecs().
+    expect(bridged.registry.lazySpecs().map((spec) => spec.function.name)).toEqual([
       "srv_alpha",
       "srv_zeta",
     ]);

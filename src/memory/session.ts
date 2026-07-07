@@ -406,8 +406,8 @@ export function appendSessionMessage(name: string, message: ChatMessage): void {
   // Resolve / assign sessionId
   const sessionId = loadSessionId(name);
 
-  // Assign turnId for new messages; preserve existing turnId if somehow pre-set
-  const turnId = resolveNextTurnId(existing, message.role);
+  // Assign turnId for new messages; preserve existing turnId if already stamped.
+  const turnId = message.turnId ?? resolveNextTurnId(existing, message.role);
 
   const stamped: ChatMessage = { ...message, turnId, sessionId: message.sessionId ?? sessionId };
 
@@ -836,9 +836,17 @@ export function archiveSession(name: string): string | null {
   }
   const dir = dirname(path);
   const ts = timestampSuffix();
-  const target = `${ts}`; // sessions/{workspace}/20260701_120000
+  const target = `${name}__archive_${ts}`;
   const fullName = name.includes("/") ? `${name.split("/")[0]}/${target}` : target;
   if (renameSession(name, fullName)) return fullName;
+  // Disambiguate if the same-minute target already exists.
+  for (let n = 2; n < 100; n++) {
+    const disambiguated = `${target}-${n}`;
+    const candidate = name.includes("/")
+      ? `${name.split("/")[0]}/${disambiguated}`
+      : disambiguated;
+    if (renameSession(name, candidate)) return candidate;
+  }
   return null;
 }
 

@@ -36,10 +36,28 @@ export class RefinedStore {
         notes TEXT,
         entities TEXT,
         categories TEXT,
+        source TEXT,
         PRIMARY KEY (session_id, turn_id)
       );
       CREATE INDEX IF NOT EXISTS idx_refined_session ON refined_turns(session_id);
       CREATE INDEX IF NOT EXISTS idx_refined_timestamp ON refined_turns(timestamp);
+    `);
+    // Migration: add source column if table was created before this version.
+    try {
+      this.db.exec(`ALTER TABLE refined_turns ADD COLUMN source TEXT`);
+    } catch {
+      // Column already exists.
+    }
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS turn_attention (
+        query TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        turn_id INTEGER NOT NULL,
+        hit_at TEXT NOT NULL,
+        weight REAL DEFAULT 1.0,
+        PRIMARY KEY (query, session_id, turn_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_attention_turn ON turn_attention(session_id, turn_id);
     `);
   }
 
@@ -47,11 +65,15 @@ export class RefinedStore {
     return this.dbPath;
   }
 
-  saveRefinedTurns(sessionId: string, refinedTurns: RefinedTurn[]): void {
+  saveRefinedTurns(
+    sessionId: string,
+    refinedTurns: RefinedTurn[],
+    sources?: ("fold" | "search" | undefined)[],
+  ): void {
     const insert = this.db.prepare(
       `INSERT OR REPLACE INTO refined_turns
-       (session_id, turn_id, timestamp, summary, facts, notes, entities, categories)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (session_id, turn_id, timestamp, summary, facts, notes, entities, categories, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
 
     const existing = this.loadRefinedTurns(sessionId);
@@ -61,8 +83,10 @@ export class RefinedStore {
     }
 
     const transaction = this.db.transaction(() => {
+      let i = 0;
       for (const turn of merged.values()) {
         const row = turnToRow(turn);
+        const source = sources?.[i];
         insert.run(
           row.session_id,
           row.turn_id,
@@ -72,7 +96,25 @@ export class RefinedStore {
           row.notes,
           row.entities,
           row.categories,
+          source ?? null,
         );
+        i++;
+      }
+    });
+    transaction();
+  }
+
+  recordTurnAttention(query: string, refs: Array<{ sessionId: string; turnId: number }>): void {
+    if (refs.length === 0) return;
+    const insert = this.db.prepare(
+      `INSERT OR REPLACE INTO turn_attention (query, session_id, turn_id, hit_at, weight)
+       VALUES (?, ?, ?, ?, COALESCE((SELECT weight FROM turn_attention
+                                     WHERE query = ? AND session_id = ? AND turn_id = ?), 0) + 1)`,
+    );
+    const now = new Date().toISOString();
+    const transaction = this.db.transaction(() => {
+      for (const ref of refs) {
+        insert.run(query, ref.sessionId, ref.turnId, now, query, ref.sessionId, ref.turnId);
       }
     });
     transaction();

@@ -130,7 +130,7 @@ describe("ContextManager fold sends cache-aligned summary request", () => {
     expect(JSON.stringify(req.tools)).toBe(JSON.stringify(expectedTools));
   });
 
-  it("summary request preserves the head conversation bytes (head messages unmodified)", async () => {
+  it("summary request preserves foldable bytes (small user turns are kept verbatim, not summarized)", async () => {
     const captured: CapturedRequest[] = [];
     const client = new DeepSeekClient({
       apiKey: "sk-test",
@@ -153,10 +153,22 @@ describe("ContextManager fold sends cache-aligned summary request", () => {
     expect(trailing.role).toBe("user");
     expect(typeof trailing.content === "string" ? trailing.content : "").toMatch(/Summarize/);
 
-    // Strip system head + trailing instruction; what remains must equal a prefix of the pre-fold log.
+    // Strip system head + trailing instruction. Small user turns are kept
+    // verbatim and therefore excluded from the summarizer payload; only
+    // foldable messages (assistant replies, large user turns, tool results)
+    // reach the summarizer. Every foldable message must match its original
+    // bytes in order.
     const middle = req.messages.slice(1, -1);
-    for (let i = 0; i < middle.length; i++) {
-      expect(middle[i]).toEqual(logBeforeFold[i]);
+    expect(middle.length).toBeGreaterThan(0);
+    let origIndex = 0;
+    for (const m of middle) {
+      expect(m.role).not.toBe("user");
+      while (origIndex < logBeforeFold.length && logBeforeFold[origIndex]!.role !== m.role) {
+        origIndex++;
+      }
+      expect(origIndex).toBeLessThan(logBeforeFold.length);
+      expect(m).toEqual(logBeforeFold[origIndex]);
+      origIndex++;
     }
   });
 
@@ -198,7 +210,7 @@ describe("ContextManager fold sends cache-aligned summary request", () => {
     expect(captured[0]!.model).toBe("deepseek-v4-flash");
   });
 
-  it("skill-pinned bodies are sent to summarizer verbatim (head bytes unchanged)", async () => {
+  it("skill-pinned bodies are lifted out of the summarizer payload and re-attached after the summary", async () => {
     const captured: CapturedRequest[] = [];
     const client = new DeepSeekClient({
       apiKey: "sk-test",
@@ -228,8 +240,10 @@ describe("ContextManager fold sends cache-aligned summary request", () => {
 
     const req = captured[0]!;
     const serialized = JSON.stringify(req.messages);
-    expect(serialized).toContain("Step 1. Read entrypoints.");
-    expect(serialized).toContain("Step 2. Trace flow.");
+    // The skill body lives in the pinned prefix, not inside the summarizer
+    // request, so the summarizer payload is smaller and the prefix cache stays
+    // byte-identical. The instruction still names the pinned skill.
+    expect(serialized).not.toContain("Step 1. Read entrypoints.");
     expect(serialized).not.toContain("preserved separately, do not summarize");
 
     const trailing = req.messages[req.messages.length - 1]!;

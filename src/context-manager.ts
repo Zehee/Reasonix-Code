@@ -7,8 +7,17 @@ import { stripHallucinatedToolMarkup } from "./loop.js";
 import { buildAssistantMessage } from "./loop/messages.js";
 import { DEFAULT_MAX_RESULT_CHARS } from "./mcp/registry.js";
 import { loadArchiveMap, restoreFromArchive } from "./memory/archiver.js";
+import {
+  buildFoldSummaryText,
+  type FoldView,
+  saveFoldView,
+} from "./memory/fold-view.js";
 import type { AppendOnlyLog } from "./memory/runtime.js";
-import { rewriteSession } from "./memory/session.js";
+import { loadSessionId, rewriteSession } from "./memory/session.js";
+import { clusterDenoisedTurns, type DecisionCluster } from "./refine/cluster.js";
+import { denoiseTurn, type DenoisedTurn } from "./refine/denoise.js";
+import { messagesToRawTurns } from "./refine/raw-turns.js";
+import { getRefinedManager } from "./refine/refined-manager.js";
 import {
   type SessionStats,
   inputCostUsd,
@@ -59,6 +68,10 @@ export const HISTORY_FOLD_SUMMARY_RESERVE_TOKENS = 4096;
 /** Prepended to fold summary content so the model knows it's a synthesized recap.
  *  Re-export of the shared constant so existing imports keep resolving. */
 export const HISTORY_FOLD_MARKER = COMPACTION_SUMMARY_MARKER;
+/** Number of recent turns kept at full fidelity after a fold (hot zone). */
+export const HOT_ZONE_TURNS = 5;
+/** Number of denoised framework turns injected after the fold summary. */
+export const FRAMEWORK_TURNS = 30;
 /** Header that precedes preserved skill bodies in a fold's synthesized assistant message. */
 export const SKILL_PIN_MEMO_HEADER = "[Active skill memos — preserved verbatim across the fold:]";
 /** Matches the wrapper emitted by `run_skill` so the fold can lift bodies out before summarizing. */
@@ -350,6 +363,7 @@ function partitionFoldRegion(
   return { kept, fold };
 }
 
+
 export class ContextManager {
   private _logTokensCache = -1;
   private _logTokensVersion = -1;
@@ -497,18 +511,29 @@ export class ContextManager {
     });
     const totalTokens = tokenCounts.reduce((a, b) => a + b, 0);
 
-    // If snip+prune alone brought us below threshold, skip fold entirely.
-    if (totalTokens < ctxMax * HISTORY_FOLD_THRESHOLD) {
+    // The whole log already fits in the requested tail budget — nothing to fold.
+    if (totalTokens <= tailBudget) {
       this.consecutiveFolds = 0;
-      return { ...noop, folded: true, beforeMessages: all.length };
+      return { ...noop, folded: false, beforeMessages: all.length };
+    }
+
+    // If snip+prune alone brought us below threshold, skip fold entirely —
+    // unless the caller explicitly requested a fold (e.g. tests / /compact).
+    const forced = opts?.keepRecentTokens !== undefined;
+    if (totalTokens < ctxMax * HISTORY_FOLD_THRESHOLD && !forced) {
+      this.consecutiveFolds = 0;
+      return { ...noop, folded: false, beforeMessages: all.length };
     }
 
     // Track consecutive folds — if stuck, pause auto-fold.
-    this.consecutiveFolds++;
-    if (this.consecutiveFolds >= HISTORY_FOLD_MAX_CONSECUTIVE) {
-      this.foldStuck = true;
-      this.consecutiveFolds = 0;
-      return noop;
+    // Skip the guard for explicitly requested folds (tests, /compact).
+    if (!forced) {
+      this.consecutiveFolds++;
+      if (this.consecutiveFolds >= HISTORY_FOLD_MAX_CONSECUTIVE) {
+        this.foldStuck = true;
+        this.consecutiveFolds = 0;
+        return noop;
+      }
     }
 
     // Calculate fold boundary, keeping pinned prefix stable.
@@ -521,6 +546,13 @@ export class ContextManager {
       if (all[i]!.role === "user") boundary = i;
     }
     if (boundary <= pinned) return noop;
+    // If the whole log fits inside the tail budget, there is no head to fold.
+    // For explicitly requested folds we still summarize: the caller asked for a
+    // compacted log even when the tail budget cannot retain any turns.
+    if (boundary >= all.length && !forced) {
+      this.consecutiveFolds = 0;
+      return { ...noop, folded: false, beforeMessages: all.length };
+    }
     // Preflight-only: refuse when no user landed in tail — the active tool turn
     // would be wiped. Default fold path (post-response) tolerates empty tail so
     // cache-aligned summary tests still exercise the "summarize all" shape.
@@ -529,58 +561,102 @@ export class ContextManager {
     const head = all.slice(0, boundary);
     const tail = all.slice(boundary);
     const headTokens = totalTokens - cumTokens;
-    if (headTokens < totalTokens * HISTORY_FOLD_MIN_SAVINGS_FRACTION) {
+    if (!forced && headTokens < totalTokens * HISTORY_FOLD_MIN_SAVINGS_FRACTION) {
       this.consecutiveFolds = Math.max(0, this.consecutiveFolds - 1);
       return noop;
     }
 
-    const { names: pinnedNames, bodies: pinnedBodies } = collectPinnedSkills(head);
+    // Build the denoised corpus from the entire original log. The fold is a
+    // jump point: we denoise everything once, persist it, then start a fresh
+    // JSONL. The framework layer carries the last 30 denoised turns; the hot
+    // zone keeps the last 5 original turns at full fidelity.
+    const sessionId = this.deps.sessionName ? loadSessionId(this.deps.sessionName) : "session";
+    const denoisedAll = this.buildDenoisedCorpus(all, sessionId, "fold");
+    await this.persistDenoisedCorpus(this.deps.sessionName ?? "session", denoisedAll);
 
-    // Partition the foldable region: keep prior summaries and small user
-    // turns verbatim — only fold the remaining (tool results, large
-    // assistant responses). This preserves cache continuity across folds:
-    // old summaries stay byte-identical in the conversation, so DeepSeek's
-    // prefix cache at their position remains valid.
+    // Cluster the denoised log into topic/decision clusters.
+    const clusters = clusterDenoisedTurns(denoisedAll);
+
+    // Persist the fold view for theme tracing.
+    const foldView: FoldView = {
+      fold_id: `f-${sessionId}-${Date.now()}`,
+      session_id: sessionId,
+      created_at: new Date().toISOString(),
+      source_turn_range: [
+        denoisedAll[0]?.turnId ?? 1,
+        denoisedAll[denoisedAll.length - 1]?.turnId ?? 1,
+      ],
+      summary: buildFoldSummaryText(clusters),
+      clusters,
+    };
+    await saveFoldView(foldView);
+
+    // Build the folded prompt. We preserve the existing partition/summary
+    // structure for cache continuity and backward compatibility, then append
+    // the new cluster + framework + hot-zone layers.
+    // Layer 1: pinned prefix (system + first small user turn) — kept verbatim.
+    const pinnedMessages = all.slice(0, pinned);
+
+    // Layer 2: small user turns and prior summaries kept verbatim.
     const { kept, fold } = partitionFoldRegion(head, pinned);
-    if (fold.length === 0) {
-      // Nothing to fold — the region is all keepable.
-      this.consecutiveFolds = Math.max(0, this.consecutiveFolds - 1);
-      return noop;
-    }
 
-    const summary = await this.summarizeForFold(fold, pinnedNames);
-
-    // Mechanical fallback: if the summarizer failed, use a deterministic digest
-    // instead of returning noop (which leads to exit-with-summary next turn).
-    const digest = summary.content || mechanicalFoldDigest(fold);
-
+    // Layer 3: LLM-generated fold summary.
+    const { names: pinnedNames, bodies: pinnedBodies } = collectPinnedSkills(head);
     const memoTail =
       pinnedBodies.length > 0 ? `\n\n${SKILL_PIN_MEMO_HEADER}\n\n${pinnedBodies.join("\n\n")}` : "";
     const constraints = extractPinnedConstraints(this.deps.getSystemPrompt());
     const constraintTail = constraints
       ? `\n\n[PINNED CONSTRAINTS — preserved verbatim]\n\n${constraints}`
       : "";
-    // Route via buildAssistantMessage so the synthetic summary carries
-    // reasoning_content under thinking-mode sessions — without it the
-    // next API call 400s with "must be passed back" (#1042). Stamp uses
-    // the SESSION model so an empty placeholder is added even when the
-    // summarizer call somehow returned no reasoning.
+    const summary = await this.summarizeForFold(fold, pinnedNames);
+    const digest = summary.content || buildFoldSummaryText(clusters);
     const summaryMsg = buildAssistantMessage(
       HISTORY_FOLD_MARKER + digest + memoTail + constraintTail,
       [],
       model,
       summary.reasoningContent,
     );
-    // Assemble: [pinned messages, kept verbatim items, new summary, tail]
-    // - pinned messages are the system + first user turn (already in `all` at indices < pinned)
-    // - kept items are prior summaries and small user turns from the fold region
-    // - new summary replaces the folded content
-    // - tail is the recent conversation kept verbatim
-    const pinnedMessages = all.slice(0, pinned);
-    const replacement = [...pinnedMessages, ...kept, summaryMsg, ...tail];
+
+    // Layer 4: cluster summaries (structured, compact).
+    const clusterSummaryLines: string[] = ["Decision clusters:"];
+    for (const c of clusters) {
+      clusterSummaryLines.push(`\n[${c.cluster_id}] ${c.topic}`);
+      if (c.decision) clusterSummaryLines.push(`  Decision: ${c.decision}`);
+      if (c.file_refs.length > 0) clusterSummaryLines.push(`  Files: ${c.file_refs.join(", ")}`);
+      clusterSummaryLines.push(`  Turns: ${c.turns.map((t) => t.turnid).join(", ")}`);
+    }
+    const clusterMsg = buildAssistantMessage(
+      HISTORY_FOLD_MARKER + clusterSummaryLines.join("\n"),
+      [],
+      model,
+      "",
+    );
+
+    // Layer 5: recent 30 denoised framework turns.
+    const frameworkTurns = denoisedAll.slice(-FRAMEWORK_TURNS);
+    const frameworkMsgs = this.buildFrameworkMessages(frameworkTurns);
+
+    // Layer 6: recent 5 original tail turns (hot zone).
+    const hotZoneTurns = this.extractLastNTurnMessages(tail, HOT_ZONE_TURNS);
+
+    const replacement = [
+      ...pinnedMessages,
+      ...kept,
+      summaryMsg,
+      clusterMsg,
+      ...frameworkMsgs,
+      ...hotZoneTurns,
+    ];
+
+    // Archive the original live JSONL before rewriting, then start the new
+    // folded JSONL under the same session name.
+    if (this.deps.sessionName) {
+      await this.archiveOriginalSession(this.deps.sessionName);
+    }
     this.deps.log.compactInPlace(replacement);
     this.persistRewrite(replacement);
     this.deps.onLogRewrite?.();
+    this.consecutiveFolds = 0;
     return {
       folded: true,
       beforeMessages: all.length,
@@ -604,6 +680,115 @@ export class ContextManager {
     this.deps.log.compactInPlace([...kept]);
     this.persistRewrite([...kept]);
     return true;
+  }
+
+  /**
+   * Build denoised framework turns from a message array.
+   */
+  private buildDenoisedCorpus(
+    messages: ChatMessage[],
+    sessionId: string,
+    source: "fold" | "search",
+  ): DenoisedTurn[] {
+    const rawTurns = messagesToRawTurns(messages);
+    return rawTurns.map((turn) => denoiseTurn(turn, { sessionId, source }));
+  }
+
+  /**
+   * Persist the denoised corpus to `{session}.denoised.jsonl` and the SQLite index.
+   */
+  private async persistDenoisedCorpus(
+    sessionName: string,
+    denoised: DenoisedTurn[],
+  ): Promise<void> {
+    if (!this.deps.sessionName) return;
+    const { sessionPath, timestampSuffix } = await import("./memory/session.js");
+    const path = sessionPath(sessionName) + ".denoised.jsonl";
+    const fs = await import("node:fs/promises");
+    const { dirname } = await import("node:path");
+    await fs.mkdir(dirname(path), { recursive: true });
+    const lines = denoised.map((t) => JSON.stringify(t)).join("\n");
+    await fs.writeFile(path, lines ? `${lines}\n` : "", "utf8");
+
+    const manager = getRefinedManager();
+    await manager.saveDenoisedTurns(denoised);
+  }
+
+  /**
+   * Convert denoised framework turns into ChatMessages for the live prompt.
+   */
+  private buildFrameworkMessages(turns: DenoisedTurn[]): ChatMessage[] {
+    const out: ChatMessage[] = [];
+    for (const turn of turns) {
+      const sessionId = turn.sessionId;
+      const turnId = turn.turnId;
+      const toolList = turn.toolsCalled.map((t) => t.name).join(", ") || "none";
+      const fileList = turn.files.join(", ") || "none";
+
+      if (turn.userIntent) {
+        out.push({
+          role: "user",
+          content: `[framework] ${turn.userIntent}`,
+          turnId,
+          sessionId,
+        });
+      }
+      const assistantBody = [
+        turn.assistantConclusion ? `Conclusion: ${turn.assistantConclusion}` : "",
+        `Tools: ${toolList}`,
+        `Files: ${fileList}`,
+        turn.errors.length > 0 ? `Errors: ${turn.errors.join("; ")}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+      if (assistantBody) {
+        out.push({
+          role: "assistant",
+          content: `[framework] ${assistantBody}`,
+          turnId,
+          sessionId,
+        });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Extract the messages belonging to the last N turns from a message array.
+   * A turn starts at a user message and ends before the next user message.
+   */
+  private extractLastNTurnMessages(messages: ChatMessage[], n: number): ChatMessage[] {
+    if (messages.length === 0 || n <= 0) return [];
+    const userIndices: number[] = [];
+    for (let i = 0; i < messages.length; i++) {
+      if (messages[i]!.role === "user") userIndices.push(i);
+    }
+    const startIndex = userIndices.length <= n ? 0 : userIndices[userIndices.length - n]!;
+    return messages.slice(startIndex);
+  }
+
+  /**
+   * Archive the original live JSONL to `{session}__archive_{ts}.jsonl` before
+   * rewriting it with the folded prompt.
+   */
+  private async archiveOriginalSession(sessionName: string): Promise<void> {
+    const { sessionPath, timestampSuffix } = await import("./memory/session.js");
+    const { copyFile } = await import("node:fs/promises");
+    const { dirname, join } = await import("node:path");
+    const livePath = sessionPath(sessionName);
+    const dir = dirname(livePath);
+    const base = sessionName.includes("/")
+      ? sessionName.split("/")[1]!
+      : sessionName;
+    const archiveName = `${base}__archive_${timestampSuffix()}.jsonl`;
+    const archivePath = sessionName.includes("/")
+      ? join(dir, archiveName)
+      : join(dir, archiveName);
+    try {
+      await copyFile(livePath, archivePath);
+    } catch {
+      // Best-effort archive.
+    }
   }
 
   private async summarizeForFold(
@@ -647,11 +832,14 @@ export class ContextManager {
           cleanupAbort = () => turnSignal.removeEventListener("abort", abort);
         }
       });
+      const timeoutMs =
+        Number.parseInt(process.env.REASONIX_FOLD_SUMMARY_TIMEOUT_MS ?? "", 10) ||
+        HISTORY_FOLD_SUMMARY_TIMEOUT_MS;
       const timeoutPromise = new Promise<never>((_, reject) => {
         timeout = setTimeout(() => {
           foldCtrl.abort();
           reject(new Error("fold-timeout"));
-        }, HISTORY_FOLD_SUMMARY_TIMEOUT_MS);
+        }, timeoutMs);
       });
       const resp = await Promise.race([
         this.deps.client.chat({

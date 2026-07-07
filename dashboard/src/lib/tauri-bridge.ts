@@ -1078,25 +1078,56 @@ export function getCurrentWindow(): any {
 
 // 4. @tauri-apps/plugin-dialog
 export async function open(options?: any): Promise<any> {
-  console.log("[tauri-bridge] dialog open:", options);
+  console.log("[tauri-bridge] dialog open:", JSON.stringify(options), "mode:", MODE, "hasTAURI:", !!(window as any).__TAURI__?.invoke);
+  if (MODE === "tauri") {
+    try {
+      const result = await invoke("plugin:dialog|open", { options });
+      console.log("[tauri-bridge] dialog result:", result);
+      return result;
+    } catch (err) {
+      console.error("[tauri-bridge] dialog invoke error:", err);
+      return "";
+    }
+  }
   return Promise.resolve("");
 }
 
 export async function save(options?: any): Promise<any> {
   console.log("[tauri-bridge] dialog save:", options);
+  if (MODE === "tauri") {
+    try {
+      return await invoke("plugin:dialog|save", { options });
+    } catch (err) {
+      console.error("[tauri-bridge] dialog save error:", err);
+      return "";
+    }
+  }
   return Promise.resolve("");
 }
 
 // 5. @tauri-apps/plugin-opener
-export async function openUrl(url: string): Promise<void> {
+export async function openUrl(url: string, openWith?: string): Promise<void> {
   console.log(`[tauri-bridge] open url -> ${url}`);
+  if (MODE === "tauri") {
+    const tauri = (window as any).__TAURI__;
+    if (tauri?.invoke) {
+      await tauri.invoke("plugin:opener|open_url", { url, with: openWith });
+      return;
+    }
+  }
   window.open(url, "_blank");
-  return Promise.resolve();
 }
 
-export async function openPath(path: string): Promise<void> {
+export async function openPath(path: string, openWith?: string): Promise<void> {
   console.log(`[tauri-bridge] open path -> ${path}`);
-  return Promise.resolve();
+  if (MODE === "tauri") {
+    const tauri = (window as any).__TAURI__;
+    if (tauri?.invoke) {
+      await tauri.invoke("plugin:opener|open_path", { path, with: openWith });
+      return;
+    }
+  }
+  // fallback: no-op in web/mock mode
 }
 
 // 6. @tauri-apps/plugin-process
