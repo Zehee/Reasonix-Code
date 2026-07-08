@@ -9,7 +9,13 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { ARCHIVE_MARKER } from "../memory/archiver.js";
-import { type SearchCluster, type SearchView, saveSearchView } from "../memory/search-view.js";
+import { listFoldViews, listFoldViewsForSession } from "../memory/fold-view.js";
+import {
+  type SearchCluster,
+  type SearchView,
+  listSearchViews,
+  saveSearchView,
+} from "../memory/search-view.js";
 import {
   loadSessionMessages,
   loadSessionMeta,
@@ -125,25 +131,25 @@ async function searchLiveSession(
 export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
   registry.register({
     name: "search_context",
-    description: `跨会话搜索历史对话，返回匹配的对话轮次（按时间窗口聚簇）。搜索会先查已降噪的索引库；如果涉及当前未折叠的会话，会按需降噪并入库，同时记录搜索权重。
+    description: `Search conversation history across sessions and return matching turns grouped into clusters. Searches the denoised/refined index first; for the current live session, denoises on demand and records attention weights.
 
-参数:
-- query: 搜索关键词（必填）
-- sessionName: 当前会话名称（可选，不填则使用最近会话）
-- maxClusters: 最多返回多少个簇（默认 5）
-- detail: "compact" | "normal"（默认 "normal"）
+Parameters:
+- query: search keywords (required)
+- sessionName: current session name (optional; defaults to the most recent session)
+- maxClusters: maximum clusters to return (default 5)
+- detail: "compact" | "normal" (default "normal")
 
-返回匹配的对话轮次列表，按 session 分组聚簇，包含上下文片段。`,
+Returns matched turns grouped by session, with summaries, facts, and notes.`,
     parameters: {
       type: "object",
       properties: {
-        query: { type: "string", description: "搜索关键词" },
-        sessionName: { type: "string", description: "当前会话名称，可选" },
-        maxClusters: { type: "number", description: "最多返回簇数，默认 5" },
+        query: { type: "string", description: "Search keywords" },
+        sessionName: { type: "string", description: "Current session name, optional" },
+        maxClusters: { type: "number", description: "Maximum clusters to return, default 5" },
         detail: {
           type: "string",
           enum: ["compact", "normal"],
-          description: "详情级别，默认 normal",
+          description: "Detail level, default normal",
         },
       },
       required: ["query"],
@@ -287,32 +293,31 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
 
   registry.register({
     name: "load_turns_context",
-    description: `批量加载指定会话轮次的原始内容。读取 session JSONL 和归档 JSONL，还原被压缩的工具结果。
+    description: `Batch-load original content for the specified session turns. Reads session JSONL and archived JSONL, restoring compressed tool results.
 
-参数:
-- references: 要加载的 { sessionName, turnId } 引用数组（必填，最多 20 个）
-- mode: "full" | "material"（默认 "full"）
-  - full: 返回 user + assistant + tool 完整消息
-  - material: 仅返回工具调用与工具结果，避免与 cluster 骨架重复
+Parameters:
+- references: array of { sessionName, turnId } to load (required, max 20)
+- mode: "full" | "material" (default "full")
+  - full: full user + assistant + tool messages
+  - material: only tool calls and tool results, avoiding duplicate skeleton from search_context
 
-返回每轮的对话内容。
-找不到的引用会列在 notFound 中。
+Returns each turn's messages. Missing references are listed in notFound.
 
-典型用途：
-1. 先用 search_context 搜索到匹配的轮次（拿到骨架）
-2. 需要原文时再用 load_turns_context 加载，mode="material" 只补工具素材
-3. 基于完整内容做分析或决策`,
+Typical use:
+1. search_context returns matching turns (skeleton).
+2. Call load_turns_context when original content is needed; mode="material" fetches only tool material.
+3. Analyze or decide based on the full content.`,
     parameters: {
       type: "object",
       properties: {
         references: {
           type: "array",
-          description: "{ sessionName, turnId } 引用数组",
+          description: "Array of { sessionName, turnId } references",
           items: {
             type: "object",
             properties: {
-              sessionName: { type: "string", description: "会话名称" },
-              turnId: { type: "number", description: "轮次编号" },
+              sessionName: { type: "string", description: "Session name" },
+              turnId: { type: "number", description: "Turn number" },
             },
             required: ["sessionName", "turnId"],
           },
@@ -320,7 +325,7 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
         mode: {
           type: "string",
           enum: ["full", "material"],
-          description: "加载模式：full 完整消息，material 仅工具调用与结果",
+          description: "Loading mode: full messages, or material (tool calls and results only)",
         },
       },
       required: ["references"],
@@ -423,6 +428,68 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
       }
 
       return JSON.stringify({ rounds, notFound });
+    },
+  });
+
+  registry.register({
+    name: "list_search_views",
+    description: `List saved search_context snapshots. Optionally filter by session.
+
+Parameters:
+- sessionId: optional session identifier filter
+
+Returns an array of { id, query, createdAt, totalMatches, sessions }.`,
+    parameters: {
+      type: "object",
+      properties: {
+        sessionId: { type: "string", description: "Optional session identifier filter" },
+      },
+    },
+    fn: async (args: Record<string, unknown>, _ctx?: ToolCallContext): Promise<string> => {
+      const sessionId = String(args.sessionId ?? "");
+      const views = await listSearchViews();
+      const filtered = sessionId
+        ? views.filter((v) =>
+            v.clusters.some((c) => c.sessionId === sessionId || c.sessionName === sessionId),
+          )
+        : views;
+      const result = filtered.map((v) => ({
+        id: v.id,
+        query: v.query,
+        createdAt: v.createdAt,
+        totalMatches: v.totalMatches,
+        sessions: [...new Set(v.clusters.flatMap((c) => c.sessionName ?? c.sessionId))],
+      }));
+      return JSON.stringify(result, null, 2);
+    },
+  });
+
+  registry.register({
+    name: "list_fold_views",
+    description: `List saved fold snapshots. Optionally filter by session.
+
+Parameters:
+- sessionId: optional session identifier filter
+
+Returns an array of { foldId, sessionId, parentFoldId, createdAt, summary, clusterCount }.`,
+    parameters: {
+      type: "object",
+      properties: {
+        sessionId: { type: "string", description: "Optional session identifier filter" },
+      },
+    },
+    fn: async (args: Record<string, unknown>, _ctx?: ToolCallContext): Promise<string> => {
+      const sessionId = String(args.sessionId ?? "");
+      const views = sessionId ? await listFoldViewsForSession(sessionId) : await listFoldViews();
+      const result = views.map((v) => ({
+        foldId: v.fold_id,
+        sessionId: v.session_id,
+        parentFoldId: v.parent_fold_id,
+        createdAt: v.created_at,
+        summary: v.summary,
+        clusterCount: v.clusters.length,
+      }));
+      return JSON.stringify(result, null, 2);
     },
   });
 

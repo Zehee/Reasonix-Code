@@ -4,6 +4,7 @@
 
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { getRefinedManager } from "../refine/refined-manager.js";
 import { ThemeManager } from "../themes/manager.js";
 import type { ToolCallContext, ToolRegistry } from "../tools.js";
 
@@ -23,18 +24,18 @@ function themeManager(): ThemeManager {
 export function registerThemeTools(registry: ToolRegistry): ToolRegistry {
   registry.register({
     name: "tag_theme",
-    description: `将一个对话轮次关联到一个主题。用于跨 Session 的主题追踪。
+    description: `Associate a turn with a theme for cross-session theme tracing.
 
-参数:
-- theme: 主题名称（如 "auth-flow"）
-- sessionId: 会话 ID
-- turnId: 对话轮次号`,
+Parameters:
+- theme: theme name (e.g. "auth-flow")
+- sessionId: session identifier (the same value returned as sessionName by search_context)
+- turnId: turn number`,
     parameters: {
       type: "object",
       properties: {
-        theme: { type: "string", description: "主题名称" },
-        sessionId: { type: "string", description: "会话 ID" },
-        turnId: { type: "number", description: "对话轮次号" },
+        theme: { type: "string", description: "Theme name" },
+        sessionId: { type: "string", description: "Session identifier" },
+        turnId: { type: "number", description: "Turn number" },
       },
       required: ["theme", "sessionId", "turnId"],
     },
@@ -60,16 +61,21 @@ export function registerThemeTools(registry: ToolRegistry): ToolRegistry {
 
   registry.register({
     name: "trace_theme",
-    description: `追溯一个主题的完整演化时间线。返回按时间排序的所有关联对话轮次。
+    description: `Trace the full evolution timeline of a theme. Returns associated turns sorted chronologically.
 
-参数:
-- theme: 主题名称（必填）
-- includeContent: 是否包含对话内容（默认 false，只返回摘要）`,
+Parameters:
+- theme: theme name (required)
+- includeContent: when true, include the denoised skeleton for each turn (default false)
+
+When includeContent is false, only turn references are returned. To recall tool results for a turn, use load_turns_context with the returned references.`,
     parameters: {
       type: "object",
       properties: {
-        theme: { type: "string", description: "主题名称" },
-        includeContent: { type: "boolean", description: "包含对话内容，默认 false" },
+        theme: { type: "string", description: "Theme name" },
+        includeContent: {
+          type: "boolean",
+          description: "Include denoised skeleton per turn, default false",
+        },
       },
       required: ["theme"],
     },
@@ -85,7 +91,7 @@ export function registerThemeTools(registry: ToolRegistry): ToolRegistry {
         return `Theme "${theme}" not found.`;
       }
 
-      const turns = assoc.turns;
+      const turns = assoc.turns.slice();
       if (turns.length === 0) {
         return `Theme "${assoc.displayName}" has no associated turns.`;
       }
@@ -103,14 +109,29 @@ export function registerThemeTools(registry: ToolRegistry): ToolRegistry {
         "## Timeline",
       ];
 
+      const refinedMgr = getRefinedManager();
+
       for (const turn of turns) {
         lines.push(`- ${turn.timestamp ?? "?"} — Session: ${turn.sessionId}, Turn: ${turn.turnId}`);
         if (includeContent) {
-          const { loadSessionMessages, loadSessionMeta } = await import("../memory/session.js");
-          const meta = loadSessionMeta(turn.sessionId);
-          const sessionName = meta.sessionId ?? turn.sessionId;
-          // We need to find the session file by sessionId in meta
-          lines.push(`  (session name: ${sessionName})`);
+          const skeleton = refinedMgr.loadRefinedTurn(turn.sessionId, turn.turnId);
+          if (skeleton) {
+            lines.push(`  Summary: ${skeleton.summary}`);
+            if (skeleton.facts.length > 0) {
+              lines.push(`  Facts: ${skeleton.facts.join("; ")}`);
+            }
+            if (skeleton.entities.files.length > 0) {
+              lines.push(`  Files: ${skeleton.entities.files.join(", ")}`);
+            }
+            if (skeleton.entities.tools.length > 0) {
+              lines.push(`  Tools: ${skeleton.entities.tools.join(", ")}`);
+            }
+            if (skeleton.notes.length > 0) {
+              lines.push(`  Notes: ${skeleton.notes.join("; ")}`);
+            }
+          } else {
+            lines.push("  (skeleton not available — run search_context on this turn first)");
+          }
         }
       }
 
@@ -120,7 +141,7 @@ export function registerThemeTools(registry: ToolRegistry): ToolRegistry {
 
   registry.register({
     name: "list_themes",
-    description: "列出所有已创建的主题。无参数。返回主题名称列表。",
+    description: "List all created themes. No parameters. Returns a list of theme names.",
     parameters: {
       type: "object",
       properties: {},

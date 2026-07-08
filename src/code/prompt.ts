@@ -142,6 +142,27 @@ You have BOTH \`semantic_search\` (vector index) and \`search_content\` (literal
 
 If \`semantic_search\` returns nothing useful (low scores, off-topic), THEN fall back to \`search_content\`. Don't go the other way — grepping a paraphrased question wastes turns.`;
 
+const HISTORY_TRACING_GUIDE = `
+# Cross-session history tracing
+
+Use these tools when a task may depend on decisions, failures, or file changes from earlier sessions — not for finding code (use semantic_search / search_content for code).
+
+Discovery:
+- list_themes(): list existing themes.
+- list_search_views(sessionId?): list saved search snapshots; optionally filter by session.
+- list_fold_views(sessionId?): list fold snapshots; optionally filter by session.
+
+Search & materialize:
+- search_context(query, sessionName?, maxClusters=5, detail="normal"): search across live and archived sessions. Returns clusters with sessionName, turnId, summary, facts and notes. Live turns are denoised on demand.
+- load_turns_context(references=[{sessionName, turnId}], mode="full" | "material"): fetch original turn content after search_context. Prefer mode="material" (only tool_calls and tool results), because search_context already returns the skeleton. Use mode="full" only when exact wording matters.
+
+Theme tracking:
+- tag_theme(theme, sessionId, turnId): attach a confirmed turn to a long-running theme. sessionId is the same identifier returned as sessionName by search_context.
+- trace_theme(theme, includeContent=false): return chronological turn references for a theme. When includeContent=true, each turn includes its skeleton; use load_turns_context to recall tool results.
+
+Typical flow: search_context / list_* -> load_turns_context(mode=material) -> tag_theme / trace_theme.
+`;
+
 export interface CodeSystemPromptOptions {
   /** True when semantic_search is registered for this run. Adds an
    *  explicit routing fragment so the model picks it for intent-style
@@ -161,7 +182,11 @@ export interface CodeSystemPromptOptions {
 
 export function codeSystemPrompt(rootDir: string, opts: CodeSystemPromptOptions = {}): string {
   const codeBase = codeSystemBase(opts.modelId ?? DEFAULT_CODE_MODEL);
-  const base = opts.hasSemanticSearch ? `${codeBase}${SEMANTIC_SEARCH_ROUTING}` : codeBase;
+  let base = codeBase;
+  if (opts.hasSemanticSearch) {
+    base += SEMANTIC_SEARCH_ROUTING;
+  }
+  base += HISTORY_TRACING_GUIDE;
   const withMemory = applyMemoryStack(base, rootDir);
   const gitignorePath = join(rootDir, ".gitignore");
   let result = withMemory;

@@ -2,7 +2,7 @@
 
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, join } from "node:path";
 import { workspaceSlug } from "./session.js";
 
 export interface SearchCluster {
@@ -52,15 +52,15 @@ export async function loadSearchView(viewId: string): Promise<SearchView | undef
   }
 }
 
-export async function listSearchViews(): Promise<SearchView[]> {
+export async function listSearchViews(): Promise<Array<SearchView & { id: string }>> {
   const dir = searchViewsDir();
   try {
     const files = (await readdir(dir)).filter((f) => f.endsWith(".json"));
-    const views: SearchView[] = [];
+    const views: Array<SearchView & { id: string }> = [];
     for (const f of files) {
       const raw = await readFile(join(dir, f), "utf8");
       try {
-        views.push(JSON.parse(raw) as SearchView);
+        views.push({ id: basename(f, ".json"), ...(JSON.parse(raw) as SearchView) });
       } catch {
         // skip malformed
       }
