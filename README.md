@@ -170,8 +170,7 @@ src/
 ├── sessions/                      ← 所有会话
 │   ├── {workspace-slug}/          ← 按工作区隔离
 │   │   ├── active.jsonl           ← 当前活跃会话（尚未折叠；纯追加，无骨架/无影子）
-│   │   ├── {sessionId}.jsonl      ← 已归档的原始会话
-│   │   ├── {sessionId}__archive_{ts}.jsonl  ← fold 后旧 live JSONL 的归档
+│   │   ├── {sessionId}__archive_{ts}.jsonl  ← 已归档的原始会话（/new、clearLog、fold 触发）
 │   │   ├── {sessionId}.denoised.jsonl      ← fold 时生成的降噪骨架
 │   │   ├── {sessionId}.toolcache.jsonl     ← 工具结果原文缓存
 │   │   └── {sessionId}.meta.json           ← 元数据

@@ -170,8 +170,7 @@ src/
 ├── sessions/                      ← All sessions
 │   ├── {workspace-slug}/          ← Workspace-isolated
 │   │   ├── active.jsonl           ← Active session (not yet folded; append-only, no skeleton/shadow)
-│   │   ├── {sessionId}.jsonl      ← Archived raw session
-│   │   ├── {sessionId}__archive_{ts}.jsonl  ← Old live JSONL archived after a fold
+│   │   ├── {sessionId}__archive_{ts}.jsonl  ← Archived raw session (triggered by /new, clearLog, or fold)
 │   │   ├── {sessionId}.denoised.jsonl      ← Denoised skeleton generated at fold time
 │   │   ├── {sessionId}.toolcache.jsonl     ← Raw tool-result cache
 │   │   └── {sessionId}.meta.json           ← Metadata
