@@ -145,22 +145,41 @@ If \`semantic_search\` returns nothing useful (low scores, off-topic), THEN fall
 const HISTORY_TRACING_GUIDE = `
 # Cross-session history tracing
 
-Use these tools when a task may depend on decisions, failures, or file changes from earlier sessions — not for finding code (use semantic_search / search_content for code).
+Use for evolution/decision/design questions about a long-running topic, not for code search (use semantic_search / search_content).
 
-Discovery:
-- list_themes(): list existing themes.
-- list_search_views(sessionId?): list saved search snapshots; optionally filter by session.
-- list_fold_views(sessionId?): list fold snapshots; optionally filter by session.
+Theme = chronological cluster of related turns (e.g., login module evolution).
 
-Search & materialize:
-- search_context(query, sessionName?, maxClusters=5, detail="normal"): search across live and archived sessions. Returns clusters with sessionName, turnId, summary, facts and notes. Live turns are denoised on demand.
-- load_turns_context(references=[{sessionName, turnId}], mode="full" | "material"): fetch original turn content after search_context. Prefer mode="material" (only tool_calls and tool results), because search_context already returns the skeleton. Use mode="full" only when exact wording matters.
+Workflow:
+\`\`\`
+[list_themes]
+    │
+    ├─ exists ───────► [trace_theme]  (refresh if stale)
+    │
+    └─ missing ──────► ask user, then build:
 
-Theme tracking:
-- tag_theme(theme, sessionId, turnId): attach a confirmed turn to a long-running theme. sessionId is the same identifier returned as sessionName by search_context.
-- trace_theme(theme, includeContent=false): return chronological turn references for a theme. When includeContent=true, each turn includes its skeleton; use load_turns_context to recall tool results.
+[material pool: list_search_views + list_fold_views]
+              │
+              ▼
+      [search_context(query)]
+              │
+              ▼
+    [load_turns_context(mode=material)]
+              │
+              ▼
+           [tag_theme]
+              │
+              └─ iterate until complete
+              │
+              ▼
+    chronological report / trace_theme
+\`\`\`
 
-Typical flow: search_context / list_* -> load_turns_context(mode=material) -> tag_theme / trace_theme.
+Tools:
+- list_themes / list_search_views / list_fold_views: discovery.
+- search_context(query, sessionName?, maxClusters=5, detail="normal"): find relevant turns across sessions.
+- load_turns_context(references=[{sessionName, turnId}], mode="full"|"material"): verify turns; prefer material to avoid duplicate skeleton.
+- tag_theme(theme, sessionId, turnId): attach a turn. sessionId equals sessionName from search_context.
+- trace_theme(theme, includeContent=false): timeline references; includeContent=true adds skeletons.
 `;
 
 export interface CodeSystemPromptOptions {
