@@ -287,17 +287,20 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
 
   registry.register({
     name: "load_turns_context",
-    description: `批量加载指定会话轮次的完整原始内容。读取 session JSONL 和归档 JSONL，还原被压缩的工具结果。
+    description: `批量加载指定会话轮次的原始内容。读取 session JSONL 和归档 JSONL，还原被压缩的工具结果。
 
 参数:
 - references: 要加载的 { sessionName, turnId } 引用数组（必填，最多 20 个）
+- mode: "full" | "material"（默认 "full"）
+  - full: 返回 user + assistant + tool 完整消息
+  - material: 仅返回工具调用与工具结果，避免与 cluster 骨架重复
 
-返回每轮的完整对话内容（user + assistant + tool 消息原文）。
+返回每轮的对话内容。
 找不到的引用会列在 notFound 中。
 
 典型用途：
-1. 先用 search_context 搜索到匹配的轮次
-2. 然后用 load_turns_context 加载这些轮次的完整内容
+1. 先用 search_context 搜索到匹配的轮次（拿到骨架）
+2. 需要原文时再用 load_turns_context 加载，mode="material" 只补工具素材
 3. 基于完整内容做分析或决策`,
     parameters: {
       type: "object",
@@ -314,11 +317,17 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
             required: ["sessionName", "turnId"],
           },
         },
+        mode: {
+          type: "string",
+          enum: ["full", "material"],
+          description: "加载模式：full 完整消息，material 仅工具调用与结果",
+        },
       },
       required: ["references"],
     },
     fn: async (args: Record<string, unknown>, _ctx?: ToolCallContext): Promise<string> => {
       const rawRefs = args.references;
+      const mode = String(args.mode ?? "full");
       if (!Array.isArray(rawRefs) || rawRefs.length === 0) {
         return JSON.stringify({
           error: "references must be a non-empty array",
@@ -395,11 +404,21 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
 
         for (const turnId of turnIds) {
           const turnMessages = turnMap.get(turnId);
-          if (turnMessages) {
-            rounds.push({ sessionName, turnId, messages: turnMessages });
-          } else {
+          if (!turnMessages) {
             notFound.push({ sessionName, turnId });
+            continue;
           }
+          const filtered =
+            mode === "material"
+              ? turnMessages.filter(
+                  (m) =>
+                    m.role === "tool" ||
+                    (m.role === "assistant" &&
+                      Array.isArray(m.tool_calls) &&
+                      m.tool_calls.length > 0),
+                )
+              : turnMessages;
+          rounds.push({ sessionName, turnId, messages: filtered });
         }
       }
 

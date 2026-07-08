@@ -92,7 +92,7 @@ Turn extraction uses keyword rules + Markdown structure analysis. Zero LLM calls
 
 ### Search-as-you-scan
 
-`search_context "auth JWT cookie"` hits the SQLite index, clusters adjacent turns (90s time window), and auto-refines unprocessed turns. Results carry a `sessionName` (live session name or archived file name) that can be passed directly to `load_turns_context` to restore the full original transcript.
+`search_context "auth JWT cookie"` hits the SQLite index, clusters adjacent turns (90s time window), and auto-refines unprocessed turns. Results carry a `sessionName` (live session name or archived file name) that can be passed directly to `load_turns_context` to restore the original transcript. If the skeleton is already available from a cluster/fold view, use `mode="material"` to load only the tool calls and tool results, avoiding duplication.
 
 ### Cross-session theme tracing
 
