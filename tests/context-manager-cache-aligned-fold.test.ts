@@ -84,12 +84,12 @@ function seedTurns(loop: CacheFirstLoop, n: number, padding = 8): void {
   }
 }
 
-describe("ContextManager fold sends cache-aligned summary request", () => {
-  it("summary request reuses the main agent's system prompt verbatim", async () => {
+describe("ContextManager fold summary request", () => {
+  it("first fold does not call the summarizer", async () => {
     const captured: CapturedRequest[] = [];
     const client = new DeepSeekClient({
       apiKey: "sk-test",
-      fetch: fakeFetch(captured, "compact prose summary."),
+      fetch: fakeFetch(captured, "summary."),
     });
     const loop = new CacheFirstLoop({
       client,
@@ -101,7 +101,54 @@ describe("ContextManager fold sends cache-aligned summary request", () => {
 
     const result = await loop.compactHistory({ keepRecentTokens: 40 });
     expect(result.folded).toBe(true);
+    expect(captured).toHaveLength(0);
+  });
+
+  it("second fold calls the summarizer with the previous fold's artifacts", async () => {
+    const captured: CapturedRequest[] = [];
+    const client = new DeepSeekClient({
+      apiKey: "sk-test",
+      fetch: fakeFetch(captured, "second fold summary."),
+    });
+    const loop = new CacheFirstLoop({
+      client,
+      prefix: new ImmutablePrefix({ system: SYSTEM_PROMPT, toolSpecs: TOOLS }),
+      model: "deepseek-v4-flash",
+      stream: false,
+    });
+    seedTurns(loop, 8);
+    await loop.compactHistory({ keepRecentTokens: 40 });
+
+    seedTurns(loop, 8);
+    await loop.compactHistory({ keepRecentTokens: 40 });
+
     expect(captured).toHaveLength(1);
+    const req = captured[0]!;
+    expect(req.messages[0]).toEqual({ role: "system", content: SYSTEM_PROMPT });
+    const serialized = JSON.stringify(req.messages);
+    expect(serialized).toContain("Decision clusters:");
+    expect(serialized).toContain("[framework]");
+    const last = req.messages[req.messages.length - 1]!;
+    expect(last.role).toBe("user");
+    expect(typeof last.content === "string" ? last.content : "").toMatch(/Summarize/);
+  });
+
+  it("summary request reuses the main agent's system prompt verbatim", async () => {
+    const captured: CapturedRequest[] = [];
+    const client = new DeepSeekClient({
+      apiKey: "sk-test",
+      fetch: fakeFetch(captured, "summary."),
+    });
+    const loop = new CacheFirstLoop({
+      client,
+      prefix: new ImmutablePrefix({ system: SYSTEM_PROMPT, toolSpecs: TOOLS }),
+      model: "deepseek-v4-flash",
+      stream: false,
+    });
+    seedTurns(loop, 8);
+    await loop.compactHistory({ keepRecentTokens: 40 });
+    seedTurns(loop, 8);
+    await loop.compactHistory({ keepRecentTokens: 40 });
 
     const req = captured[0]!;
     expect(req.messages[0]).toEqual({ role: "system", content: SYSTEM_PROMPT });
@@ -120,56 +167,15 @@ describe("ContextManager fold sends cache-aligned summary request", () => {
       stream: false,
     });
     seedTurns(loop, 8);
-
     await loop.compactHistory({ keepRecentTokens: 40 });
+    seedTurns(loop, 8);
+    await loop.compactHistory({ keepRecentTokens: 40 });
+
     const req = captured[0]!;
     const expectedTools = sortToolSpecs(TOOLS);
-
     expect(req.tools).toBeDefined();
     expect(req.tools).toEqual(expectedTools);
     expect(JSON.stringify(req.tools)).toBe(JSON.stringify(expectedTools));
-  });
-
-  it("summary request preserves foldable bytes (small user turns are kept verbatim, not summarized)", async () => {
-    const captured: CapturedRequest[] = [];
-    const client = new DeepSeekClient({
-      apiKey: "sk-test",
-      fetch: fakeFetch(captured, "summary."),
-    });
-    const loop = new CacheFirstLoop({
-      client,
-      prefix: new ImmutablePrefix({ system: SYSTEM_PROMPT, toolSpecs: TOOLS }),
-      model: "deepseek-v4-flash",
-      stream: false,
-    });
-    seedTurns(loop, 8);
-    const logBeforeFold = loop.log.toMessages();
-
-    await loop.compactHistory({ keepRecentTokens: 40 });
-    const req = captured[0]!;
-
-    expect(req.messages[0]!.role).toBe("system");
-    const trailing = req.messages[req.messages.length - 1]!;
-    expect(trailing.role).toBe("user");
-    expect(typeof trailing.content === "string" ? trailing.content : "").toMatch(/Summarize/);
-
-    // Strip system head + trailing instruction. Small user turns are kept
-    // verbatim and therefore excluded from the summarizer payload; only
-    // foldable messages (assistant replies, large user turns, tool results)
-    // reach the summarizer. Every foldable message must match its original
-    // bytes in order.
-    const middle = req.messages.slice(1, -1);
-    expect(middle.length).toBeGreaterThan(0);
-    let origIndex = 0;
-    for (const m of middle) {
-      expect(m.role).not.toBe("user");
-      while (origIndex < logBeforeFold.length && logBeforeFold[origIndex]!.role !== m.role) {
-        origIndex++;
-      }
-      expect(origIndex).toBeLessThan(logBeforeFold.length);
-      expect(m).toEqual(logBeforeFold[origIndex]);
-      origIndex++;
-    }
   });
 
   it("summary request omits reasoning to avoid burning thinking tokens on paraphrase", async () => {
@@ -185,8 +191,10 @@ describe("ContextManager fold sends cache-aligned summary request", () => {
       stream: false,
     });
     seedTurns(loop, 8);
-
     await loop.compactHistory({ keepRecentTokens: 40 });
+    seedTurns(loop, 8);
+    await loop.compactHistory({ keepRecentTokens: 40 });
+
     const req = captured[0]!;
     expect(req.thinking).toBe("disabled");
     expect(req.body.reasoning_effort).toBeUndefined();
@@ -205,80 +213,10 @@ describe("ContextManager fold sends cache-aligned summary request", () => {
       stream: false,
     });
     seedTurns(loop, 8);
-
     await loop.compactHistory({ keepRecentTokens: 40 });
-    expect(captured[0]!.model).toBe("deepseek-v4-flash");
-  });
-
-  it("skill-pinned bodies are lifted out of the summarizer payload and re-attached after the summary", async () => {
-    const captured: CapturedRequest[] = [];
-    const client = new DeepSeekClient({
-      apiKey: "sk-test",
-      fetch: fakeFetch(captured, "summary."),
-    });
-    const loop = new CacheFirstLoop({
-      client,
-      prefix: new ImmutablePrefix({ system: SYSTEM_PROMPT, toolSpecs: TOOLS }),
-      model: "deepseek-v4-flash",
-      stream: false,
-    });
-
-    const skillBody =
-      '<skill-pin name="explore">\n# Skill: explore\n\nStep 1. Read entrypoints.\nStep 2. Trace flow.\n</skill-pin>';
-    loop.log.append({
-      role: "assistant",
-      content: null,
-      tool_calls: [
-        { id: "c1", type: "function", function: { name: "run_skill", arguments: "{}" } },
-      ],
-    });
-    loop.log.append({ role: "tool", tool_call_id: "c1", content: skillBody });
-    seedTurns(loop, 6);
-
-    const result = await loop.compactHistory({ keepRecentTokens: 40 });
-    expect(result.folded).toBe(true);
-
-    const req = captured[0]!;
-    const serialized = JSON.stringify(req.messages);
-    // The skill body lives in the pinned prefix, not inside the summarizer
-    // request, so the summarizer payload is smaller and the prefix cache stays
-    // byte-identical. The instruction still names the pinned skill.
-    expect(serialized).not.toContain("Step 1. Read entrypoints.");
-    expect(serialized).not.toContain("preserved separately, do not summarize");
-
-    const trailing = req.messages[req.messages.length - 1]!;
-    const instruction = typeof trailing.content === "string" ? trailing.content : "";
-    expect(instruction).toMatch(/pinned verbatim/);
-    expect(instruction).toContain('"explore"');
-  });
-
-  it("summarizer receives only foldable messages + trailing instruction", async () => {
-    const captured: CapturedRequest[] = [];
-    const client = new DeepSeekClient({
-      apiKey: "sk-test",
-      fetch: fakeFetch(captured, "summary."),
-    });
-    const loop = new CacheFirstLoop({
-      client,
-      prefix: new ImmutablePrefix({ system: SYSTEM_PROMPT, toolSpecs: TOOLS }),
-      model: "deepseek-v4-flash",
-      stream: false,
-    });
     seedTurns(loop, 8);
-
     await loop.compactHistory({ keepRecentTokens: 40 });
-    const req = captured[0]!;
-    const last = req.messages[req.messages.length - 1]!;
 
-    expect(last.role).toBe("user");
-    // With partitionFold, the foldable messages (before the trailing
-    // instruction) are only the items that weren't kept verbatim —
-    // prior summaries and small user turns are excluded from the
-    // summarizer's request. The messages sent are a contiguous subset
-    // of the original log (fewer messages than the head).
-    expect(last.content).toContain("Summarize");
-    // At least one foldable message exists before the instruction.
-    const beforeLast = req.messages[req.messages.length - 2];
-    expect(beforeLast).toBeDefined();
+    expect(captured[0]!.model).toBe("deepseek-v4-flash");
   });
 });

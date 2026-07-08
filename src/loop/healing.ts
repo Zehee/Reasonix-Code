@@ -1,9 +1,4 @@
 import type { ChatMessage, ToolCall } from "../types.js";
-import {
-  shrinkOversizedToolCallArgsByTokens,
-  shrinkOversizedToolResults,
-  shrinkOversizedToolResultsByTokens,
-} from "./shrink.js";
 import { isThinkingModeModel } from "./thinking.js";
 
 let _stampSeq = 0;
@@ -64,12 +59,11 @@ export function fixToolCallPairing(messages: ChatMessage[]): {
 
 export function healLoadedMessages(
   messages: ChatMessage[],
-  maxChars: number,
+  _maxChars: number,
 ): { messages: ChatMessage[]; healedCount: number; healedFrom: number } {
-  const shrunk = shrinkOversizedToolResults(messages, maxChars);
-  const paired = fixToolCallPairing(shrunk.messages);
-  const healedCount = shrunk.healedCount + paired.droppedAssistantCalls + paired.droppedStrayTools;
-  return { messages: paired.messages, healedCount, healedFrom: shrunk.healedFrom };
+  const paired = fixToolCallPairing(messages);
+  const healedCount = paired.droppedAssistantCalls + paired.droppedStrayTools;
+  return { messages: paired.messages, healedCount, healedFrom: 0 };
 }
 
 /** Go v2 compatible: never adds empty reasoning_content. Only preserves non-empty reasoning. */
@@ -108,28 +102,24 @@ export function stripStalePlainReasoning(messages: ChatMessage[]): ChatMessage[]
   });
 }
 
-/** Token-cap variant — char cap would let CJK slip past at 2× the intended token cost. */
+/** Token-cap variant — kept for API compatibility but no longer shrinks content.
+ *  Tool results are preserved verbatim until fold time; this only repairs
+ *  dangling tool-call pairings from a crashed or directly-mutated log. */
 export function healLoadedMessagesByTokens(
   messages: ChatMessage[],
-  maxTokens: number,
+  _maxTokens: number,
 ): {
   messages: ChatMessage[];
   healedCount: number;
   tokensSaved: number;
   charsSaved: number;
 } {
-  const shrunk = shrinkOversizedToolResultsByTokens(messages, maxTokens);
-  const paired = fixToolCallPairing(shrunk.messages);
-  const argsShrunk = shrinkOversizedToolCallArgsByTokens(paired.messages, maxTokens);
-  const healedCount =
-    shrunk.healedCount +
-    argsShrunk.healedCount +
-    paired.droppedAssistantCalls +
-    paired.droppedStrayTools;
+  const paired = fixToolCallPairing(messages);
+  const healedCount = paired.droppedAssistantCalls + paired.droppedStrayTools;
   return {
-    messages: argsShrunk.messages,
+    messages: paired.messages,
     healedCount,
-    tokensSaved: shrunk.tokensSaved + argsShrunk.tokensSaved,
-    charsSaved: shrunk.charsSaved + argsShrunk.charsSaved,
+    tokensSaved: 0,
+    charsSaved: 0,
   };
 }

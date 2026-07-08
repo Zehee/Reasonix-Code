@@ -3,12 +3,7 @@ import type { ReasoningEffort } from "./config.js";
 import type { PauseGate } from "./core/pause-gate.js";
 import { pauseGate as defaultPauseGate } from "./core/pause-gate.js";
 import { type HookPayload, type ResolvedHook, runHooks } from "./hooks.js";
-import {
-  DEFAULT_MAX_RESULT_CHARS,
-  DEFAULT_MAX_RESULT_TOKENS,
-  truncateForModel,
-  truncateForModelByTokens,
-} from "./mcp/registry.js";
+import { DEFAULT_MAX_RESULT_TOKENS } from "./mcp/registry.js";
 
 import { ContextManager, TURN_START_FOLD_THRESHOLD } from "./context-manager.js";
 import { InflightSet } from "./core/inflight.js";
@@ -35,7 +30,6 @@ import { buildAssistantMessage, buildSyntheticAssistantMessage } from "./loop/me
 import {
   looksLikeCompleteJson,
   shrinkOversizedToolCallArgsByTokens,
-  shrinkOversizedToolResults,
   shrinkOversizedToolResultsByTokens,
 } from "./loop/shrink.js";
 import { streamModelResponse } from "./loop/streaming.js";
@@ -45,7 +39,6 @@ import {
   thinkingModeForModel,
 } from "./loop/thinking.js";
 import type { LoopEvent } from "./loop/types.js";
-import { TurnArchiver } from "./memory/archiver.js";
 import { AppendOnlyLog, type ImmutablePrefix, VolatileScratch } from "./memory/runtime.js";
 import {
   appendSessionMessage,
@@ -90,7 +83,6 @@ export {
   isThinkingModeModel,
   looksLikeCompleteJson,
   shrinkOversizedToolCallArgsByTokens,
-  shrinkOversizedToolResults,
   shrinkOversizedToolResultsByTokens,
   stampMissingReasoningForThinkingMode,
   stripHallucinatedToolMarkup,
@@ -145,25 +137,6 @@ interface CacheShapeSnapshot {
   toolSchemaTokens: number;
 }
 
-function shrinkMessageForRetention(message: ChatMessage): ChatMessage {
-  if (message.role !== "assistant" || !Array.isArray(message.tool_calls)) return message;
-  return (
-    shrinkOversizedToolCallArgsByTokens([message], DEFAULT_MAX_RESULT_TOKENS).messages[0] ?? message
-  );
-}
-
-/** Shrink oversized tool results on append so the content is stable from the
- *  first API call — the healing pipeline (healActiveLogBeforeSend) would
- *  otherwise truncate oversized results between API calls, changing message
- *  content mid-turn and invalidating DeepSeek's prefix cache. */
-function shrinkToolResultForCacheStability(message: ChatMessage): ChatMessage {
-  if (message.role !== "tool") return message;
-  const content = typeof message.content === "string" ? message.content : "";
-  if (content.length <= DEFAULT_MAX_RESULT_CHARS) return message;
-  const [shrunk] = shrinkOversizedToolResults([message], DEFAULT_MAX_RESULT_CHARS).messages;
-  return shrunk ?? message;
-}
-
 export class CacheFirstLoop {
   readonly client: DeepSeekClient;
   readonly prefix: ImmutablePrefix;
@@ -176,7 +149,7 @@ export class CacheFirstLoop {
    *  burning unlimited API budget. The model gets one final force-summary
    *  call when the cap fires. Override via REASONIX_MAX_ITER env var. */
   static readonly DEFAULT_MAX_ITER_PER_TURN = 50;
-  /** Files the model has read this session; gates edit_file / multi_edit so SEARCH text matches on-disk bytes. Cleared on fold / mechanical truncate (the model's byte-level view of the elided history is gone). In-memory only — naturally empty on resume. */
+  /** Files the model has read this session; gates edit_file / multi_edit so SEARCH text matches on-disk bytes. Cleared on fold (the model's byte-level view of the elided history is gone). In-memory only — naturally empty on resume. */
   readonly readTracker = new ReadTracker();
 
   // Mutable via configure() — slash commands in the TUI / library callers tweak
@@ -242,8 +215,6 @@ export class CacheFirstLoop {
   private _foldedThisTurn = false;
   private context!: ContextManager;
   private _lastCacheShape: CacheShapeSnapshot | null = null;
-  /** Proactive turn archiver — strips old tool noise from the main context. */
-  private readonly _archiver: TurnArchiver;
 
   /** Subscribe API so UI hooks can derive `running` from finally-guaranteed insertions. */
   get inflight(): InflightSet {
@@ -294,11 +265,7 @@ export class CacheFirstLoop {
       stormWindow: parsePositiveIntEnv(process.env.REASONIX_STORM_WINDOW),
     });
 
-    // Proactive archiver — must be initialized before session loading
-    // so the startup archive pass can use it.
-    this._archiver = new TurnArchiver(this.sessionName);
-
-    // Heal-on-load: oversized tool results would 400 the next call before the user types.
+    // Heal-on-load: repair dangling tool-call pairings from crashed sessions.
     if (this.sessionName) {
       const prior = loadSessionMessages(this.sessionName);
       const shrunk = healLoadedMessagesByTokens(prior, DEFAULT_MAX_RESULT_TOKENS);
@@ -346,25 +313,6 @@ export class CacheFirstLoop {
           );
         }
       }
-
-      // Archive old tool noise at startup so the session is loaded in
-      // compressed form — this is the main contributor to fast start.
-      this._archiver
-        .archivePreviousTurnNoise(messages, this._turn)
-        .then((archived) => {
-          if (archived > 0) {
-            process.stderr.write(`▸ ${this.sessionName}: archived ${archived} tool results.\n`);
-            this.log.compactInPlace(messages);
-            if (this.sessionName) {
-              try {
-                rewriteSession(this.sessionName, messages);
-              } catch {
-                /* best-effort */
-              }
-            }
-          }
-        })
-        .catch(() => {});
     } else {
       this.resumedMessageCount = 0;
     }
@@ -415,13 +363,13 @@ export class CacheFirstLoop {
   }
 
   appendAndPersist(message: ChatMessage): void {
-    // Shrink oversized content on append so the message is byte-identical from
-    // the first API call — deferred shrinking in the healing pipeline would
-    // change content between calls and invalidate DeepSeek's prefix cache.
-    const retained = shrinkToolResultForCacheStability(shrinkMessageForRetention(message));
+    // Tool results are kept verbatim; truncation only happens at fold time,
+    // when the full result is archived to .toolcache.jsonl and replaced by a
+    // placeholder. This keeps every API call within a turn byte-identical so
+    // DeepSeek's prefix cache remains valid.
     // Stamp stable metadata at append time so in-memory log, disk file, and
     // later reloads all see the same message bytes (issue #943 / cache stability).
-    const stamped = this.stampMessage(retained);
+    const stamped = this.stampMessage(message);
     this.log.append(stamped);
     if (this.sessionName) {
       try {
@@ -434,12 +382,11 @@ export class CacheFirstLoop {
 
   /** Swap the just-appended assistant entry — used by self-correction to restore the original tool_calls without dropping reasoning_content. */
   private replaceTailAssistantMessage(message: ChatMessage): void {
-    const retained = shrinkMessageForRetention(message);
     const entries = this.log.entries;
     const tail = entries[entries.length - 1];
     if (!tail || tail.role !== "assistant") return;
     const kept = entries.slice(0, -1);
-    kept.push(retained);
+    kept.push(message);
     this.log.compactInPlace(kept);
     if (this.sessionName) {
       try {
@@ -597,7 +544,6 @@ export class CacheFirstLoop {
 
       const result = await this.tools.dispatch(name, args, {
         signal,
-        maxResultTokens: DEFAULT_MAX_RESULT_TOKENS,
         confirmationGate: this.confirmationGate,
         readTracker: this.readTracker,
         rootDir: this.hookCwd,
@@ -639,7 +585,11 @@ export class CacheFirstLoop {
 
   private buildMessages(): ChatMessage[] {
     const healedMessages = stripStalePlainReasoning(this.healActiveLogBeforeSend());
-    return [...this.prefix.toMessages(), ...healedMessages];
+    const apiReady = healedMessages.map((m) => {
+      const { foldId: _, foldArtifact: __, ...rest } = m;
+      return rest as ChatMessage;
+    });
+    return [...this.prefix.toMessages(), ...apiReady];
   }
 
   private cacheShapeForRequest(
@@ -1233,8 +1183,6 @@ export class CacheFirstLoop {
         restoreModelIfNeeded();
         yield { turn: this._turn, role: "done", content: assistantContent };
         this._steerQueue.length = 0;
-        // Archive old tool noise from previous turns (proactive compression).
-        this.archiveAfterTurn().catch(() => {});
         return;
       }
 
@@ -1306,37 +1254,6 @@ export class CacheFirstLoop {
     // loop via return statements when it produces no more tool calls,
     // when the context guard fires, when an abort fires, or when a fatal
     // error escapes the inner try blocks.
-  }
-
-  private async archiveAfterTurn(): Promise<void> {
-    const lastUsage =
-      this.stats.turns.length > 0 ? this.stats.turns[this.stats.turns.length - 1]?.usage : null;
-    const promptTokens = lastUsage?.promptTokens ?? 0;
-
-    // Only archive when prompt is under meaningful pressure.
-    if (promptTokens < 100_000) return;
-
-    const log = this.log.toFullHistory();
-
-    // Insert cache-boundary marker on first pass. The marker sits at the
-    // 100K boundary — content before it is the stable cache prefix and
-    // is NEVER archived.
-    const markerInserted = this._archiver.ensureBoundaryMarker(log, Math.floor(log.length * 0.4));
-
-    const archived = await this._archiver.archivePreviousTurnNoise(log, this._turn);
-    if (markerInserted || archived > 0) {
-      if (archived > 0) {
-        process.stderr.write(`▸ turn ${this._turn}: archived ${archived} old tool results.\n`);
-      }
-      this.log.compactInPlace(log);
-      if (this.sessionName) {
-        try {
-          rewriteSession(this.sessionName, log);
-        } catch {
-          /* best-effort */
-        }
-      }
-    }
   }
 
   private summaryContext(): ForceSummaryContext {

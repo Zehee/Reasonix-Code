@@ -122,7 +122,7 @@ irm https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.ps1 | iex
 
 ```powershell
 # Download the latest release
-iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.3.exe -OutFile reasonix.exe
+iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.4.exe -OutFile reasonix.exe
 ```
 
 ---
@@ -211,21 +211,23 @@ The immutable prefix (system prompt + tool schemas + few-shots) is hashed and ke
 Post-fold prompt structure:
 
 ```
-[Fold recursive summary]
-  → [Decision clusters / related turn IDs]
-  → [Evolution framework: last 30 denoised turns]
-  → [Hot zone: last 5 turns full fidelity]
-  → [Current turn]
+<!-- fold: f-xxx -->           ← epoch summary of the previous fold's three artifacts (max 5; reset to the latest on the 6th)
+...
+<!-- current-fold: f-yyy -->   ← current fold marker
+[Decision clusters / related turn IDs]
+[Evolution framework: last 30 denoised turns]
+[Hot zone: last 5 turns full fidelity]
+[Current turn]
 ```
 
 | Layer | Scope | Contents | Cache role |
 |------|------|------|----------|
-| Fold summary | Earlier folds | Recursive strategic summary | Long-term stable, cache hit |
-| Decision clusters | Across folds | Decision facts, file refs, turn IDs | Highly stable, cache hit |
+| Epoch summary | Earlier folds | Recursive strategic summary (≤1024 tokens) of the previous clusters/framework/hotzone | Long-term stable, cache hit |
+| Decision clusters | This fold | Decision facts, file refs, turn IDs | Highly stable, cache hit |
 | Evolution framework | Pre-fold 30 turns | User intent, tool calls, conclusions | Hits within stable window |
 | Hot zone | Last 5 turns | Full user/assistant/tool content | Changes every turn, expected miss |
 
-A fold is a single jump, not a continuous process. After the jump the prefix enters a new stable window and the cache hit rate recovers. Every compressed turn remains restorable via its `turnId` from the archived JSONL or `fold_view.json`.
+A fold is a single jump, not a continuous process. The first fold produces only clusters/framework/hotzone; later folds invoke a lightweight summarizer against the previous fold's three artifacts. After the jump the original JSONL is archived as `{sessionId}__archive_{ts}.jsonl`, non-hot-zone tool results are moved verbatim to `{sessionId}.toolcache.jsonl`, and the prompt sees `[archived: ...]` placeholders. Every compressed turn remains restorable via `turnId` / `tool_call_id` from the archived JSONL, `.toolcache.jsonl`, or `fold_view.json`.
 
 ### 3. Error tolerance
 
@@ -234,7 +236,7 @@ Tool-call errors are handled leniently to avoid wasting turns:
 - **`lenientJsonParse()`** — 5 repair strategies (brace wrap, trailing comma, single quotes, unquote keys)
 - **`inferToolArgs()`** — fuzzy param name matching (`path` ↔ `file` ↔ `filepath`), function-call style parsing, shell-KV format
 - **`fillMissingRequiredParam()`** — auto-fill missing required params with type defaults (string → `""`, number → `0`)
-- **`shrinkToolResultForCacheStability()`** — oversized results truncated on append, not mid-turn
+- **Tool results kept verbatim** — tool results and tool_call args are no longer truncated on append or between turns; they remain intact until fold time, when they are archived to `.toolcache.jsonl`. This keeps the prefix-cache bytes identical across multiple API calls within the same turn
 
 ### MCP handshake cache
 

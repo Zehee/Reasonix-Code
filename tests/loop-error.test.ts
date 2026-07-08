@@ -157,7 +157,7 @@ describe("formatLoopError", () => {
 });
 
 describe("healLoadedMessagesByTokens", () => {
-  it("shrinks oversized paired tool-call args when loading an old session", () => {
+  it("no longer shrinks content but still repairs dangling tool-call pairings", () => {
     const bigArgs = JSON.stringify({
       path: "src/large.ts",
       content: Array.from({ length: 1200 }, (_, i) => `line ${i}: replacement`).join("\n"),
@@ -175,15 +175,13 @@ describe("healLoadedMessagesByTokens", () => {
 
     const healed = healLoadedMessagesByTokens(messages, 500);
 
-    expect(healed.healedCount).toBe(1);
-    expect(healed.tokensSaved).toBeGreaterThan(0);
+    expect(healed.healedCount).toBe(0);
+    expect(healed.tokensSaved).toBe(0);
     const assistant = healed.messages[0];
     if (assistant?.role !== "assistant" || !assistant.tool_calls) {
       throw new Error("assistant tool call missing");
     }
-    const savedArgs = assistant.tool_calls[0]!.function.arguments;
-    expect(savedArgs.length).toBeLessThan(bigArgs.length / 5);
-    expect(JSON.parse(savedArgs).content).toMatch(/shrunk/);
+    expect(assistant.tool_calls[0]!.function.arguments).toBe(bigArgs);
   });
 });
 
@@ -225,10 +223,8 @@ describe("formatLoopError — zh-CN runtime switch", () => {
 });
 
 describe("healLoadedMessages", () => {
-  it("truncates a giant tool result, leaves user/assistant messages alone", () => {
+  it("preserves a giant tool result verbatim and leaves user/assistant messages alone", () => {
     const big = "X".repeat(80_000);
-    // Needs a proper assistant.tool_calls + matching tool response so
-    // the 0.4.12+ validator doesn't prune the tool as stray.
     const messages: ChatMessage[] = [
       { role: "user", content: "read the big file" },
       {
@@ -240,13 +236,11 @@ describe("healLoadedMessages", () => {
       { role: "assistant", content: "here's what I found" },
     ];
     const { messages: healed, healedCount, healedFrom } = healLoadedMessages(messages, 32_000);
-    expect(healedCount).toBe(1);
-    expect(healedFrom).toBe(80_000);
+    expect(healedCount).toBe(0);
+    expect(healedFrom).toBe(0);
     expect(healed[0]).toEqual(messages[0]); // user untouched
     expect(healed[1]).toEqual(messages[1]); // assistant untouched
-    expect(typeof healed[2]!.content).toBe("string");
-    expect((healed[2]!.content as string).length).toBeLessThan(33_000);
-    expect(healed[2]!.content).toContain("truncated");
+    expect(healed[2]!.content).toBe(big);
     expect(healed[3]).toEqual(messages[3]); // trailing assistant untouched
   });
 
@@ -260,9 +254,7 @@ describe("healLoadedMessages", () => {
     expect(healed).toEqual(messages);
   });
 
-  it("heals multiple oversized tool messages in one pass (all properly paired)", () => {
-    // Each oversized tool MUST be the response to a preceding
-    // assistant.tool_calls, otherwise the 0.4.12 validator prunes it.
+  it("preserves multiple oversized tool messages when properly paired", () => {
     const messages: ChatMessage[] = [
       { role: "user", content: "do three things" },
       {
@@ -279,8 +271,8 @@ describe("healLoadedMessages", () => {
       { role: "tool", tool_call_id: "t3", content: "small" },
     ];
     const { healedCount, healedFrom } = healLoadedMessages(messages, 32_000);
-    expect(healedCount).toBe(2);
-    expect(healedFrom).toBe(90_000);
+    expect(healedCount).toBe(0);
+    expect(healedFrom).toBe(0);
   });
 
   it("drops stray tool messages that have no preceding assistant.tool_calls", () => {

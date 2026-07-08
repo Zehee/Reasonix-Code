@@ -797,19 +797,15 @@ describe("CacheFirstLoop (non-streaming)", () => {
     expect(seenModels.every((m) => m === thirdPartyModel)).toBe(true);
   });
 
-  it("compactHistory replaces head with summary, keeps tail within token budget", async () => {
-    const responses: FakeResponseShape[] = [
-      { content: "User explored auth and billing modules; landed on session refactor plan." },
-    ];
-    const client = makeClient(responses);
+  it("compactHistory replaces raw turns with clusters/framework/hotzone artifacts", async () => {
+    const client = makeClient([]);
     const loop = new CacheFirstLoop({
       client,
       prefix: new ImmutablePrefix({ system: "s" }),
       stream: false,
     });
 
-    // Seed 6 user/assistant pairs with chunky content so we can
-    // reason about token weight; each pair ≈ 20 tokens.
+    // Seed 6 user/assistant pairs with chunky content.
     for (let i = 0; i < 6; i++) {
       loop.log.append({
         role: "user",
@@ -819,19 +815,24 @@ describe("CacheFirstLoop (non-streaming)", () => {
     }
     expect(loop.log.length).toBe(12);
 
-    // Budget of ~60 tokens fits ~3 trailing pairs.
+    // Budget smaller than the raw turns → fold happens (first fold has no summary).
     const result = await loop.compactHistory({ keepRecentTokens: 60 });
     expect(result.folded).toBe(true);
     expect(result.beforeMessages).toBe(12);
 
     const entries = loop.log.entries;
-    const summaryEntry = entries.find(
+    const hasClusters = entries.some(
       (m) =>
         m.role === "assistant" &&
         typeof m.content === "string" &&
-        m.content.includes("HISTORY SUMMARY"),
+        m.content.includes("Decision clusters:"),
     );
-    expect(summaryEntry).toBeDefined();
+    expect(hasClusters).toBe(true);
+    const hasFramework = entries.some(
+      (m) => typeof m.content === "string" && m.content.startsWith("[framework]"),
+    );
+    expect(hasFramework).toBe(true);
+    // Hot zone keeps the last 5 raw turns verbatim.
     expect(entries[entries.length - 1]!.content).toMatch(/answer number 5/);
   });
 
@@ -922,14 +923,14 @@ describe("CacheFirstLoop (non-streaming)", () => {
     );
     expect(foldWarn).toBeDefined();
     expect(foldWarn!.content).toMatch(/folded \d+ messages/);
-    // The log is rewritten with a summary plus denoised framework turns.
-    const hasSummary = loop.log.entries.some(
+    // The log is rewritten with clusters/framework/hotzone artifacts.
+    const hasClusters = loop.log.entries.some(
       (m) =>
         m.role === "assistant" &&
         typeof m.content === "string" &&
-        m.content.includes("HISTORY SUMMARY"),
+        m.content.includes("Decision clusters:"),
     );
-    expect(hasSummary).toBe(true);
+    expect(hasClusters).toBe(true);
   }, 30_000);
 
   it("uses the aggressive fold tier when promptTokens crosses the aggressive threshold", async () => {
@@ -997,14 +998,8 @@ describe("CacheFirstLoop (non-streaming)", () => {
     expect(status).toBeDefined();
   }, 30_000);
 
-  it("pre-clips new tool results at dispatch so they never enter the log oversized", async () => {
+  it("keeps new tool results verbatim at dispatch until fold time", async () => {
     const reg = new ToolRegistry();
-    // Tool returns ~50k chars of realistic-shape log text; the default
-    // token budget (8k) bounds the resulting log entry to a small
-    // fraction of the raw size. (Using "A".repeat(N) would hit the
-    // tokenizer's BPE O(n²) path for repeated single-char inputs —
-    // pathological enough to slow the suite by tens of seconds, and
-    // not representative of real tool output.)
     const huge = "ERROR: repeated failure with some detail\n".repeat(1250);
     reg.register({
       name: "big",
@@ -1017,7 +1012,7 @@ describe("CacheFirstLoop (non-streaming)", () => {
         content: "",
         tool_calls: [{ id: "c1", type: "function", function: { name: "big", arguments: "{}" } }],
       },
-      { content: "summarized." },
+      { content: "done." },
     ];
     const client = makeClient(responses);
     const loop = new CacheFirstLoop({
@@ -1032,12 +1027,11 @@ describe("CacheFirstLoop (non-streaming)", () => {
     const toolEntry = loop.log.toMessages().find((m) => m.role === "tool");
     expect(toolEntry).toBeDefined();
     const content = typeof toolEntry!.content === "string" ? toolEntry!.content : "";
-    // Well under the raw 50k — pre-clip fired before append.
-    expect(content.length).toBeLessThan(40_000);
-    expect(content).toMatch(/truncated/);
+    // Tool results are no longer pre-clipped; full content survives for fold-time archival.
+    expect(content).toBe(huge);
   });
 
-  it("shrinks retained tool-call args without starving the tool dispatch", async () => {
+  it("keeps retained tool-call args verbatim without starving the tool dispatch", async () => {
     const reg = new ToolRegistry();
     const hugeContent = Array.from({ length: 9000 }, (_, i) => `line ${i}: payload ${i}`).join(
       "\n",
@@ -1087,10 +1081,11 @@ describe("CacheFirstLoop (non-streaming)", () => {
       .find((m) => m.role === "assistant" && (m.tool_calls?.length ?? 0) > 0);
     expect(assistantEntry).toBeDefined();
     const savedArgs = assistantEntry!.tool_calls![0]!.function.arguments;
-    expect(savedArgs.length).toBeLessThan(rawArgs.length / 10);
+    // Tool-call args are no longer shrunk; they are preserved verbatim until fold time.
+    expect(savedArgs).toBe(rawArgs);
     const parsed = JSON.parse(savedArgs) as { path: string; content: string };
     expect(parsed.path).toBe("big.txt");
-    expect(parsed.content).toMatch(/shrunk/);
+    expect(parsed.content).toBe(hugeContent);
   });
 
   it("buildMessages strips a dangling assistant-with-tool_calls tail — defensive against 'insufficient tool messages' 400", async () => {

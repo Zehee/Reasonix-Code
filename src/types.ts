@@ -42,6 +42,9 @@ export interface ChatMessage {
   turnId?: number;
   /** Stable session UUID, embedded in every message for self-contained data — survives meta.json loss. */
   sessionId?: string;
+  /** Fold artifact marker — used by ContextManager to identify summary/cluster/framework/hotzone messages. */
+  foldId?: string;
+  foldArtifact?: "summary" | "clusters" | "framework" | "hotzone";
 }
 
 /** First line of a JSONL file — enables sessionId recovery even when .meta.json is lost. */

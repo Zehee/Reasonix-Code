@@ -3,6 +3,29 @@
 All notable changes to Reasonix. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] — 2026-07-08
+
+**Single-jump fold without gradual truncation.** Removed all proactive
+shrink/snip/prune paths: tool results and tool-call args are kept verbatim
+until a fold is triggered. This eliminates mid-turn prefix-cache churn.
+
+**Fold artifact markers and epoch summaries.** Folded prompts now carry
+machine-readable markers:
+`<!-- fold: id -->` for recursive epoch summaries (max 5, reset to latest
+on the 6th) and `<!-- current-fold: id -->` for the current fold's
+clusters/framework/hotzone. The summarizer only consumes the previous fold's
+three artifacts, and the first fold produces no summary.
+
+**Toolcache separation.** Non-hot-zone tool results are written verbatim to
+`{sessionId}.toolcache.jsonl` and replaced by `[archived: ...]` placeholders
+in the prompt, while the original JSONL is archived as
+`{sessionId}__archive_{ts}.jsonl`. Old tool results remain restorable via
+`turnId` / `tool_call_id`.
+
+**Removed TurnArchiver proactive archiving.** The per-turn 100K boundary
+archive loop and its cache-boundary marker are gone; archiving only happens
+at fold time.
+
 ## [0.1.3] — 2026-07-07
 
 **Context compression / fold architecture.** Fold now performs a single

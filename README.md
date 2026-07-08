@@ -122,7 +122,7 @@ irm https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.ps1 | iex
 
 ```powershell
 # 下载最新版本
-iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.3.exe -OutFile reasonix.exe
+iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.4.exe -OutFile reasonix.exe
 ```
 
 ---
@@ -211,21 +211,23 @@ Reasonix-Code 的 **cache-first 循环**最大化 DeepSeek 前缀缓存命中率
 折叠后的主 prompt 结构：
 
 ```
-[Fold 递归摘要]
-  → [决策簇 / 相关 turn IDs]
-  → [演化框架：最近 30 轮降噪骨架]
-  → [热区原文：最近 5 轮完整内容]
-  → [当前 turn]
+<!-- fold: f-xxx -->           ← 对上一届三项的 epoch 摘要（最多保留 5 个，第 6 个时重置为最新 1 个）
+...
+<!-- current-fold: f-yyy -->   ← 当前 fold 标记
+[Decision clusters / 相关 turn IDs]
+[演化框架：最近 30 轮降噪骨架]
+[热区原文：最近 5 轮完整内容]
+[当前 turn]
 ```
 
 | 层级 | 范围 | 内容 | 缓存角色 |
 |------|------|------|----------|
-| Fold 摘要 | 更早 fold | 递归战略摘要 | 长期稳定，缓存命中 |
-| 决策簇 | 跨 fold | 决策事实、文件引用、turn IDs | 高稳定，缓存命中 |
-| 演化框架 | fold 前 30 轮 | 用户意图、工具调用、结论 | 稳定期内缓存命中 |
+| Epoch 摘要 | 更早 fold | 对上一届 clusters/framework/hotzone 的递归战略摘要（≤1024 tokens） | 长期稳定，缓存命中 |
+| 决策簇 | 本次 fold | 决策事实、文件引用、turn IDs | 高稳定，缓存命中 |
+| 演化框架 | 本次 fold 前 30 轮 | 用户意图、工具调用、结论 | 稳定期内缓存命中 |
 | 热区原文 | 最近 5 轮 | 完整 user/assistant/tool 内容 | 每轮变化，接受 miss |
 
-折叠是一次性跳变，不是持续渐进过程。fold 完成后前缀进入新的稳定期，缓存命中率重新上升。所有被压缩的历史都可以通过 `turnId` 从归档 JSONL 或 `fold_view.json` 中精确还原。
+折叠是一次性跳变，不是持续渐进过程。第一次 fold 只生成 clusters/framework/hotzone，不生成 epoch 摘要；后续 fold 才调用轻量 summarizer 对上一届三项做摘要。fold 完成后原 JSONL 被归档为 `{sessionId}__archive_{ts}.jsonl`，非热区的 tool result 完整存入 `{sessionId}.toolcache.jsonl`，prompt 中替换为 `[archived: ...]` 占位符。所有被压缩的历史都可通过 `turnId` / `tool_call_id` 从归档 JSONL、`.toolcache.jsonl` 或 `fold_view.json` 中精确还原。
 
 ### 3. 错误容忍
 
@@ -234,7 +236,7 @@ Reasonix-Code 的 **cache-first 循环**最大化 DeepSeek 前缀缓存命中率
 - **`lenientJsonParse()`** — 5 种修复策略（包裹花括号、去除尾逗号、单引号转双引号、去键引号）
 - **`inferToolArgs()`** — 模糊参数名匹配（`path` ↔ `file` ↔ `filepath`）、函数调用风格解析、Shell KV 格式
 - **`fillMissingRequiredParam()`** — 缺失 required 参数自动填充类型默认值（string → `""`，number → `0`）
-- **`shrinkToolResultForCacheStability()`** — 超大结果在追加时截断，非中间轮次
+- **工具结果保持完整** — tool result 与 tool_call args 在追加和轮次间不再截断，完整保留到 fold 时一次性归档到 `.toolcache.jsonl`，保证同轮内多次 API 调用的前缀缓存字节一致
 
 ### MCP 握手缓存
 

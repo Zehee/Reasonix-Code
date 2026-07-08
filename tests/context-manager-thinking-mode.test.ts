@@ -36,12 +36,16 @@ function makeClient(responses: FakeResponseShape[]) {
   return new DeepSeekClient({ apiKey: "sk-test", fetch: fakeFetch(responses) });
 }
 
-function findSummary(entries: readonly ChatMessage[]): ChatMessage | undefined {
+function findSummary(entries: readonly { content?: string | null; role?: string }[]):
+  | {
+      content?: string | null;
+      role?: string;
+      reasoning_content?: string | null;
+    }
+  | undefined {
   return entries.find(
     (m) =>
-      m.role === "assistant" &&
-      typeof m.content === "string" &&
-      m.content.includes("HISTORY SUMMARY"),
+      m.role === "assistant" && typeof m.content === "string" && m.content.startsWith("<!-- fold:"),
   );
 }
 
@@ -57,9 +61,9 @@ function seedTurns(loop: CacheFirstLoop, n: number): void {
 }
 
 describe("ContextManager fold preserves reasoning_content for thinking-mode (#1042)", () => {
-  it("stamps reasoning_content on the synthesized fold summary so the next API call doesn't 400", async () => {
+  it("stamps reasoning_content on the epoch summary when the summarizer returns it", async () => {
     const client = makeClient([
-      { content: "earlier turns covered the user's auth refactor.", reasoning_content: "thought" },
+      { content: "epoch summary for second fold.", reasoning_content: "thought" },
     ]);
     const loop = new CacheFirstLoop({
       client,
@@ -67,47 +71,51 @@ describe("ContextManager fold preserves reasoning_content for thinking-mode (#10
       model: "deepseek-v4-flash",
       stream: false,
     });
-    seedTurns(loop, 6);
+    seedTurns(loop, 8);
+    const r1 = await loop.compactHistory({ keepRecentTokens: 40 });
+    expect(r1.folded).toBe(true);
+    expect(findSummary(loop.log.entries)).toBeUndefined();
 
-    const result = await loop.compactHistory({ keepRecentTokens: 40 });
-    expect(result.folded).toBe(true);
+    seedTurns(loop, 8);
+    const r2 = await loop.compactHistory({ keepRecentTokens: 40 });
+    expect(r2.folded).toBe(true);
 
     const head = findSummary(loop.log.entries)!;
     expect(head.role).toBe("assistant");
-    expect(head.content).toMatch(/HISTORY SUMMARY/);
+    expect(head.content).toMatch(/<!-- fold:/);
     expect(head.reasoning_content).toBeDefined();
     expect(head.reasoning_content).toBe("thought");
   });
 
   it("omits reasoning_content when the summarizer response omitted it (Go v2 omits empty fields)", async () => {
-    const client = makeClient([{ content: "earlier turns happened." }]);
+    const client = makeClient([{ content: "epoch summary for second fold." }]);
     const loop = new CacheFirstLoop({
       client,
       prefix: new ImmutablePrefix({ system: "s" }),
       model: "deepseek-v4-flash",
       stream: false,
     });
-    seedTurns(loop, 6);
-
-    const result = await loop.compactHistory({ keepRecentTokens: 40 });
-    expect(result.folded).toBe(true);
+    seedTurns(loop, 8);
+    await loop.compactHistory({ keepRecentTokens: 40 });
+    seedTurns(loop, 8);
+    await loop.compactHistory({ keepRecentTokens: 40 });
 
     const head = findSummary(loop.log.entries)!;
     expect(head.reasoning_content).toBeUndefined();
   });
 
   it("omits reasoning_content for non-thinking-mode session models when summarizer returned none", async () => {
-    const client = makeClient([{ content: "earlier turns happened." }]);
+    const client = makeClient([{ content: "epoch summary for second fold." }]);
     const loop = new CacheFirstLoop({
       client,
       prefix: new ImmutablePrefix({ system: "s" }),
       model: "deepseek-chat",
       stream: false,
     });
-    seedTurns(loop, 6);
-
-    const result = await loop.compactHistory({ keepRecentTokens: 40 });
-    expect(result.folded).toBe(true);
+    seedTurns(loop, 8);
+    await loop.compactHistory({ keepRecentTokens: 40 });
+    seedTurns(loop, 8);
+    await loop.compactHistory({ keepRecentTokens: 40 });
 
     const head = findSummary(loop.log.entries)!;
     expect(head.reasoning_content).toBeUndefined();

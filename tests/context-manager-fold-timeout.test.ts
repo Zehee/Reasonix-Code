@@ -30,7 +30,7 @@ function seedTurns(loop: CacheFirstLoop, n: number): void {
 }
 
 describe("ContextManager fold timeout", () => {
-  it("falls back to the deterministic cluster summary when the summarizer request hangs", async () => {
+  it("falls back cleanly when the second-fold summarizer request hangs", async () => {
     const prevTimeout = process.env.REASONIX_FOLD_SUMMARY_TIMEOUT_MS;
     process.env.REASONIX_FOLD_SUMMARY_TIMEOUT_MS = "50";
     try {
@@ -40,25 +40,29 @@ describe("ContextManager fold timeout", () => {
         prefix: new ImmutablePrefix({ system: "s" }),
         stream: false,
       });
-      seedTurns(loop, 6);
-      const beforeMessages = loop.log.length;
+      seedTurns(loop, 8);
+      const first = await loop.compactHistory({ keepRecentTokens: 40 });
+      expect(first.folded).toBe(true);
 
+      seedTurns(loop, 8);
+      const beforeMessages = loop.log.length;
       const result = await loop.compactHistory({ keepRecentTokens: 40 });
 
       expect(result).toMatchObject({
         folded: true,
         beforeMessages,
         afterMessages: expect.any(Number),
-        summaryChars: expect.any(Number),
+        summaryChars: 0,
       });
-      // The log is rewritten with the cluster-based fallback summary.
+      // The log is rewritten with the cluster-based fallback; no summary
+      // message is added because the summarizer timed out.
       const hasSummary = loop.log.entries.some(
-        (m) => typeof m.content === "string" && m.content.includes("HISTORY SUMMARY"),
+        (m) => typeof m.content === "string" && m.content.startsWith("<!-- fold:"),
       );
       const hasClusters = loop.log.entries.some(
         (m) => typeof m.content === "string" && m.content.includes("Decision clusters:"),
       );
-      expect(hasSummary).toBe(true);
+      expect(hasSummary).toBe(false);
       expect(hasClusters).toBe(true);
     } finally {
       if (prevTimeout === undefined) {
