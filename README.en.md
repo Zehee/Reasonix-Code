@@ -169,12 +169,12 @@ src/
 ~/.reasonix/
 ├── sessions/                      ← All sessions
 │   ├── {workspace-slug}/          ← Workspace-isolated
-│   │   ├── active.jsonl           ← Active conversation (append-only, no skeleton/shadow)
-│   │   ├── active.denoised.jsonl  ← Denoised skeleton generated at fold time (not live content)
-│   │   ├── active.toolcache.jsonl   ← Pre-compressed shadow (raw tool results)
-│   │   ├── active.meta.json       ← Metadata
-│   │   ├── 20260701_120000.jsonl  ← Archived history (/new rotation)
-│   │   └── 20260701_120000.toolcache.jsonl
+│   │   ├── active.jsonl           ← Active session (not yet folded; append-only, no skeleton/shadow)
+│   │   ├── {sessionId}.jsonl      ← Archived raw session
+│   │   ├── {sessionId}__archive_{ts}.jsonl  ← Old live JSONL archived after a fold
+│   │   ├── {sessionId}.denoised.jsonl      ← Denoised skeleton generated at fold time
+│   │   ├── {sessionId}.toolcache.jsonl     ← Raw tool-result cache
+│   │   └── {sessionId}.meta.json           ← Metadata
 │   ├── __chat__/                  ← Non-workspace sessions
 │   ├── {root-hash}/checkpoints/   ← Git snapshots before file writes
 │   └── *.plan.json, *.pending.json
