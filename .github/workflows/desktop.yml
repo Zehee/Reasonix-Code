@@ -23,11 +23,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Node dependencies
-        run: bun install
+        run: npm ci --ignore-scripts
 
       - name: Install desktop dependencies
         working-directory: desktop
-        run: bun install
+        run: npm ci --ignore-scripts
 
       - name: Build Node binary
         run: bun build ./src/cli/index.ts --compile --outfile desktop/src-tauri/binaries/node.exe
