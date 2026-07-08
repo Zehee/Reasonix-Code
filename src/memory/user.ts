@@ -455,54 +455,6 @@ export function applyUserMemory(
   return parts.join("\n");
 }
 
-/** Read theme activity summaries from ~/.reasonix/themes/ and format as a system-prompt block. */
-function applyThemeActivity(basePrompt: string): string {
-  const dir = join(homedir(), ".reasonix", "themes");
-  if (!existsSync(dir)) return basePrompt;
-
-  try {
-    const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
-    if (files.length === 0) return basePrompt;
-
-    const summaries: { name: string; turns: number; updated: string }[] = [];
-    for (const file of files) {
-      try {
-        const raw = JSON.parse(readFileSync(join(dir, file), "utf8")) as {
-          displayName?: string;
-          turns?: unknown[];
-          updatedAt?: string;
-        };
-        if (raw && typeof raw.displayName === "string" && raw.displayName.trim()) {
-          summaries.push({
-            name: raw.displayName,
-            turns: Array.isArray(raw.turns) ? raw.turns.length : 0,
-            updated: raw.updatedAt ?? "",
-          });
-        }
-      } catch {
-        /* skip corrupt theme file */
-      }
-    }
-
-    if (summaries.length === 0) return basePrompt;
-
-    // Sort by most recently updated, take top 5
-    summaries.sort((a, b) => b.updated.localeCompare(a.updated));
-    const top = summaries.slice(0, 5);
-
-    const lines: string[] = ["\n# Recent theme activity", ""];
-    for (const t of top) {
-      const active = t.updated ? `(last active ${t.updated.slice(0, 10)})` : "";
-      lines.push(`- ${t.name}: ${t.turns} turns ${active}`);
-    }
-    lines.push("", "Run trace_theme to see a theme's full timeline.");
-
-    return `${basePrompt}\n${lines.join("\n")}`;
-  } catch {
-    return basePrompt;
-  }
-}
-
 export function applyMemoryStack(
   basePrompt: string,
   rootDir: string,
@@ -525,5 +477,5 @@ export function applyMemoryStack(
     homeDir,
     customSkillPaths,
   });
-  return applyThemeActivity(withSkills);
+  return withSkills;
 }
