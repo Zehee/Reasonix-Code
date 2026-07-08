@@ -566,8 +566,15 @@ export class ContextManager {
     // JSONL. The framework layer carries the last 30 denoised turns; the hot
     // zone keeps the last 5 original turns at full fidelity.
     const sessionId = this.deps.sessionName ? loadSessionId(this.deps.sessionName) : "session";
-    const denoisedAll = this.buildDenoisedCorpus(all, sessionId, "fold");
-    await this.persistDenoisedCorpus(this.deps.sessionName ?? "session", denoisedAll);
+    const { timestampSuffix } = await import("./memory/session.js");
+    const ts = timestampSuffix();
+    const workspace = this.deps.sessionName?.includes("/")
+      ? this.deps.sessionName.split("/")[0]
+      : undefined;
+    const archiveBase = `${sessionId}__archive_${ts}`;
+    const archiveSessionName = workspace ? `${workspace}/${archiveBase}` : archiveBase;
+    const denoisedAll = this.buildDenoisedCorpus(all, sessionId, archiveSessionName, "fold");
+    await this.persistDenoisedCorpus(sessionId, denoisedAll);
 
     // Cluster the denoised log into topic/decision clusters.
     const clusters = clusterDenoisedTurns(denoisedAll);
@@ -646,7 +653,7 @@ export class ContextManager {
     // Archive the original live JSONL before rewriting, then start the new
     // folded JSONL under the same session name.
     if (this.deps.sessionName) {
-      await this.archiveOriginalSession(this.deps.sessionName);
+      await this.archiveOriginalSession(this.deps.sessionName, archiveSessionName);
     }
     this.deps.log.compactInPlace(replacement);
     this.persistRewrite(replacement);
@@ -683,24 +690,23 @@ export class ContextManager {
   private buildDenoisedCorpus(
     messages: ChatMessage[],
     sessionId: string,
+    sessionName: string,
     source: "fold" | "search",
   ): DenoisedTurn[] {
     const rawTurns = messagesToRawTurns(messages);
-    return rawTurns.map((turn) => denoiseTurn(turn, { sessionId, source }));
+    return rawTurns.map((turn) => denoiseTurn(turn, { sessionId, sessionName, source }));
   }
 
   /**
-   * Persist the denoised corpus to `{session}.denoised.jsonl` and the SQLite index.
+   * Persist the denoised corpus to `{sessionId}.denoised.jsonl` and the SQLite index.
    */
-  private async persistDenoisedCorpus(
-    sessionName: string,
-    denoised: DenoisedTurn[],
-  ): Promise<void> {
+  private async persistDenoisedCorpus(sessionId: string, denoised: DenoisedTurn[]): Promise<void> {
     if (!this.deps.sessionName) return;
-    const { sessionPath, timestampSuffix } = await import("./memory/session.js");
-    const path = `${sessionPath(sessionName)}.denoised.jsonl`;
+    const { sessionPath } = await import("./memory/session.js");
     const fs = await import("node:fs/promises");
-    const { dirname } = await import("node:path");
+    const { dirname, join } = await import("node:path");
+    const livePath = sessionPath(this.deps.sessionName);
+    const path = join(dirname(livePath), `${sessionId}.denoised.jsonl`);
     await fs.mkdir(dirname(path), { recursive: true });
     const lines = denoised.map((t) => JSON.stringify(t)).join("\n");
     await fs.writeFile(path, lines ? `${lines}\n` : "", "utf8");
@@ -763,22 +769,38 @@ export class ContextManager {
   }
 
   /**
-   * Archive the original live JSONL to `{session}__archive_{ts}.jsonl` before
+   * Archive the original live JSONL to `{sessionId}__archive_{ts}.jsonl` before
    * rewriting it with the folded prompt.
    */
-  private async archiveOriginalSession(sessionName: string): Promise<void> {
-    const { sessionPath, timestampSuffix } = await import("./memory/session.js");
+  private async archiveOriginalSession(
+    sessionName: string,
+    archiveSessionName: string,
+  ): Promise<void> {
+    const { sessionPath } = await import("./memory/session.js");
     const { copyFile } = await import("node:fs/promises");
-    const { dirname, join } = await import("node:path");
     const livePath = sessionPath(sessionName);
-    const dir = dirname(livePath);
-    const base = sessionName.includes("/") ? sessionName.split("/")[1]! : sessionName;
-    const archiveName = `${base}__archive_${timestampSuffix()}.jsonl`;
-    const archivePath = sessionName.includes("/") ? join(dir, archiveName) : join(dir, archiveName);
+    const liveToolcache = `${livePath}.toolcache.jsonl`;
+    let archivePath = sessionPath(archiveSessionName);
     try {
       await copyFile(livePath, archivePath);
+      await copyFile(liveToolcache, `${archivePath}.toolcache.jsonl`).catch(() => {
+        // Best-effort: toolcache sidecar may not exist.
+      });
+      return;
     } catch {
-      // Best-effort archive.
+      // If the same-minute target exists, disambiguate.
+      for (let n = 2; n < 100; n++) {
+        try {
+          archivePath = sessionPath(`${archiveSessionName}-${n}`);
+          await copyFile(livePath, archivePath);
+          await copyFile(liveToolcache, `${archivePath}.toolcache.jsonl`).catch(() => {
+            // Best-effort.
+          });
+          return;
+        } catch {
+          // keep trying
+        }
+      }
     }
   }
 

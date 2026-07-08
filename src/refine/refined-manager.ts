@@ -72,11 +72,7 @@ export class RefinedManager {
       }
       for (const [sessionId, turns] of bySession) {
         const refined = turns.map(denoisedToRefined);
-        this.store.saveRefinedTurns(
-          sessionId,
-          refined,
-          turns.map((t) => t.source),
-        );
+        this.store.saveRefinedTurns(sessionId, refined);
       }
     });
   }

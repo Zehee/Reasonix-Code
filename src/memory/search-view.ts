@@ -7,9 +7,10 @@ import { workspaceSlug } from "./session.js";
 
 export interface SearchCluster {
   sessionId: string;
+  sessionName?: string;
   hitTurnId: number;
   memberCount: number;
-  members: Array<{ sessionId: string; turnId: number; timestamp?: string }>;
+  members: Array<{ sessionId: string; sessionName?: string; turnId: number; timestamp?: string }>;
 }
 
 export interface SearchView {

@@ -48,6 +48,12 @@ export class RefinedStore {
     } catch {
       // Column already exists.
     }
+    // Migration: add session_name column so refined turns remember which file/archive holds the original transcript.
+    try {
+      this.db.exec("ALTER TABLE refined_turns ADD COLUMN session_name TEXT");
+    } catch {
+      // Column already exists.
+    }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS turn_attention (
         query TEXT NOT NULL,
@@ -65,15 +71,11 @@ export class RefinedStore {
     return this.dbPath;
   }
 
-  saveRefinedTurns(
-    sessionId: string,
-    refinedTurns: RefinedTurn[],
-    sources?: ("fold" | "search" | undefined)[],
-  ): void {
+  saveRefinedTurns(sessionId: string, refinedTurns: RefinedTurn[]): void {
     const insert = this.db.prepare(
       `INSERT OR REPLACE INTO refined_turns
-       (session_id, turn_id, timestamp, summary, facts, notes, entities, categories, source)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (session_id, session_name, turn_id, timestamp, summary, facts, notes, entities, categories, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
 
     const existing = this.loadRefinedTurns(sessionId);
@@ -83,12 +85,11 @@ export class RefinedStore {
     }
 
     const transaction = this.db.transaction(() => {
-      let i = 0;
       for (const turn of merged.values()) {
         const row = turnToRow(turn);
-        const source = sources?.[i];
         insert.run(
           row.session_id,
+          row.session_name,
           row.turn_id,
           row.timestamp,
           row.summary,
@@ -96,9 +97,8 @@ export class RefinedStore {
           row.notes,
           row.entities,
           row.categories,
-          source ?? null,
+          null,
         );
-        i++;
       }
     });
     transaction();
@@ -126,6 +126,7 @@ export class RefinedStore {
     );
     const rows = stmt.all(sessionId) as Array<{
       session_id: string;
+      session_name: string | null;
       turn_id: number;
       timestamp: string | null;
       summary: string;
@@ -144,6 +145,7 @@ export class RefinedStore {
     const row = stmt.get(sessionId, turnId) as
       | {
           session_id: string;
+          session_name: string | null;
           turn_id: number;
           timestamp: string | null;
           summary: string;
@@ -192,7 +194,7 @@ export class RefinedStore {
       params.push(dateRange.to);
     }
 
-    const sql = `SELECT session_id, turn_id, timestamp, summary, facts, notes
+    const sql = `SELECT session_id, session_name, turn_id, timestamp, summary, facts, notes
                  FROM refined_turns
                  WHERE ${conditions.join(" AND ")}
                  ORDER BY timestamp DESC
@@ -202,6 +204,7 @@ export class RefinedStore {
     const stmt = this.db.prepare(sql);
     const rows = stmt.all(...params) as Array<{
       session_id: string;
+      session_name: string | null;
       turn_id: number;
       timestamp: string | null;
       summary: string;
@@ -217,6 +220,7 @@ export class RefinedStore {
 
       matches.push({
         sessionId: row.session_id,
+        sessionName: row.session_name ?? undefined,
         turnId: row.turn_id,
         timestamp: row.timestamp ?? undefined,
         summary: row.summary,
@@ -239,6 +243,7 @@ export class RefinedStore {
     const stmt = this.db.prepare("SELECT * FROM refined_turns ORDER BY timestamp DESC LIMIT ?");
     const rows = stmt.all(limit) as Array<{
       session_id: string;
+      session_name: string | null;
       turn_id: number;
       timestamp: string | null;
       summary: string;

@@ -19,6 +19,8 @@ export interface RawTurn {
 
 export interface RefinedTurn {
   sessionId: string;
+  /** File-level session name (live name or archive base) used to reload the original transcript. */
+  sessionName?: string;
   turnId: number;
   timestamp: string | undefined;
   summary: string;
@@ -41,6 +43,7 @@ export interface RefinedSearchOptions {
 
 export interface RefinedSearchMatch {
   sessionId: string;
+  sessionName?: string;
   turnId: number;
   timestamp: string | undefined;
   summary: string;
@@ -52,6 +55,7 @@ export interface RefinedSearchMatch {
 /** SQLite row shape for refined_turns. */
 export interface RefinedRow {
   session_id: string;
+  session_name: string | null;
   turn_id: number;
   timestamp: string | null;
   summary: string;

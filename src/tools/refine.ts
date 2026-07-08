@@ -49,12 +49,13 @@ function resolveCurrentSessionName(sessionName?: string): string | undefined {
  */
 function sessionToRawTurns(sessionName: string): {
   sessionId: string;
+  sessionName: string;
   turns: import("../refine/types.js").RawTurn[];
 } {
   const messages = loadSessionMessages(sessionName);
   const meta = loadSessionMeta(sessionName);
   const sessionId = meta.sessionId ?? sessionName;
-  return { sessionId, turns: messagesToRawTurns(messages) };
+  return { sessionId, sessionName, turns: messagesToRawTurns(messages) };
 }
 
 /**
@@ -65,8 +66,16 @@ async function searchLiveSession(
   sessionName: string,
   query: string,
   limit: number,
-): Promise<Array<{ sessionId: string; turnId: number; score: number; timestamp?: string }>> {
-  const { sessionId, turns } = sessionToRawTurns(sessionName);
+): Promise<
+  Array<{
+    sessionId: string;
+    sessionName: string;
+    turnId: number;
+    score: number;
+    timestamp?: string;
+  }>
+> {
+  const { sessionId, sessionName: name, turns } = sessionToRawTurns(sessionName);
   if (turns.length === 0) return [];
 
   const terms = query
@@ -75,7 +84,9 @@ async function searchLiveSession(
     .filter((t) => t.length > 0);
   if (terms.length === 0) return [];
 
-  const denoised = turns.map((turn) => denoiseTurn(turn, { sessionId, source: "search" }));
+  const denoised = turns.map((turn) =>
+    denoiseTurn(turn, { sessionId, sessionName: name, source: "search" }),
+  );
 
   const scored = denoised
     .map((turn) => {
@@ -87,7 +98,13 @@ async function searchLiveSession(
         ...turn.errors,
       ].join(" ");
       const score = scoreText(haystack, terms);
-      return { sessionId, turnId: turn.turnId, score, timestamp: turn.timestamp };
+      return {
+        sessionId,
+        sessionName: name,
+        turnId: turn.turnId,
+        score,
+        timestamp: turn.timestamp,
+      };
     })
     .filter((m) => m.score > 0)
     .sort((a, b) => b.score - a.score)
@@ -150,6 +167,7 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
       const currentSessionName = resolveCurrentSessionName(explicitSessionName || undefined);
       let liveMatches: Array<{
         sessionId: string;
+        sessionName: string;
         turnId: number;
         score: number;
         timestamp?: string;
@@ -158,15 +176,21 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
         liveMatches = await searchLiveSession(currentSessionName, query, maxClusters * 4);
       }
 
+      type Match = {
+        sessionId: string;
+        sessionName: string;
+        turnId: number;
+        score: number;
+        timestamp?: string;
+      };
+
       // 3. Merge and deduplicate.
-      const merged = new Map<
-        string,
-        { sessionId: string; turnId: number; score: number; timestamp?: string }
-      >();
+      const merged = new Map<string, Match>();
       for (const m of refinedMatches) {
         const key = `${m.sessionId}:${m.turnId}`;
         merged.set(key, {
           sessionId: m.sessionId,
+          sessionName: m.sessionName ?? m.sessionId,
           turnId: m.turnId,
           score: m.score,
           timestamp: m.timestamp,
@@ -195,22 +219,30 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
       );
 
       // 4. Build search view and save it.
-      const bySession = new Map<string, typeof matches>();
+      const bySession = new Map<string, Match[]>();
       for (const m of matches) {
-        const list = bySession.get(m.sessionId) ?? [];
+        const list = bySession.get(m.sessionName) ?? [];
         list.push(m);
-        bySession.set(m.sessionId, list);
+        bySession.set(m.sessionName, list);
       }
 
       const clusters: SearchCluster[] = [];
-      for (const [sid, ms] of bySession) {
+      for (const [sname, ms] of bySession) {
         const picked = ms.slice(0, maxClusters);
         for (const m of picked) {
           clusters.push({
-            sessionId: sid,
+            sessionId: m.sessionId,
+            sessionName: sname,
             hitTurnId: m.turnId,
             memberCount: 1,
-            members: [{ sessionId: sid, turnId: m.turnId, timestamp: m.timestamp }],
+            members: [
+              {
+                sessionId: m.sessionId,
+                sessionName: sname,
+                turnId: m.turnId,
+                timestamp: m.timestamp,
+              },
+            ],
           });
         }
       }
@@ -229,8 +261,8 @@ export function registerRefineTools(registry: ToolRegistry): ToolRegistry {
         `Found ${matches.length} matches in ${bySession.size} sessions for "${query}":`,
       ];
 
-      for (const [sid, ms] of bySession) {
-        lines.push(`\n## Session: ${sid} (${ms.length} matches)`);
+      for (const [sname, ms] of bySession) {
+        lines.push(`\n## Session: ${sname} (${ms.length} matches)`);
         const cluster = ms.slice(0, maxClusters);
         for (const m of cluster) {
           const refined = manager.loadRefinedTurn(m.sessionId, m.turnId);

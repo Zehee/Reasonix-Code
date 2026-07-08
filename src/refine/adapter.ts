@@ -7,6 +7,7 @@ import type { RefinedRow, RefinedTurn } from "./types.js";
 export function rowToTurn(row: RefinedRow): RefinedTurn {
   return {
     sessionId: row.session_id,
+    sessionName: row.session_name ?? undefined,
     turnId: row.turn_id,
     timestamp: row.timestamp ?? undefined,
     summary: row.summary,
@@ -20,6 +21,7 @@ export function rowToTurn(row: RefinedRow): RefinedTurn {
 export function turnToRow(turn: RefinedTurn): RefinedRow {
   return {
     session_id: turn.sessionId,
+    session_name: turn.sessionName ?? null,
     turn_id: turn.turnId,
     timestamp: turn.timestamp ?? null,
     summary: turn.summary,

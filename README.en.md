@@ -92,12 +92,12 @@ Turn extraction uses keyword rules + Markdown structure analysis. Zero LLM calls
 
 ### Search-as-you-scan
 
-`search_context "auth JWT cookie"` hits the SQLite index, clusters adjacent turns (90s time window), and auto-refines unprocessed turns. The search itself builds the material library.
+`search_context "auth JWT cookie"` hits the SQLite index, clusters adjacent turns (90s time window), and auto-refines unprocessed turns. Results carry a `sessionName` (live session name or archived file name) that can be passed directly to `load_turns_context` to restore the full original transcript.
 
 ### Cross-session theme tracing
 
 ```
-tag_theme "auth-flow" with sessionId="..." turnId=12
+tag_theme "auth-flow" with sessionName="..." turnId=12
 trace_theme "auth-flow"
   → Timeline of all related decisions, sorted chronologically
   → Even if they span 3 weeks and 8 sessions

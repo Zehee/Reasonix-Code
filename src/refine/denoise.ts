@@ -12,6 +12,8 @@ export interface DenoisedTurn {
   turnId: number;
   /** Stable session UUID. */
   sessionId: string;
+  /** File-level session name (live or archive base) used to reload the original transcript. */
+  sessionName?: string;
   /** ISO timestamp if available. */
   timestamp?: string;
   /** Source that produced this denoised turn. */
@@ -33,6 +35,8 @@ export interface DenoisedTurn {
 export interface DenoiseOptions {
   /** Session UUID. */
   sessionId: string;
+  /** File-level session name (live or archive base) used to reload the original transcript. */
+  sessionName?: string;
   /** How this denoised turn was produced. */
   source: DenoiseSource;
 }
@@ -88,7 +92,7 @@ function extractToolsCalled(actions: RawAction[] | undefined): { name: string; a
 
 /** Denoise a single RawTurn into a framework turn. */
 export function denoiseTurn(turn: RawTurn, opts: DenoiseOptions): DenoisedTurn {
-  const { sessionId, source } = opts;
+  const { sessionId, sessionName, source } = opts;
   const turnId = Number.parseInt(String(turn.turnId), 10) || 0;
 
   const userIntent = compressUserIntent(turn.user || "");
@@ -115,6 +119,7 @@ export function denoiseTurn(turn: RawTurn, opts: DenoiseOptions): DenoisedTurn {
   return {
     turnId,
     sessionId,
+    sessionName,
     timestamp: turn.timestamp,
     source,
     userIntent,
@@ -129,6 +134,7 @@ export function denoiseTurn(turn: RawTurn, opts: DenoiseOptions): DenoisedTurn {
 /** Convert a DenoisedTurn back into the legacy RefinedTurn shape. */
 export function denoisedToRefined(turn: DenoisedTurn): {
   sessionId: string;
+  sessionName?: string;
   turnId: number;
   timestamp: string | undefined;
   summary: string;
@@ -144,6 +150,7 @@ export function denoisedToRefined(turn: DenoisedTurn): {
 
   return {
     sessionId: turn.sessionId,
+    sessionName: turn.sessionName,
     turnId: turn.turnId,
     timestamp: turn.timestamp,
     summary,

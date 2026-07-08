@@ -92,12 +92,12 @@ Reasonix-Code 的三层记忆架构通过自动捕获、索引和关联跨 sessi
 
 ### 搜索即打捞
 
-`search_context "auth JWT cookie"` 命中 SQLite 索引后，自动将相邻 turn 按时间窗口聚簇（90 秒），并提炼未处理的 turn。搜索本身就在构建材料库。
+`search_context "auth JWT cookie"` 命中 SQLite 索引后，自动将相邻 turn 按时间窗口聚簇（90 秒），并提炼未处理的 turn。搜索返回的结果携带 `sessionName`（当前会话名或 fold 后的归档文件名），可直接交给 `load_turns_context` 还原完整原文。
 
 ### 跨 session 主题追溯
 
 ```
-tag_theme "auth-flow" with sessionId="..." turnId=12
+tag_theme "auth-flow" with sessionName="..." turnId=12
 trace_theme "auth-flow"
   → 按时间线展示所有相关决策
   → 即使跨越 3 周、8 个 session

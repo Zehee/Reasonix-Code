@@ -21,6 +21,7 @@ import {
   freshSessionName,
   listSessions,
   listSessionsForWorkspace,
+  loadSessionId,
   loadSessionMessages,
   normalizeWorkspace,
   patchSessionMeta,
@@ -475,8 +476,9 @@ describe("session persistence", () => {
       writeFileSync(meta, "{}");
       writeFileSync(backup, `${JSON.stringify({ role: "user", content: "backup" })}\n`);
 
+      const sessionId = loadSessionId("live");
       const archived = archiveSession("live");
-      expect(archived).toMatch(/^live__archive_\d{12}/);
+      expect(archived).toMatch(new RegExp(`^${sessionId}__archive_\\d{12}`));
       expect(existsSync(sessionPath("live"))).toBe(false);
       expect(existsSync(sessionPath(archived!))).toBe(true);
       expect(existsSync(events)).toBe(false);
@@ -530,9 +532,10 @@ describe("session persistence", () => {
       loop.appendAndPersist({ role: "user", content: "first turn" });
       loop.appendAndPersist({ role: "assistant", content: "reply" });
 
+      const sessionId = loadSessionId("clear-archive");
       const { dropped, archived } = loop.clearLog();
       expect(dropped).toBe(2);
-      expect(archived).toMatch(/^clear-archive__archive_\d{12}/);
+      expect(archived).toMatch(new RegExp(`^${sessionId}__archive_\\d{12}`));
       expect(loadSessionMessages(archived!)).toHaveLength(2);
       expect(loadSessionMessages("clear-archive")).toEqual([]);
       expect(loop.log.length).toBe(0);

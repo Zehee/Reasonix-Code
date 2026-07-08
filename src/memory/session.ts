@@ -825,7 +825,10 @@ export function rewriteSession(name: string, messages: ChatMessage[]): void {
   invalidatePromptHistoryCache();
 }
 
-/** Rotate the live jsonl + sidecars to `<name>__archive_<ts>` so /new doesn't destroy history. Returns the archive name, or null if there was nothing to archive. */
+/** Rotate the live jsonl + sidecars to `<sessionId>__archive_<ts>` so /new doesn't destroy history.
+ *  Uses the stable sessionId rather than the display name so archived files remain
+ *  identifiable even after the live session name changes or overlaps.
+ *  Returns the archive name, or null if there was nothing to archive. */
 export function archiveSession(name: string): string | null {
   const path = sessionPath(name);
   if (!existsSync(path)) return null;
@@ -834,15 +837,19 @@ export function archiveSession(name: string): string | null {
   } catch {
     return null;
   }
-  const dir = dirname(path);
+  const sessionId = loadSessionId(name);
   const ts = timestampSuffix();
-  const target = `${name}__archive_${ts}`;
-  const fullName = name.includes("/") ? `${name.split("/")[0]}/${target}` : target;
-  if (renameSession(name, fullName)) return fullName;
+  const workspace = name.includes("/") ? name.split("/")[0] : undefined;
+  const targetBase = `${sessionId}__archive_${ts}`;
+
+  function fullName(base: string): string {
+    return workspace ? `${workspace}/${base}` : base;
+  }
+
+  if (renameSession(name, fullName(targetBase))) return fullName(targetBase);
   // Disambiguate if the same-minute target already exists.
   for (let n = 2; n < 100; n++) {
-    const disambiguated = `${target}-${n}`;
-    const candidate = name.includes("/") ? `${name.split("/")[0]}/${disambiguated}` : disambiguated;
+    const candidate = fullName(`${targetBase}-${n}`);
     if (renameSession(name, candidate)) return candidate;
   }
   return null;
