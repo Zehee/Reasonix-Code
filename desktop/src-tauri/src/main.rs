@@ -502,12 +502,7 @@ fn main() {
                 // 解决部分 macOS 版本（Ventura/Sonoma）下 WebKit 透明渲染的兼容性问题。
                 #[cfg(target_os = "macos")]
                 if std::env::var("REASONIX_DESKTOP_OPAQUE").is_ok() {
-                    let _ = w.set_background_color(tauri::window::Color {
-                        r: 11,
-                        g: 11,
-                        b: 11,
-                        a: 255,
-                    });
+                    let _ = w.set_background_color(Some(tauri::window::Color(11, 11, 11, 255)));
                 }
                 if std::env::var("REASONIX_DEVTOOLS").is_ok() {
                     #[cfg(debug_assertions)]
