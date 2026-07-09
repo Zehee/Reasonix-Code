@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  Desktop downloads: <a href="https://github.com/Zehee/Reasonix-Code/releases/latest">Windows</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest">macOS</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest">Linux</a>
+  Desktop downloads: <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-windows.exe">Windows</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-macos.dmg">macOS</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-linux.deb">Linux</a>
 </p>
 
 **Reasonix-Code** is a lightweight, transparent, and controllable coding agent for developers who need AI to remember decisions across sessions — no vector databases, knowledge graphs, opaque "AI memory" black boxes, or MCP servers required.

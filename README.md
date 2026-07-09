@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  桌面版下载：<a href="https://github.com/Zehee/Reasonix-Code/releases/latest">Windows</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest">macOS</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest">Linux</a>
+  桌面版下载：<a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-windows.exe">Windows</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-macos.dmg">macOS</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-linux.deb">Linux</a>
 </p>
 
 **Reasonix-Code** 是一个轻量、透明、可控的编程 agent，专为需要 AI 记住跨 session 决策的开发者设计——不需要向量数据库、知识图谱、黑盒式的"AI 记忆"，也不需要安装任何 MCP 服务器。

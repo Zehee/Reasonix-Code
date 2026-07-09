@@ -107,6 +107,14 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Rename artifacts to stable names
+        run: |
+          cd artifacts
+          mv Reasonix\ Code_*_x64-setup.exe reasonix-desktop-windows.exe || true
+          mv Reasonix\ Code_*.dmg reasonix-desktop-macos.dmg || true
+          mv reasonix-code_*_amd64.deb reasonix-desktop-linux.deb || true
+          ls -la
+
       - name: Publish desktop installers to release
         uses: softprops/action-gh-release@v2
         with:
