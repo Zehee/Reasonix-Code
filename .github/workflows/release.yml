@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies and build
         run: |
           npm ci --ignore-scripts
-          cd desktop && npm ci --ignore-scripts
+          cd dashboard && npm ci --ignore-scripts
           cd ..
           npm run build
 
