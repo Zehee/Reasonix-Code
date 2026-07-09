@@ -68,16 +68,12 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          # Ubuntu 24.04 images may ship libappindicator3-1, which conflicts
-          # with libayatana-appindicator3-1 required by webkit2gtk.
-          sudo apt-get remove -y libappindicator3-1 libappindicator3-dev || true
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
             librsvg2-dev \
             patchelf \
             libssl-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-1
+            libgtk-3-dev
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
