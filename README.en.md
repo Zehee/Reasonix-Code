@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="desktop/icons/source.svg" alt="Reasonix-Code" width="200"/>
+  <img src="desktop/src-tauri/icons/icon.png" alt="Reasonix-Code" width="200"/>
 </p>
 
 <p align="center">
