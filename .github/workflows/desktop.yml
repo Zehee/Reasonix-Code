@@ -17,8 +17,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -44,8 +42,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -70,8 +66,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
 
       - name: Install system dependencies
         run: |
@@ -103,3 +97,20 @@ jobs:
         with:
           name: reasonix-desktop-linux
           path: desktop/src-tauri/target/release/bundle/deb/*.deb
+
+  publish:
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish desktop installers to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          fail_on_unmatched_files: false
