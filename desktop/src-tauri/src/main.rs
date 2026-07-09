@@ -1,10 +1,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod rpc;
-
-use rpc::{RpcState, rpc_kill, rpc_send, rpc_spawn};
+use anyhow::Result;
+use parking_lot::Mutex;
 use serde::Serialize;
-use std::path::Path;
+use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
+use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, Instant};
+use tauri::{Emitter, Listener, Manager};
 
 /// #892: bundled libwayland in AppImage can ABI-mismatch the host Wayland
 /// compositor → WebKitWebProcess `abort()`s on EGL display creation. Redirect
@@ -208,6 +213,268 @@ fn write_text_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, &content).map_err(|e| format!("write failed: {e}"))
 }
 
+// ── Desktop shell lifecycle: detect CLI → install → start TUI → load dashboard ──
+
+#[derive(Default)]
+struct DesktopState {
+    child: Arc<Mutex<Option<Child>>>,
+}
+
+fn home_dir() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        std::env::var("USERPROFILE").ok().map(PathBuf::from)
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var("HOME").ok().map(PathBuf::from)
+    }
+}
+
+fn cli_names() -> &'static [&'static str] {
+    if cfg!(windows) {
+        &["reasonix.exe", "reasonix-code.exe"]
+    } else {
+        &["reasonix", "reasonix-code"]
+    }
+}
+
+fn find_cli() -> Option<PathBuf> {
+    // 1. Known install location used by install.ps1.
+    if let Some(home) = home_dir() {
+        let install_dir = home.join(".reasonix-code").join("bin");
+        for name in cli_names() {
+            let p = install_dir.join(name);
+            if p.is_file() {
+                return Some(p);
+            }
+        }
+    }
+
+    // 2. PATH lookup.
+    let path_var = std::env::var("PATH").ok()?;
+    let sep = if cfg!(windows) { ';' } else { ':' };
+    for dir in path_var.split(sep) {
+        for name in cli_names() {
+            let p = Path::new(dir).join(name);
+            if p.is_file() {
+                return Some(p);
+            }
+        }
+    }
+    None
+}
+
+fn install_script_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    // Production: bundled resource. Dev: repo-root install.ps1.
+    let candidates: Vec<Option<PathBuf>> = vec![
+        app.path()
+            .resource_dir()
+            .ok()
+            .map(|d| d.join("install.ps1")),
+        std::env::current_dir()
+            .ok()
+            .map(|d| d.join("install.ps1")),
+        std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(Path::to_path_buf))
+            .map(|d| d.join("install.ps1")),
+    ];
+    for candidate in candidates.into_iter().flatten() {
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    Err("install.ps1 not found".into())
+}
+
+fn install_cli(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let ps1 = install_script_path(app)?;
+
+    #[cfg(windows)]
+    {
+        let mut cmd = Command::new("powershell.exe");
+        cmd.args([
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            &ps1.to_string_lossy(),
+            "-Force",
+        ]);
+        cmd.stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .stdin(Stdio::null());
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+
+        let output = cmd.output().map_err(|e| format!("failed to run installer: {e}"))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("install.ps1 failed: {stderr}"));
+        }
+        return find_cli().ok_or_else(|| "CLI not found after running install.ps1".into());
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = ps1;
+        Err("Reasonix CLI is not installed. Please install it manually from https://github.com/Zehee/Reasonix-Code/releases".into())
+    }
+}
+
+fn parse_dashboard_url(line: &str) -> Option<String> {
+    if !line.contains("/dashboard") {
+        return None;
+    }
+    let arrow = "→";
+    let idx = line.find(arrow)?;
+    let arrow_len = arrow.chars().next().map(|c| c.len_utf8()).unwrap_or(1);
+    let url = line[idx + arrow_len..].trim();
+    if url.starts_with("http://") || url.starts_with("https://") {
+        Some(url.to_string())
+    } else {
+        None
+    }
+}
+
+fn spawn_tui(
+    app: &tauri::AppHandle,
+    state: &DesktopState,
+    cli: &Path,
+    cwd: &Path,
+) -> Result<(), String> {
+    let mut cmd = Command::new(cli);
+    cmd.arg("code").arg(cwd);
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("failed to start Reasonix TUI: {e}"))?;
+    let stdout = child.stdout.take().ok_or("no stdout")?;
+    let stderr = child.stderr.take().ok_or("no stderr")?;
+
+    *state.child.lock() = Some(child);
+
+    // Drain stdout so the child never blocks on a full pipe.
+    thread::spawn(move || {
+        let _ = BufReader::new(stdout).lines().count();
+    });
+
+    // Parse stderr for the dashboard URL, then keep emitting lines for the splash UI.
+    let app_stderr = app.clone();
+    let child_for_exit = state.child.clone();
+    thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        let mut found_url = false;
+        for line in reader.lines().map_while(Result::ok) {
+            let _ = app_stderr.emit("cli:stderr", line.clone());
+            if !found_url {
+                if let Some(url) = parse_dashboard_url(&line) {
+                    found_url = true;
+                    let _ = app_stderr.emit("cli:url", url);
+                }
+            }
+        }
+
+        // Stderr closed — watch for process exit and notify the UI.
+        let app_exit = app_stderr.clone();
+        let watcher = child_for_exit.clone();
+        thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                let done = {
+                    let mut guard = watcher.lock();
+                    match guard.as_mut() {
+                        Some(c) => match c.try_wait() {
+                            Ok(Some(status)) => {
+                                let code = status.code();
+                                let _ = app_exit.emit("cli:exit", code);
+                                guard.take();
+                                true
+                            }
+                            Ok(None) => false,
+                            Err(_) => {
+                                guard.take();
+                                true
+                            }
+                        },
+                        None => true,
+                    }
+                };
+                if done {
+                    break;
+                }
+                if Instant::now() >= deadline {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(250));
+            }
+        });
+    });
+
+    Ok(())
+}
+
+fn start_backend(app: &tauri::AppHandle, state: &DesktopState) {
+    let app = app.clone();
+    let state = DesktopState {
+        child: state.child.clone(),
+    };
+    thread::spawn(move || {
+        let result: Result<(), String> = (|| {
+            let cli = match find_cli() {
+                Some(p) => p,
+                None => install_cli(&app)?,
+            };
+            let cwd = std::env::current_dir().map_err(|e| format!("no current directory: {e}"))?;
+            spawn_tui(&app, &state, &cli, &cwd)
+        })();
+        if let Err(err) = result {
+            let _ = app.emit("cli:error", err);
+        }
+    });
+}
+
+fn kill_process_tree(pid: u32) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let _ = Command::new("taskkill")
+            .args(["/F", "/T", "/PID", &pid.to_string()])
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = Command::new("kill")
+            .args(["-KILL", &pid.to_string()])
+            .status();
+        let _ = Command::new("pkill")
+            .args(["-KILL", "-P", &pid.to_string()])
+            .status();
+    }
+}
+
+fn navigate_main_window(app: &tauri::AppHandle, url: &str) {
+    if let Some(w) = app.get_webview_window("main") {
+        if let Ok(parsed) = url.parse::<tauri::Url>() {
+            let _ = w.navigate(parsed);
+        }
+    }
+}
+
 fn main() {
     #[cfg(target_os = "linux")]
     linux_webkit_compat();
@@ -219,30 +486,25 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
-        .manage(RpcState::default())
+        .manage(DesktopState::default())
         .invoke_handler(tauri::generate_handler![
-            rpc_spawn,
-            rpc_send,
-            rpc_kill,
             open_in_editor,
             list_workspace_tree,
             git_status,
             write_text_file
         ])
         .setup(|app| {
-            use tauri::Manager;
-
             // #1119: Updater pubkey is empty — auto-updates will not be
             // cryptographically verified. Generate a keypair before release:
             //   cargo tauri signer generate -w ~/.tauri/reasonix.key
             // then set the public key in tauri.conf.json's updater.pubkey.
             // This warning is best-effort; the real check happens at build time.
             {
-                let ctx = tauri::generate_context!();
-                let updater_config = &ctx.config().plugins.updater;
+                let ctx: tauri::Context<tauri::Wry> = tauri::generate_context!();
+                let updater_config = ctx.config().plugins.0.get("updater");
                 let pubkey_empty = updater_config
-                    .as_ref()
-                    .and_then(|u| u.pubkey.as_deref())
+                    .and_then(|u| u.get("pubkey"))
+                    .and_then(|k| k.as_str())
                     .map(|k| k.is_empty())
                     .unwrap_or(true);
                 if pubkey_empty {
@@ -253,6 +515,14 @@ fn main() {
                     );
                 }
             }
+
+            let app_handle = app.handle().clone();
+            app.listen("cli:url", move |event| {
+                let url = serde_json::from_str::<String>(event.payload()).unwrap_or_default();
+                if !url.is_empty() {
+                    navigate_main_window(&app_handle, &url);
+                }
+            });
 
             if let Some(w) = app.get_webview_window("main") {
                 // HiDPI fit: the JSON config asks for 1024x720 logical px.
@@ -293,18 +563,23 @@ fn main() {
                     w.open_devtools();
                 }
             }
+
+            let state = app.state::<DesktopState>();
+            start_backend(app.handle(), &state);
+
             Ok(())
         })
         .build(tauri::generate_context!())
         .expect("tauri build failed")
         .run(|app, event| {
-            // Tauri 2 normally exits the process via Exit; managed-state drops
-            // don't always run. ExitRequested fires before that, so we kill the
-            // Node child here too — belt-and-braces vs the Drop on RpcHandle.
             if let tauri::RunEvent::ExitRequested { .. } = event {
-                use tauri::Manager;
-                let state = app.state::<RpcState>();
-                let _ = rpc::rpc_kill(state);
+                let state = app.state::<DesktopState>();
+                let child_opt = state.child.lock().take();
+                if let Some(mut child) = child_opt {
+                    let pid = child.id();
+                    let _ = child.kill();
+                    kill_process_tree(pid);
+                }
             }
         });
 }

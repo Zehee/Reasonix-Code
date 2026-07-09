@@ -3493,7 +3493,10 @@ function AppInner({
           // Broadcast real-time context breakdown after events that change
           // the token count so the dashboard panel stays in sync with the
           // CLI footer bar.
-          if ((ev.role === "assistant_final" || ev.role === "tool") && eventSubscribersRef.current.size > 0) {
+          if (
+            (ev.role === "assistant_final" || ev.role === "tool") &&
+            eventSubscribersRef.current.size > 0
+          ) {
             try {
               const sysTokens = countTokensBounded(loop.prefix.system);
               const toolsTokens = countTokensBounded(JSON.stringify(loop.prefix.toolSpecs));

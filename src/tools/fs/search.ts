@@ -63,5 +63,3 @@ export async function searchFiles(
   await walk(startAbs);
   return matches.length === 0 ? "(no matches)" : matches.join("\n");
 }
-
-

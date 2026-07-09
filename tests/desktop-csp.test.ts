@@ -35,4 +35,9 @@ describe("desktop CSP (tauri.conf.json)", () => {
     expect(match).toBeTruthy();
     expect(match![1]).toContain("'self'");
   });
+
+  it("allows local dashboard server in connect-src, script-src and img-src", () => {
+    expect(csp).toContain("http://127.0.0.1:*");
+    expect(csp).toContain("http://localhost:*");
+  });
 });

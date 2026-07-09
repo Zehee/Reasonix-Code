@@ -548,11 +548,9 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
         });
 
       try {
-        const out = await tools.dispatch(
-          "grep",
-          JSON.stringify({ pattern: "export const" }),
-          { signal: ctrl.signal },
-        );
+        const out = await tools.dispatch("grep", JSON.stringify({ pattern: "export const" }), {
+          signal: ctrl.signal,
+        });
         expect(out).toMatch(/aborted/i);
       } finally {
         spy.mockRestore();
@@ -1147,8 +1145,6 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
       expect(lines[lines.length - 1]).toMatch(/3 more matches/);
     });
   });
-
-
 });
 
 describe("lineDiff — LCS line-level diff used by edit_file", () => {

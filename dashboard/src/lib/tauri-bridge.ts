@@ -13,11 +13,13 @@ let currentTurn = 1;
 const modeMeta = document.querySelector('meta[name="reasonix-mode"]');
 const rawMode = modeMeta?.getAttribute("content") ?? "";
 const isServerMode = rawMode !== "" && rawMode !== "__REASONIX_MODE__";
-const isTauriMode = typeof window !== "undefined" && !!(window as any).__TAURI__?.invoke;
-const MODE: "tauri" | "server" | "mock" = isTauriMode
-  ? "tauri"
-  : isServerMode
-    ? "server"
+const hasTauriApi = typeof window !== "undefined" && !!(window as any).__TAURI__?.invoke;
+// When the page is served by the CLI dashboard server we always use the
+// REST/SSE bridge, even if it happens to be loaded inside the Tauri webview.
+const MODE: "tauri" | "server" | "mock" = isServerMode
+  ? "server"
+  : hasTauriApi
+    ? "tauri"
     : "mock";
 
 /** Web vs. native dispatcher hint — `true` whenever the dashboard is served by the CLI server, false in the Tauri desktop wrapper where native dialogs work. */
@@ -970,9 +972,12 @@ export async function invoke(cmd: string, args?: any): Promise<any> {
       serverRpc(payload).catch(console.warn);
       return Promise.resolve();
     }
+    const tauri = (window as any).__TAURI__;
+    if (tauri?.invoke) {
+      return tauri.invoke(cmd, args ?? {});
+    }
     if (cmd === "open_in_editor") {
       console.log("[tauri-bridge] open in editor:", args);
-      return Promise.resolve();
     }
     return Promise.resolve();
   }
@@ -1070,6 +1075,14 @@ export function getCurrentWebview(): any {
 
 // 3b. @tauri-apps/api/window
 export function getCurrentWindow(): any {
+  const tauri = (window as any).__TAURI__;
+  if (tauri?.window?.getCurrentWindow) {
+    try {
+      return tauri.window.getCurrentWindow();
+    } catch {
+      /* fall through to no-op */
+    }
+  }
   return {
     isMaximized: async () => false,
     minimize: async () => {
@@ -1090,10 +1103,11 @@ export function getCurrentWindow(): any {
 
 // 4. @tauri-apps/plugin-dialog
 export async function open(options?: any): Promise<any> {
-  console.log("[tauri-bridge] dialog open:", JSON.stringify(options), "mode:", MODE, "hasTAURI:", !!(window as any).__TAURI__?.invoke);
-  if (MODE === "tauri") {
+  const tauri = (window as any).__TAURI__;
+  console.log("[tauri-bridge] dialog open:", JSON.stringify(options), "mode:", MODE, "hasTAURI:", !!tauri?.invoke);
+  if (tauri?.invoke) {
     try {
-      const result = await invoke("plugin:dialog|open", { options });
+      const result = await tauri.invoke("plugin:dialog|open", { options });
       console.log("[tauri-bridge] dialog result:", result);
       return result;
     } catch (err) {
@@ -1105,10 +1119,11 @@ export async function open(options?: any): Promise<any> {
 }
 
 export async function save(options?: any): Promise<any> {
+  const tauri = (window as any).__TAURI__;
   console.log("[tauri-bridge] dialog save:", options);
-  if (MODE === "tauri") {
+  if (tauri?.invoke) {
     try {
-      return await invoke("plugin:dialog|save", { options });
+      return await tauri.invoke("plugin:dialog|save", { options });
     } catch (err) {
       console.error("[tauri-bridge] dialog save error:", err);
       return "";
@@ -1120,24 +1135,20 @@ export async function save(options?: any): Promise<any> {
 // 5. @tauri-apps/plugin-opener
 export async function openUrl(url: string, openWith?: string): Promise<void> {
   console.log(`[tauri-bridge] open url -> ${url}`);
-  if (MODE === "tauri") {
-    const tauri = (window as any).__TAURI__;
-    if (tauri?.invoke) {
-      await tauri.invoke("plugin:opener|open_url", { url, with: openWith });
-      return;
-    }
+  const tauri = (window as any).__TAURI__;
+  if (tauri?.invoke) {
+    await tauri.invoke("plugin:opener|open_url", { url, with: openWith });
+    return;
   }
   window.open(url, "_blank");
 }
 
 export async function openPath(path: string, openWith?: string): Promise<void> {
   console.log(`[tauri-bridge] open path -> ${path}`);
-  if (MODE === "tauri") {
-    const tauri = (window as any).__TAURI__;
-    if (tauri?.invoke) {
-      await tauri.invoke("plugin:opener|open_path", { path, with: openWith });
-      return;
-    }
+  const tauri = (window as any).__TAURI__;
+  if (tauri?.invoke) {
+    await tauri.invoke("plugin:opener|open_path", { path, with: openWith });
+    return;
   }
   // fallback: no-op in web/mock mode
 }

@@ -27,7 +27,6 @@ export function snipOutput(text: string, maxChars: number): string {
   return `${head}${marker}${tail}`;
 }
 
-
 /** Kill child + descendants. Windows: taskkill /T /F. Unix: SIGKILL the process group when detached, else fall back to SIGKILL on the leader. */
 export function killProcessTree(child: ChildProcess): void {
   if (!child.pid || child.killed) return;

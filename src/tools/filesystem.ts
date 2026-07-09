@@ -28,8 +28,8 @@ import {
 } from "./fs/edit.js";
 import { globFiles } from "./fs/glob.js";
 import { extractOutline, formatOutline } from "./fs/outline.js";
-import { runGrep } from "./grep.js";
 import { searchFiles } from "./fs/search.js";
+import { runGrep } from "./grep.js";
 
 export { lineDiff } from "./fs/edit.js";
 
@@ -536,7 +536,7 @@ export function registerFilesystemTools(
         },
         path: {
           type: "string",
-          description: "File or directory to search (default \".\").",
+          description: 'File or directory to search (default ".").',
         },
         timeout_seconds: {
           type: "integer",
@@ -547,10 +547,7 @@ export function registerFilesystemTools(
       },
       required: ["pattern"],
     },
-    fn: async (
-      args: { pattern: string; path?: string; timeout_seconds?: number },
-      toolCtx,
-    ) =>
+    fn: async (args: { pattern: string; path?: string; timeout_seconds?: number }, toolCtx) =>
       runGrep(
         {
           rootDir,

@@ -439,29 +439,6 @@ program
   });
 
 program
-  .command("desktop")
-  .description("headless JSON-RPC chat for the desktop client (internal)")
-  .option("-m, --model <id>", t("ui.modelIdHint"))
-  .option("--dir <path>", "root directory for filesystem tools (default: cwd)")
-  .option("--effort <level>", t("ui.effortHintShort"))
-  .option("--budget <usd>", t("ui.budgetHintShort"), (v) => Number.parseFloat(v))
-  .action(async (opts) => {
-    persistEffortFlag(opts.effort);
-    const defaults = resolveDefaults({
-      model: opts.model,
-      mcp: [],
-      effort: opts.effort,
-      noConfig: false,
-    });
-    const { desktopCommand } = await import("./commands/desktop.js");
-    await desktopCommand({
-      model: defaults.model,
-      budgetUsd: parseBudgetFlag(opts.budget),
-      dir: opts.dir,
-    });
-  });
-
-program
   .command("stats [transcript]")
   .description(t("cli.stats"))
   .action(async (transcript: string | undefined) => {
