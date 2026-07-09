@@ -262,7 +262,6 @@ Reasonix-Code 是 [DeepSeek-Reasonix](https://github.com/esengine/DeepSeek-Reaso
 - **独立方向** — 不跟随 Go 重写版本（main-v2）的路线
 - **三层记忆** — 实现 RFC #5539 设计，不采用 v5 memory 模型
 - **鲁棒性优先** — 自愈 session ID、冗余元数据、崩溃安全写入
-- **不发 npm 包** — 通过 GitHub Releases + `irm` 分发
 
 ---
 

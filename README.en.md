@@ -255,7 +255,6 @@ Reasonix-Code is a fork of [DeepSeek-Reasonix](https://github.com/esengine/DeepS
 - **Independent direction** — not bound to the Go rewrite (main-v2) roadmap
 - **Three-layer memory** — RFC #5539 design, not the v5 memory model
 - **Robustness first** — self-healing session identifiers, redundant metadata, crash-safe writes
-- **No npm publish** — distributed via GitHub Releases + `irm`
 
 ---
 
