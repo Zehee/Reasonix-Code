@@ -753,7 +753,7 @@ describe("handleSlash", () => {
       const r = handleSlash("update", [], makeLoop(), { latestVersion: "99.99.99" });
       expect(r.info).toMatch(/99\.99\.99/);
       expect(r.info).toMatch(/reasonix-code update/);
-      expect(r.info).toMatch(/npm install -g reasonix@latest/);
+      expect(r.info).toMatch(/npm install -g reasonix-code@latest/);
     });
 
     it("is surfaced by suggestSlashCommands", () => {
