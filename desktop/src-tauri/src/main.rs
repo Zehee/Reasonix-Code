@@ -375,6 +375,21 @@ fn spawn_tui(
     Ok(())
 }
 
+#[cfg(not(windows))]
+fn install_cli_unix() -> Result<(), String> {
+    let url = "https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.sh";
+    let output = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(format!("curl -fsSL {url} | sh"))
+        .output()
+        .map_err(|e| format!("failed to run install script: {e}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("install.sh failed:\n{stderr}"));
+    }
+    Ok(())
+}
+
 fn start_backend(app: &tauri::AppHandle, state: &DesktopState) {
     let app = app.clone();
     let state = DesktopState {
@@ -382,10 +397,17 @@ fn start_backend(app: &tauri::AppHandle, state: &DesktopState) {
     };
     thread::spawn(move || {
         let result: Result<(), String> = (|| {
-            let cli = find_cli().ok_or(
-                "reasonix-code CLI not found. Please install it with:\n\
-                 powershell -ExecutionPolicy Bypass -File install.ps1",
-            )?;
+            if find_cli().is_none() {
+                #[cfg(not(windows))]
+                install_cli_unix()?;
+                #[cfg(windows)]
+                return Err(
+                    "reasonix-code CLI not found. Please install it with:\n\
+                     powershell -ExecutionPolicy Bypass -File install.ps1"
+                        .into(),
+                );
+            }
+            let cli = find_cli().ok_or("reasonix-code CLI not found.")?;
             let cwd = std::env::current_dir().map_err(|e| format!("no current directory: {e}"))?;
             spawn_tui(&app, &state, &cli, &cwd)
         })();
