@@ -1,4 +1,4 @@
-/** `reasonix stats [path]` — path arg switches to per-transcript mode; default is the cross-session dashboard. */
+/** `reasonix-code stats [path]` — path arg switches to per-transcript mode; default is the cross-session dashboard. */
 
 import { existsSync, readFileSync } from "node:fs";
 import { t } from "../../i18n/index.js";

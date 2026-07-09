@@ -156,17 +156,17 @@ function resolveDashboardToken(noConfig: boolean): string | undefined {
 
 const program = new Command();
 program
-  .name("reasonix")
+  .name("reasonix-code")
   .description(t("cli.description"))
   .version(VERSION)
   .option("-c, --continue", t("cli.continue"))
   .option("--no-mouse", t("ui.noMouseHint"))
   .option("--no-proxy", t("ui.noProxyHint"));
 
-// `reasonix` with no subcommand → setup wizard on first run (no API key
+// `reasonix-code` with no subcommand → setup wizard on first run (no API key
 // configured yet), otherwise code mode in the current directory.
 // The current directory is automatically used as the workspace root.
-// Filesystem-less chat stays reachable via `reasonix chat`.
+// Filesystem-less chat stays reachable via `reasonix-code chat`.
 program.action(async (opts: { continue?: boolean; mouse?: boolean }) => {
   const cfg = readConfig();
   const mode = resolveBareCommandMode(cfg);
@@ -230,7 +230,7 @@ program
           "Short-term recommendation:\n" +
           "  Run Reasonix directly on the remote host, then use SSH tunnel for the dashboard:\n" +
           "  $ ssh -L 8420:127.0.0.1:8420 user@host\n" +
-          "  $ reasonix code\n",
+          "  $ reasonix-code code\n",
       );
       process.exit(1);
     }

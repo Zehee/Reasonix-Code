@@ -42,7 +42,7 @@ tests/mcp-sse.test.ts — in-process http.Server fake for SSE
 
 | feature | status | note |
 |---|---|---|
-| CLI wiring (`reasonix chat --mcp <cmd>`) | ✅ shipped | see Usage below |
+| CLI wiring (`reasonix-code chat --mcp <cmd>`) | ✅ shipped | see Usage below |
 | Bundled demo server | ✅ shipped | `examples/mcp-server-demo.ts`, exposes echo/add/get_time |
 | Real-subprocess integration test | ✅ shipped | `tests/mcp-integration.test.ts` |
 | Resources / `resources/list` / `resources/read` | deferred | Reasonix doesn't surface resources today |
@@ -60,24 +60,24 @@ first-class citizens of the loop.
 
 ```bash
 # Single server, anonymous (tools use native names):
-reasonix chat --mcp "node --import tsx examples/mcp-server-demo.ts"
+reasonix-code chat --mcp "node --import tsx examples/mcp-server-demo.ts"
 
 # Official filesystem server:
-reasonix chat --mcp "npx -y @modelcontextprotocol/server-filesystem /tmp/safe-dir"
+reasonix-code chat --mcp "npx -y @modelcontextprotocol/server-filesystem /tmp/safe-dir"
 
 # Multiple servers, each namespaced. Syntax: "name=command args..."
 # Tools land in a shared registry as fs_read_file, demo_add, etc.
-reasonix chat \
+reasonix-code chat \
   --mcp "fs=npx -y @modelcontextprotocol/server-filesystem /tmp/safe" \
   --mcp "demo=node --import tsx examples/mcp-server-demo.ts"
 
 # Global prefix (only honored when there's ONE anonymous server):
-reasonix chat \
+reasonix-code chat \
   --mcp "npx -y @modelcontextprotocol/server-filesystem /tmp" \
   --mcp-prefix fs_
 
 # Same flag works with one-shot run:
-reasonix run "list files in /tmp/safe-dir" \
+reasonix-code run "list files in /tmp/safe-dir" \
   --mcp "npx -y @modelcontextprotocol/server-filesystem /tmp/safe-dir"
 ```
 

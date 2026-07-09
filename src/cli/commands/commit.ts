@@ -56,7 +56,7 @@ function runGit(
 function dieIfNotGitRepo(): void {
   const r = runGit(["rev-parse", "--is-inside-work-tree"]);
   if (r.status !== 0) {
-    process.stderr.write("reasonix commit: not inside a git repository.\n");
+    process.stderr.write("reasonix-code commit: not inside a git repository.\n");
     process.exit(1);
   }
 }
@@ -70,7 +70,9 @@ interface DiffResult {
 function readDiff(): DiffResult | null {
   const staged = runGit(["diff", "--staged", "--no-color"]);
   if (staged.status !== 0) {
-    process.stderr.write(`reasonix commit: git diff --staged failed: ${staged.stderr.trim()}\n`);
+    process.stderr.write(
+      `reasonix-code commit: git diff --staged failed: ${staged.stderr.trim()}\n`,
+    );
     process.exit(1);
   }
   if (staged.stdout.trim().length > 0) {
@@ -171,7 +173,7 @@ function editInExternal(initial: string): string | null {
   const editor = process.env.GIT_EDITOR ?? process.env.VISUAL ?? process.env.EDITOR;
   if (!editor) {
     process.stderr.write(
-      "reasonix commit: no $EDITOR / $VISUAL / $GIT_EDITOR set — can't open editor. Pick [a]ccept and `git commit --amend` afterwards.\n",
+      "reasonix-code commit: no $EDITOR / $VISUAL / $GIT_EDITOR set — can't open editor. Pick [a]ccept and `git commit --amend` afterwards.\n",
     );
     return null;
   }
@@ -193,7 +195,7 @@ function editInExternal(initial: string): string | null {
       /* ignore */
     }
     process.stderr.write(
-      `reasonix commit: editor exited ${result.status} — keeping prior draft.\n`,
+      `reasonix-code commit: editor exited ${result.status} — keeping prior draft.\n`,
     );
     return null;
   }
@@ -231,7 +233,7 @@ function commitWithMessage(message: string): void {
   child.stdin.end();
   child.on("close", (code) => {
     if (code !== 0) {
-      process.stderr.write(`reasonix commit: git commit exited ${code}.\n`);
+      process.stderr.write(`reasonix-code commit: git commit exited ${code}.\n`);
       process.exit(code ?? 1);
     }
   });
@@ -244,7 +246,7 @@ export async function commitCommand(opts: CommitOptions = {}): Promise<void> {
   const ep = loadEndpoint();
   if (!ep.apiKey) {
     process.stderr.write(
-      "reasonix commit: DEEPSEEK_API_KEY not set. Run `reasonix setup` to save one, or export it.\n",
+      "reasonix-code commit: DEEPSEEK_API_KEY not set. Run `reasonix-code setup` to save one, or export it.\n",
     );
     process.exit(1);
   }
@@ -252,18 +254,18 @@ export async function commitCommand(opts: CommitOptions = {}): Promise<void> {
   const diff = readDiff();
   if (!diff) {
     process.stderr.write(
-      "reasonix commit: no staged changes and working tree is clean — nothing to commit.\n",
+      "reasonix-code commit: no staged changes and working tree is clean — nothing to commit.\n",
     );
     process.exit(1);
   }
   if (diff.source === "working-tree") {
     process.stderr.write(
-      "reasonix commit: nothing staged — drafting from working-tree diff. Stage your changes and re-run, or use the draft as a starting point.\n",
+      "reasonix-code commit: nothing staged — drafting from working-tree diff. Stage your changes and re-run, or use the draft as a starting point.\n",
     );
   }
   if (diff.truncated) {
     process.stderr.write(
-      "reasonix commit: diff exceeded 80KB; head + tail sent to the model. Large diffs often produce vague drafts — consider committing in smaller chunks.\n",
+      "reasonix-code commit: diff exceeded 80KB; head + tail sent to the model. Large diffs often produce vague drafts — consider committing in smaller chunks.\n",
     );
   }
 
@@ -283,11 +285,11 @@ export async function commitCommand(opts: CommitOptions = {}): Promise<void> {
     try {
       message = await draftMessage(client, model, diff, recentCommits);
     } catch (err) {
-      process.stderr.write(`reasonix commit: model call failed — ${(err as Error).message}\n`);
+      process.stderr.write(`reasonix-code commit: model call failed — ${(err as Error).message}\n`);
       process.exit(1);
     }
     if (!message) {
-      process.stderr.write("reasonix commit: model returned an empty draft. Try again.\n");
+      process.stderr.write("reasonix-code commit: model returned an empty draft. Try again.\n");
       process.exit(1);
     }
     printDraft(message);

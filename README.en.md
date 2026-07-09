@@ -122,7 +122,7 @@ irm https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.ps1 | iex
 
 ```powershell
 # Download the latest release
-iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.5.exe -OutFile reasonix.exe
+iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.6.exe -OutFile reasonix-code.exe
 ```
 
 ---
@@ -133,7 +133,7 @@ iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-cod
 # First run: setup wizard guides you through API key configuration.
 # After that, cd into your project directory and run:
 reasonix              # auto-detects cwd as workspace, enters code mode
-reasonix chat         # interactive chat (no filesystem)
+reasonix-code chat         # interactive chat (no filesystem)
 ```
 
 ### From source (Node.js >=22 required)

@@ -72,13 +72,13 @@ export interface ChatOptions {
   /**
    * Pre-built ToolRegistry used as a seed. MCP bridges (if any) are
    * layered on top of whatever's already registered. Used by
-   * `reasonix code` to register native filesystem tools in place of
+   * `reasonix-code code` to register native filesystem tools in place of
    * the old `npx -y @modelcontextprotocol/server-filesystem` subprocess.
    */
   seedTools?: ToolRegistry;
   /**
    * Enable SEARCH/REPLACE edit-block processing after each assistant turn.
-   * Set by `reasonix code`; plain `reasonix chat` leaves this off.
+   * Set by `reasonix-code code`; plain `reasonix-code chat` leaves this off.
    */
   codeMode?: {
     rootDir: string;
@@ -283,7 +283,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
   // updater on mount. Started null so early progress frames (before
   // the App has mounted) are dropped rather than buffered.
   const progressSink: { current: ((info: ProgressInfo) => void) | null } = { current: null };
-  // Seed registry from the caller (e.g. reasonix code's native
+  // Seed registry from the caller (e.g. reasonix-code code's native
   // filesystem tools) — MCP bridges layer on top rather than
   // replacing. When no seed AND no MCP, tools stays undefined and
   // the loop runs as a bare chat.
@@ -337,7 +337,7 @@ export async function chatCommand(opts: ChatOptions): Promise<void> {
 
   // Memory tools — available in every session, not just code mode.
   // Chat-mode callers get global scope only; project scope requires
-  // the seedTools path from `reasonix code` (which registers its own
+  // the seedTools path from `reasonix-code code` (which registers its own
   // MemoryStore bound to rootDir before chatCommand runs).
   // `run_skill` is registered later in App.tsx (where the client
   // exists) so it can wire the subagent runner for runAs:subagent

@@ -122,7 +122,7 @@ irm https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.ps1 | iex
 
 ```powershell
 # 下载最新版本
-iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.5.exe -OutFile reasonix.exe
+iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.6.exe -OutFile reasonix-code.exe
 ```
 
 ---
@@ -132,8 +132,8 @@ iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-cod
 ```bash
 # 首次运行：设置向导引导你配置 API Key。
 # 配置完成后，进入项目目录执行：
-reasonix              # 自动将当前目录作为工作区，进入代码模式
-reasonix chat         # 交互式对话（无文件系统）
+reasonix-code              # 自动将当前目录作为工作区，进入代码模式
+reasonix-code chat         # 交互式对话（无文件系统）
 ```
 
 ### 源码运行（需 Node.js >=22）

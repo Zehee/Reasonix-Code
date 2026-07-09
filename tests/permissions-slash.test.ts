@@ -129,7 +129,7 @@ describe("/permissions slash handler", () => {
     const cfg = join(dir, ".reasonix", "config.json");
     const result = handleSlash("permissions", ["add", "--global", "make", "test"], makeLoop(), {});
     // Should NOT bail out with the "mutateCodeOnly" hint — global needs no root.
-    expect(result.info).not.toMatch(/reasonix code/i);
+    expect(result.info).not.toMatch(/reasonix-code code/i);
     expect(loadGlobalShellAllowed(cfg)).toContain("make test");
   });
 
@@ -232,11 +232,11 @@ describe("/permissions slash handler", () => {
 
   it("mutating subcommands refuse without a codeRoot", () => {
     const r1 = handleSlash("permissions", ["add", "lint"], makeLoop(), {});
-    expect(r1.info).toMatch(/only available inside `reasonix code`/);
+    expect(r1.info).toMatch(/only available inside `reasonix-code code`/);
     const r2 = handleSlash("permissions", ["remove", "lint"], makeLoop(), {});
-    expect(r2.info).toMatch(/only available inside `reasonix code`/);
+    expect(r2.info).toMatch(/only available inside `reasonix-code code`/);
     const r3 = handleSlash("permissions", ["clear", "confirm"], makeLoop(), {});
-    expect(r3.info).toMatch(/only available inside `reasonix code`/);
+    expect(r3.info).toMatch(/only available inside `reasonix-code code`/);
   });
 
   it("'perms' is registered as an alias for 'permissions'", () => {

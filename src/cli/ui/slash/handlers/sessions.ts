@@ -20,7 +20,7 @@ const title: SlashHandler = (_args, _loop, ctx) => {
   return { info: t("handlers.sessions.titleStarted") };
 };
 
-/** `/session persist on|off` — toggle whether `reasonix code/chat` resumes
+/** `/session persist on|off` — toggle whether `reasonix-code code/chat` resumes
  *  the previous session on launch (#2238). Persists to config.json. */
 const persist: SlashHandler = (args, _loop, ctx) => {
   const sub = (args[0] ?? "").toLowerCase();

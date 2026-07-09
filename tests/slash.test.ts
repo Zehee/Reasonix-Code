@@ -404,7 +404,7 @@ describe("handleSlash", () => {
 
   it("/undo outside code mode says it's not available", () => {
     const r = handleSlash("undo", [], makeLoop());
-    expect(r.info).toMatch(/only available inside .reasonix code/);
+    expect(r.info).toMatch(/only available inside .reasonix-code code/);
   });
 
   it("/restore with no arg opens the checkpoint picker in code mode", () => {
@@ -422,9 +422,9 @@ describe("handleSlash", () => {
   it("/restore outside code mode is unavailable regardless of args", () => {
     const noArg = handleSlash("restore", [], makeLoop());
     expect(noArg.openCheckpointPicker).toBeUndefined();
-    expect(noArg.info).toMatch(/only available inside .reasonix code/);
+    expect(noArg.info).toMatch(/only available inside .reasonix-code code/);
     const withArg = handleSlash("restore", ["abc"], makeLoop());
-    expect(withArg.info).toMatch(/only available inside .reasonix code/);
+    expect(withArg.info).toMatch(/only available inside .reasonix-code code/);
   });
 
   it("/undo in code mode invokes the callback", () => {
@@ -458,7 +458,7 @@ describe("handleSlash", () => {
 
   it("/commit outside code mode says it's not available", () => {
     const r = handleSlash("commit", ["foo"], makeLoop());
-    expect(r.info).toMatch(/only available inside .reasonix code/);
+    expect(r.info).toMatch(/only available inside .reasonix-code code/);
   });
 
   it("/commit with no message prints usage", () => {
@@ -468,7 +468,7 @@ describe("handleSlash", () => {
 
   it("/apply outside code mode says it's not available", () => {
     const r = handleSlash("apply", [], makeLoop());
-    expect(r.info).toMatch(/only available inside .reasonix code/);
+    expect(r.info).toMatch(/only available inside .reasonix-code code/);
   });
 
   it("/apply in code mode invokes the callback", () => {
@@ -480,7 +480,7 @@ describe("handleSlash", () => {
 
   it("/discard outside code mode says it's not available", () => {
     const r = handleSlash("discard", [], makeLoop());
-    expect(r.info).toMatch(/only available inside .reasonix code/);
+    expect(r.info).toMatch(/only available inside .reasonix-code code/);
   });
 
   it("/discard in code mode invokes the callback", () => {
@@ -740,7 +740,7 @@ describe("handleSlash", () => {
       const r = handleSlash("update", [], makeLoop(), { latestVersion: null });
       expect(r.info).toMatch(/current: reasonix/);
       expect(r.info).toMatch(/not yet resolved/);
-      expect(r.info).toMatch(/reasonix update/);
+      expect(r.info).toMatch(/reasonix-code update/);
     });
 
     it("reports up-to-date when current matches latest", () => {
@@ -752,7 +752,7 @@ describe("handleSlash", () => {
     it("prints shell command when latest is newer than current", () => {
       const r = handleSlash("update", [], makeLoop(), { latestVersion: "99.99.99" });
       expect(r.info).toMatch(/99\.99\.99/);
-      expect(r.info).toMatch(/reasonix update/);
+      expect(r.info).toMatch(/reasonix-code update/);
       expect(r.info).toMatch(/npm install -g reasonix@latest/);
     });
 
@@ -1471,7 +1471,7 @@ describe("handleSlash", () => {
   describe("/plan", () => {
     it("/plan replies 'only in code mode' when setPlanMode callback is missing", () => {
       const r = handleSlash("plan", [], makeLoop());
-      expect(r.info).toMatch(/only available inside `reasonix code`/);
+      expect(r.info).toMatch(/only available inside `reasonix-code code`/);
     });
 
     it("/plan toggles when called with no args", () => {

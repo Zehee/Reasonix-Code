@@ -6,10 +6,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** npm registry endpoint for the `latest` dist-tag of this package. */
-const REGISTRY_URL = "https://registry.npmjs.org/reasonix/latest";
+const REGISTRY_URL = "https://registry.npmjs.org/reasonix-code/latest";
 
 /** TTL for the on-disk cache entry. 24h keeps noise low; users who
- * want a fresh check can run `reasonix update` which passes
+ * want a fresh check can run `reasonix-code update` which passes
  * `force: true`. */
 export const LATEST_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -75,7 +75,7 @@ function writeCache(entry: VersionCacheEntry, homeDirOverride?: string): void {
 }
 
 export interface GetLatestVersionOptions {
-  /** Ignore the cached entry and always fetch fresh. Used by `reasonix update`. */
+  /** Ignore the cached entry and always fetch fresh. Used by `reasonix-code update`. */
   force?: boolean;
   /** Registry URL override (tests). */
   registryUrl?: string;
@@ -150,7 +150,7 @@ export function detectInstallSource(bin?: string): InstallSource {
   if (/\/\.bun\//.test(norm) || /\/bun\/install\//.test(norm)) return "bun";
   if (/\/pnpm\/global\//.test(norm) || /\/pnpm\/[^/]+\/node_modules\//.test(norm)) return "pnpm";
   if (/\/yarn\/global\//.test(norm) || /\/\.yarn\/global\//.test(norm)) return "yarn";
-  if (/\/node_modules\/reasonix(\b|\/)/.test(norm)) return "npm";
+  if (/\/node_modules\/reasonix-code(\b|\/)/.test(norm)) return "npm";
   return "unknown";
 }
 
@@ -164,9 +164,9 @@ export function detectNpmInstallPrefix(bin?: string): string | null {
   const raw = bin ?? process.argv[1] ?? "";
   if (!raw) return null;
   const norm = raw.replace(/\\/g, "/");
-  const posix = norm.match(/^(.+?)\/lib\/node_modules\/reasonix(?:\/|$)/i);
+  const posix = norm.match(/^(.+?)\/lib\/node_modules\/reasonix-code(?:\/|$)/i);
   if (posix) return posix[1] ?? null;
-  const win = norm.match(/^(.+?)\/node_modules\/reasonix(?:\/|$)/i);
+  const win = norm.match(/^(.+?)\/node_modules\/reasonix-code(?:\/|$)/i);
   if (win) return win[1] ?? null;
   return null;
 }

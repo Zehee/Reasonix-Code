@@ -1,4 +1,4 @@
-/** Job state in a module-scoped Map keyed by project root so multi-root dashboards don't collide; CLI `reasonix index` runs independently. */
+/** Job state in a module-scoped Map keyed by project root so multi-root dashboards don't collide; CLI `reasonix-code index` runs independently. */
 
 import { closeSync, fstatSync, openSync, readSync } from "node:fs";
 import { join } from "node:path";
@@ -148,7 +148,7 @@ async function getStatus(ctx: DashboardContext): Promise<ApiResult> {
       body: {
         attached: false,
         reason:
-          "Semantic indexing requires a code-mode session — run `/dashboard` from inside `reasonix code` instead of standalone `reasonix dashboard`.",
+          "Semantic indexing requires a code-mode session — run `/dashboard` from inside `reasonix-code code` instead of standalone `reasonix-code dashboard`.",
       },
     };
   }

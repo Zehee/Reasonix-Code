@@ -35,20 +35,21 @@ export const zhCN: TranslationSchema = {
     index: "构建（或增量刷新）本地语义搜索索引。",
   },
   stats: {
-    usageHint: "运行 `reasonix chat`、`reasonix code` 或 `reasonix run <task>` — 每次对话都会记录",
-    usageDetail: "每次对话在日志中追加一行，`reasonix stats` 会将其汇总统计。",
+    usageHint:
+      "运行 `reasonix-code chat`、`reasonix-code code` 或 `reasonix-code run <task>` — 每次对话都会记录",
+    usageDetail: "每次对话在日志中追加一行，`reasonix-code stats` 会将其汇总统计。",
   },
   run: {
     missingApiKey:
       "未设置 DEEPSEEK_API_KEY 且标准输入不是 TTY（无法交互式输入）。\n" +
-      "请设置环境变量，或先运行 `reasonix chat` 交互一次以保存密钥。\n",
+      "请设置环境变量，或先运行 `reasonix-code chat` 交互一次以保存密钥。\n",
   },
   sessions: {
     emptyHint:
-      "暂无已保存的会话 — 运行 `reasonix chat`（会话会自动保存，除非使用了 --no-session）。",
+      "暂无已保存的会话 — 运行 `reasonix-code chat`（会话会自动保存，除非使用了 --no-session）。",
     listHeader: "保存的会话 (~/.reasonix/sessions/)：",
-    inspectHint: "查看：reasonix sessions <name>",
-    resumeHint: "恢复：reasonix chat --session <name>",
+    inspectHint: "查看：reasonix-code sessions <name>",
+    resumeHint: "恢复：reasonix-code chat --session <name>",
     noSession: '找不到会话 "{name}"（或为空）。',
     lookedAt: "位置：{path}",
     noIdleSessions: "没有闲置 ≥{days} 天的会话。无需清理。",
@@ -58,7 +59,7 @@ export const zhCN: TranslationSchema = {
     daysInvalid: "--days 必须是正整数（传入了 {days}）。",
   },
   ui: {
-    welcome: "随时运行 `reasonix` 开始聊天 — 您的设置将被记住。",
+    welcome: "随时运行 `reasonix-code` 开始聊天 — 您的设置将被记住。",
     taglineChat: "DeepSeek 原生智能体",
     taglineCode: "DeepSeek 原生代码智能体",
     taglineSub: "缓存优先 · Flash 优先",
@@ -366,7 +367,7 @@ export const zhCN: TranslationSchema = {
       description: "连接/查看/断开微信通道，首次连接默认使用 iLink 扫码登录",
       argsHint: "[connect [manual token accountId [baseUrl]]|status|disconnect]",
     },
-    setup: { description: "提醒您退出并运行 `reasonix setup`" },
+    setup: { description: "提醒您退出并运行 `reasonix-code setup`" },
     semantic: {
       description: "显示 semantic_search 状态 — 已构建？Ollama 已安装？如何启用",
     },
@@ -735,7 +736,7 @@ export const zhCN: TranslationSchema = {
       "上下文溢出（DeepSeek 400）：会话历史已达 {requested}，超出模型 prompt 上限（V4：1M tokens；旧版 chat/reasoner：131k）。通常是单个工具结果太大。Reasonix 默认将新工具结果限制在 8k tokens，并在会话加载时自动修复超大历史 — 重启常能清掉。如果仍然溢出，运行 /new 重新开始，或打开 /sessions 选中后按 [d] 删除该会话。",
     contextOverflowTooMany: "tokens 数量过多",
     auth401:
-      "认证失败（DeepSeek 401）：{inner}。你的 API key 被拒绝。运行 `reasonix setup` 或 `export DEEPSEEK_API_KEY=sk-...` 修复。在 https://platform.deepseek.com/api_keys 获取 key。",
+      "认证失败（DeepSeek 401）：{inner}。你的 API key 被拒绝。运行 `reasonix-code setup` 或 `export DEEPSEEK_API_KEY=sk-...` 修复。在 https://platform.deepseek.com/api_keys 获取 key。",
     balance402:
       "余额不足（DeepSeek 402）：{inner}。在 https://platform.deepseek.com/top_up 充值 — 余额非零时面板顶栏会显示。",
     badparam422: "参数错误（DeepSeek 422）：{inner}",
@@ -801,8 +802,8 @@ export const zhCN: TranslationSchema = {
       helpUrlCache: "                             同一会话中相同 URL 只获取一次（内存缓存）。",
       helpUrlPunct: "                             自动剥离尾部标点符号（./,/））。",
       helpSessionsTitle: "会话（默认自动启用，命名为 'default'）：",
-      helpSessionCustom: "  reasonix chat --session <name>   使用不同的命名会话",
-      helpSessionNone: "  reasonix chat --no-session       禁用本次运行的持久化",
+      helpSessionCustom: "  reasonix-code chat --session <name>   使用不同的命名会话",
+      helpSessionNone: "  reasonix-code chat --no-session       禁用本次运行的持久化",
       retryNone: "没有可重试的内容 — 此会话日志中没有先前的用户消息。",
       retryInfo: '▸ 重试中："{preview}"',
       loopTuiOnly: "/loop 仅在交互式 TUI 中可用（不在 run/replay 中）。",
@@ -823,7 +824,7 @@ export const zhCN: TranslationSchema = {
     sessions: {
       persistOn: "▸ session-persist → on（下次启动将恢复上次会话）",
       persistOff: "▸ session-persist → off（下次启动将开始新会话）",
-      persistSetOn: "▸ session-persist 已设为 on — 下次 `reasonix code/chat` 将恢复上次会话。",
+      persistSetOn: "▸ session-persist 已设为 on — 下次 `reasonix-code code/chat` 将恢复上次会话。",
       persistSetOff:
         "▸ session-persist 已设为 off — 下次启动将开启新会话。使用 -c/--continue 可显式恢复。",
       persistUsage: "用法：/session-persist <on|off>",
@@ -980,13 +981,13 @@ export const zhCN: TranslationSchema = {
       updateCurrent: "当前：reasonix {version}",
       updateLatestPending: "最新：（尚未解析 — 后台检查进行中或离线）",
       updateRetryHint: "已触发新的注册表获取 — 几秒后重试 `/update`，",
-      updateRetryHint2: "或在另一个终端运行 `reasonix update` 强制同步执行。",
+      updateRetryHint2: "或在另一个终端运行 `reasonix-code update` 强制同步执行。",
       updateLatest: "最新：reasonix {version}",
       updateUpToDate: "您已是最新版本。无需操作。",
-      updateNpxHint: "您正在通过 npx 运行 — 下次 `npx reasonix ...` 启动时将自动获取。",
+      updateNpxHint: "您正在通过 npx 运行 — 下次 `npx reasonix-code ...` 启动时将自动获取。",
       updateNpxForce: "要强制刷新：`npm cache clean --force`。",
       updateUpgradeHint: "要升级，请退出此会话并运行：",
-      updateUpgradeCmd1: "  reasonix update           （交互式，支持 --dry-run 预览）",
+      updateUpgradeCmd1: "  reasonix-code update           （交互式，支持 --dry-run 预览）",
       updateUpgradeCmd2: "  {command}   （直接安装）",
       updateInSessionDisabled: "会话内安装被刻意禁用 — 安装命令会",
       updateInSessionDisabled2: "破坏此 TUI 的渲染，且 Windows 可能锁定运行中的二进制文件。",
@@ -995,26 +996,26 @@ export const zhCN: TranslationSchema = {
       statsWillAppear: "将在您发送消息后显示在仪表板中。",
     },
     edits: {
-      undoCodeOnly: "/undo 仅在 `reasonix code` 中可用 — 聊天模式不应用编辑。",
-      historyCodeOnly: "/history 仅在 `reasonix code` 中可用。",
-      showCodeOnly: "/show 仅在 `reasonix code` 中可用。",
-      applyCodeOnly: "/apply 仅在 `reasonix code` 中可用（此处无内容可应用）。",
-      discardCodeOnly: "/discard 仅在 `reasonix code` 中可用。",
-      planCodeOnly: "/plan 仅在 `reasonix code` 中可用 — 聊天模式不限制工具写入。",
+      undoCodeOnly: "/undo 仅在 `reasonix-code code` 中可用 — 聊天模式不应用编辑。",
+      historyCodeOnly: "/history 仅在 `reasonix-code code` 中可用。",
+      showCodeOnly: "/show 仅在 `reasonix-code code` 中可用。",
+      applyCodeOnly: "/apply 仅在 `reasonix-code code` 中可用（此处无内容可应用）。",
+      discardCodeOnly: "/discard 仅在 `reasonix-code code` 中可用。",
+      planCodeOnly: "/plan 仅在 `reasonix-code code` 中可用 — 聊天模式不限制工具写入。",
       planOn:
         "▸ 计划模式开启 — 写入工具被限制；模型必须先调用 `submit_plan` 才能执行任何操作。（模型也可以在计划模式关闭时自主调用 submit_plan 处理大型任务 — 此开关是更强的显式约束。）输入 /plan off 退出。",
       planOff: "▸ 计划模式关闭 — 写入工具再次可用。模型仍可为大型任务自主提出计划。",
-      modeCodeOnly: "/mode 仅在 `reasonix code` 中可用。",
+      modeCodeOnly: "/mode 仅在 `reasonix-code code` 中可用。",
       modeUsage: "用法：/mode <review|auto|yolo>   （Shift+Tab 也可循环）",
       modeYolo:
         "▸ 编辑模式：YOLO — 编辑和 Shell 命令自动运行，无提示。/undo 仍可回滚编辑。请谨慎使用。",
       modeAuto:
         "▸ 编辑模式：AUTO — 编辑立即应用；在 5 秒内按 u 撤消，或稍后使用 /undo。Shell 命令仍会询问。",
       modeReview: "▸ 编辑模式：review — 编辑排队等待 /apply（或 y）/ /discard（或 n）",
-      commitCodeOnly: "/commit 仅在 `reasonix code` 中可用（需要有根的 git 仓库）。",
+      commitCodeOnly: "/commit 仅在 `reasonix-code code` 中可用（需要有根的 git 仓库）。",
       commitUsage: '用法：/commit "提交消息"  — 在 {root} 中运行 `git add -A && git commit -m "…"`',
-      walkCodeOnly: "/walk 仅在 `reasonix code` 中可用。",
-      checkpointCodeOnly: "/checkpoint 仅在 `reasonix code` 中可用 — 聊天模式不应用编辑。",
+      walkCodeOnly: "/walk 仅在 `reasonix-code code` 中可用。",
+      checkpointCodeOnly: "/checkpoint 仅在 `reasonix-code code` 中可用 — 聊天模式不应用编辑。",
       checkpointNone:
         "尚无检查点 — `/checkpoint <name>` 快照会话涉及的每个文件。稍后使用 `/restore <name>` 恢复。",
       checkpointHeader: "◈ 检查点 · 已存储 {count} 个",
@@ -1029,14 +1030,14 @@ export const zhCN: TranslationSchema = {
         '▸ 检查点 "{name}" 已保存（{id}）— 但尚未涉及任何文件，因此是空基线。此后的编辑将可撤消。',
       checkpointSaved:
         '▸ 检查点 "{name}" 已保存（{id}）— {files} 个文件，{size} KB。恢复：/restore {name}',
-      restoreCodeOnly: "/restore 仅在 `reasonix code` 中可用。",
+      restoreCodeOnly: "/restore 仅在 `reasonix-code code` 中可用。",
       restoreUsage: "用法：/restore <name|id>   （见 /checkpoint list 获取 ID）",
       restoreNoMatch: '▸ 未找到匹配 "{target}" 的检查点 — 尝试 /checkpoint list',
       restoreInfo: '▸ 已恢复 "{name}"（{id}），来自 {when}',
       restoreWrote: "  · 写回了 {count} 个文件",
       restoreRemoved: "  · 移除了 {count} 个文件（检查点时不存在）",
       restoreSkipped: "  ✗ 跳过了 {count} 个文件：",
-      cwdCodeOnly: "/cwd 仅在 `reasonix code` 中可用。",
+      cwdCodeOnly: "/cwd 仅在 `reasonix-code code` 中可用。",
       cwdUsage:
         "用法：/cwd <path>   （当前根目录：{current}）。重新指向 filesystem / shell / memory 工具到 <path>。",
       cwdUsageNoCurrent: "用法：/cwd <path>   将工作区根目录切换到 <path>。",
@@ -1074,7 +1075,7 @@ export const zhCN: TranslationSchema = {
     },
     permissions: {
       mutateCodeOnly:
-        "/permissions add / remove / clear 仅在 `reasonix code` 中可用 — 它们编辑项目范围的允许列表（`~/.reasonix/config.json` projects[<root>].shellAllowed）。",
+        "/permissions add / remove / clear 仅在 `reasonix-code code` 中可用 — 它们编辑项目范围的允许列表（`~/.reasonix/config.json` projects[<root>].shellAllowed）。",
       addUsage:
         '用法：/permissions add <prefix>   （多 token 可用：/permissions add "git push origin"）',
       addAlready: "▸ 已允许：{prefix}",
@@ -1174,7 +1175,7 @@ export const zhCN: TranslationSchema = {
       statusDash: "  仪表板  {url}（在浏览器中打开 · /dashboard stop）",
     },
     plans: {
-      noSession: "未附加会话 — `/plans` 是按会话的。在项目中运行 `reasonix code` 以获取会话。",
+      noSession: "未附加会话 — `/plans` 是按会话的。在项目中运行 `reasonix-code code` 以获取会话。",
       activePlan: "▸ 活跃计划{label} — {done}/{total} 步骤已完成 · 最后触及 {when}",
       activeNone: "▸ 活跃计划：（无）",
       noArchives: "此会话尚无归档计划 — 当每个步骤完成时自动归档",
@@ -1184,7 +1185,7 @@ export const zhCN: TranslationSchema = {
       evidenceLine: "  evidence {stepId}: {summary}",
       archivedEvidenceLine: "    evidence: {summary}",
       replayNoSession:
-        "未附加会话 — `/replay` 是按会话的。在项目中运行 `reasonix code` 以获取会话。",
+        "未附加会话 — `/replay` 是按会话的。在项目中运行 `reasonix-code code` 以获取会话。",
       replayNoArchives:
         "此会话尚无归档计划 — `/replay` 在计划完成后启用（每个步骤完成时自动归档）。",
       replayInvalidIndex:
@@ -1203,9 +1204,9 @@ export const zhCN: TranslationSchema = {
       doneAllOk: "▸ 已标记 {count} 个步骤为完成。",
     },
     jobs: {
-      codeOnly: "/jobs 仅在 `reasonix code` 中可用。",
-      killCodeOnly: "/kill 仅在 `reasonix code` 中可用。",
-      logsCodeOnly: "/logs 仅在 `reasonix code` 中可用。",
+      codeOnly: "/jobs 仅在 `reasonix-code code` 中可用。",
+      killCodeOnly: "/kill 仅在 `reasonix-code code` 中可用。",
+      logsCodeOnly: "/logs 仅在 `reasonix-code code` 中可用。",
       empty:
         "◈ 作业 · 0 运行中 · 共 0 个\n  （run_background 生成一个 — 开发服务器、监视器、长时间运行的脚本）",
       header: "◈ 作业 · {running} 运行中 · 共 {total} 个",
@@ -1260,15 +1261,16 @@ export const zhCN: TranslationSchema = {
     },
     mcp: {
       noServers:
-        '未附加 MCP 服务器。运行 `reasonix setup` 选择一些，或使用 --mcp "<spec>" 启动。`reasonix mcp list` 显示目录。注：模型发起的 shell 命令按次审批（allow once / allow always / deny），设计上没有「全局放行」开关。',
+        '未附加 MCP 服务器。运行 `reasonix-code setup` 选择一些，或使用 --mcp "<spec>" 启动。`reasonix-code mcp list` 显示目录。注：模型发起的 shell 命令按次审批（allow once / allow always / deny），设计上没有「全局放行」开关。',
       toolsLabel: "  工具     {count}",
       resourcesHint: "`/resource` 浏览+读取",
       promptsHint: "`/prompt` 浏览+获取",
       awarenessOnly: "聊天模式目前消耗工具；资源+提示在此展示供了解。",
-      catalogHint: "完整目录：`reasonix mcp list` · 深度诊断：`reasonix mcp inspect <spec>`。",
+      catalogHint:
+        "完整目录：`reasonix-code mcp list` · 深度诊断：`reasonix-code mcp inspect <spec>`。",
       fallbackServers: "MCP 服务器（{count}）：",
       fallbackTools: "注册表中的工具（{count}）：",
-      fallbackChange: "要更改此设置，请退出并运行 `reasonix setup`。",
+      fallbackChange: "要更改此设置，请退出并运行 `reasonix-code setup`。",
       usageDisableEnable:
         "用法：/mcp {action} <name>  ·  从 /mcp 列表中挑一个名字（匿名服务器无法按名切换）。",
       usageReconnect: "用法：/mcp reconnect <name>  ·  从 /mcp 列表中挑一个名字。",
@@ -1281,7 +1283,7 @@ export const zhCN: TranslationSchema = {
     },
     init: {
       codeOnly:
-        "/init 仅在代码模式下工作（需要文件系统工具）。\n运行 `reasonix code [path]` 启动一个以您要初始化的项目为根的会话，\n然后运行 /init。",
+        "/init 仅在代码模式下工作（需要文件系统工具）。\n运行 `reasonix-code code [path]` 启动一个以您要初始化的项目为根的会话，\n然后运行 /init。",
       exists: "▸ REASONIX.md 已存在于 {path}",
       existsForce: "  /init force   从头重新生成（覆盖）",
       existsEdit: "  或手动编辑 — 它只是 markdown。当前文件已",
@@ -1340,7 +1342,7 @@ export const zhCN: TranslationSchema = {
       listProjectScope:
         "  · <project>/.reasonix/skills/<name>/SKILL.md  （或 <name>.md） — 项目范围",
       listGlobalScope: "  · ~/.reasonix/skills/<name>/SKILL.md  （或 <name>.md） — 全局范围",
-      listProjectOnly: "  （项目范围仅在 `reasonix code` 中活跃）",
+      listProjectOnly: "  （项目范围仅在 `reasonix-code code` 中活跃）",
       listFrontmatter: "每个文件的 frontmatter 至少需要 `name` 和 `description`。",
       listInvoke: "使用 `/skill <name> [args]` 调用技能，或让模型调用 `run_skill`。",
       listHeader: "用户技能（{count}）：",
@@ -1611,7 +1613,7 @@ export const zhCN: TranslationSchema = {
   },
   startup: {
     codeRooted:
-      '▸ reasonix code：根目录 {rootDir}，会话 "{session}" · {tools} 个原生工具{semantic}',
+      '▸ reasonix-code code：根目录 {rootDir}，会话 "{session}" · {tools} 个原生工具{semantic}',
     ephemeral: "（临时）",
     semanticOn: " · 语义搜索已开启",
   },
@@ -1823,7 +1825,7 @@ export const zhCN: TranslationSchema = {
     verySlow: "非常慢 \u00b7 {ms}ms",
     slowToast: "\u26a0 MCP `{name}` 响应缓慢 \u00b7 P95 {seconds}s \u00b7 最近 {sampleSize} 次调用",
     emptyHint:
-      "\u2139 未配置 MCP 服务器 —— 可尝试：`reasonix setup` 重新选择，或 `reasonix mcp install filesystem` · shell 命令按次审批（allow once / allow always / deny），无全局放行",
+      "\u2139 未配置 MCP 服务器 —— 可尝试：`reasonix-code setup` 重新选择，或 `reasonix-code mcp install filesystem` · shell 命令按次审批（allow once / allow always / deny），无全局放行",
   },
   denyContextInput: {
     description: "告诉模型你为什么拒绝了。模型下次会看到你的理由作为额外的上下文。",
@@ -1864,8 +1866,8 @@ export const zhCN: TranslationSchema = {
     notInstalled: "未安装：{name}",
     bridged: "✓ 已安装 {name} — 已桥接",
     bridgeFailed: "▲ 已安装 {name} — 桥接失败：{reason}",
-    bridgeReloadFailed: "✓ 已安装 {name} — 重启 `reasonix code` 以桥接（重载失败：{message}）",
-    restartBridge: "✓ 已安装 {name} — 重启 `reasonix code` 以桥接",
+    bridgeReloadFailed: "✓ 已安装 {name} — 重启 `reasonix-code code` 以桥接（重载失败：{message}）",
+    restartBridge: "✓ 已安装 {name} — 重启 `reasonix-code code` 以桥接",
     needsEnv: "  ·  需要环境变量：{env}",
     badgeOfficial: "[官方]",
     badgeSmithery: "[三方]",
@@ -1877,7 +1879,7 @@ export const zhCN: TranslationSchema = {
   },
   mcpBrowser: {
     title: "◈ MCP 浏览器",
-    empty: "没有挂载 MCP 服务器。运行 `reasonix setup` 选择一些，或使用 --mcp 启动。",
+    empty: "没有挂载 MCP 服务器。运行 `reasonix-code setup` 选择一些，或使用 --mcp 启动。",
     serverCount: "{count} 个服务器",
     footer: "↑↓ 选择 · [r] 重连 · [d] 禁用 · Esc 退出",
   },
@@ -1902,8 +1904,9 @@ export const zhCN: TranslationSchema = {
     initDetail: "初始化 → tools/list → resources/list",
     reconnectDetail: "断开旧连接 · 重新握手 · 列出工具",
     disabledDetail: "通过 /mcp disable {name}",
-    failedSetupHint: "→ 运行 `reasonix setup` 移除此条目，或修复底层问题（缺少 npm 包、网络等）。",
-    failedSetupConfigHint: "→ 运行 `reasonix setup` 从已保存配置中移除损坏的条目。",
+    failedSetupHint:
+      "→ 运行 `reasonix-code setup` 移除此条目，或修复底层问题（缺少 npm 包、网络等）。",
+    failedSetupConfigHint: "→ 运行 `reasonix-code setup` 从已保存配置中移除损坏的条目。",
     abortedHint: "已中断 MCP 启动 — 跳过 {count} 个服务器。问题修复后用 /mcp 重新连接。",
     toolsReady: "工具就绪",
     warnLabel: "警告",
@@ -1926,7 +1929,7 @@ export const zhCN: TranslationSchema = {
     rejectHint: "放弃修改。模型继续按原步骤执行。",
   },
   diffApp: {
-    title: "reasonix diff",
+    title: "reasonix-code diff",
     turnLabel: "第 {turn} 轮（{current}/{total}）",
     turnsAligned: "{count} 轮已对齐",
     paneEmpty: "（此轮该侧无记录）",
@@ -2002,17 +2005,17 @@ export const zhCN: TranslationSchema = {
     cachedAge: "缓存，{age}",
     moreAvailable: "还有更多",
     allLoaded: "已全部加载",
-    morePagesAvailable: "▸ 还有更多页可用 — `reasonix mcp list --pages <n>` 或 --all",
-    installHint: "安装：reasonix mcp install <name>",
-    usageSearch: "用法：reasonix mcp search <query>",
-    usageInstall: "用法：reasonix mcp install <name>",
+    morePagesAvailable: "▸ 还有更多页可用 — `reasonix-code mcp list --pages <n>` 或 --all",
+    installHint: "安装：reasonix-code mcp install <name>",
+    usageSearch: "用法：reasonix-code mcp search <query>",
+    usageInstall: "用法：reasonix-code mcp install <name>",
     noMatchesFor: '未找到 "{q}" 的匹配项（已检索 {count} 条记录，来源：{source}）',
     matchCount: '在 {source} 中找到 {count} 条 "{q}" 的匹配项（已扫描 {loaded} 条记录）：',
-    moreLoaded: "… 还有 {count} 条已加载 — 使用 `reasonix mcp search <query>` 筛选",
+    moreLoaded: "… 还有 {count} 条已加载 — 使用 `reasonix-code mcp search <query>` 筛选",
     moreMatches: "… 还有 {count} 条匹配项",
     installed: "已安装：{spec}",
     noServerFound: '在 {source} 中遍历了 {pages} 页后未找到名为 "{target}" 的 MCP 服务器。',
-    noServerTryMore: "试试：reasonix mcp install {target} --max-pages 100",
+    noServerTryMore: "试试：reasonix-code mcp install {target} --max-pages 100",
     noInstallMeta: '无法为 "{name}" 获取安装元数据 — 试试 `npx -y @smithery/cli install {name}`。',
     buildSpecFailed: "无法为 {name} 构建安装 spec：{message}",
     alreadyInstalled: "已安装：{spec}",

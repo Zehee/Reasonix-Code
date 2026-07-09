@@ -42,22 +42,23 @@ export const JA: TranslationSchema = {
   },
   stats: {
     ...EN.stats,
-    usageHint: "`reasonix chat`、`reasonix code`、または `reasonix run <task>` を実行するたびに",
-    usageDetail: "ログに1行追加され、`reasonix stats` で集計されます。",
+    usageHint:
+      "`reasonix-code chat`、`reasonix-code code`、または `reasonix-code run <task>` を実行するたびに",
+    usageDetail: "ログに1行追加され、`reasonix-code stats` で集計されます。",
   },
   run: {
     ...EN.run,
     missingApiKey:
       "DEEPSEEK_API_KEY が設定されておらず、stdin が TTY ではありません（プロンプトを表示できません）。\n" +
-      "環境変数を設定するか、`reasonix chat` を一度対話的に実行してキーを保存してください。\n",
+      "環境変数を設定するか、`reasonix-code chat` を一度対話的に実行してキーを保存してください。\n",
   },
   sessions: {
     ...EN.sessions,
     emptyHint:
-      "保存されたセッションはまだありません — `reasonix chat` を実行してください（--no-session を付けない限り自動保存されます）。",
+      "保存されたセッションはまだありません — `reasonix-code chat` を実行してください（--no-session を付けない限り自動保存されます）。",
     listHeader: "保存されたセッション (~/.reasonix/sessions/):",
-    inspectHint: "詳細表示:  reasonix sessions <name>",
-    resumeHint: "再開:   reasonix chat --session <name>",
+    inspectHint: "詳細表示:  reasonix-code sessions <name>",
+    resumeHint: "再開:   reasonix-code chat --session <name>",
     noSession: '"{name}" という名前のセッションはありません（または空です）。',
     lookedAt: "参照: {path}",
     noIdleSessions: "{days}日以上アイドルのセッションはありません。削除はありません。",
@@ -68,7 +69,7 @@ export const JA: TranslationSchema = {
   },
   ui: {
     ...EN.ui,
-    welcome: "Run `reasonix` any time to start chatting — your settings are remembered.",
+    welcome: "Run `reasonix-code` any time to start chatting — your settings are remembered.",
     taglineChat: "DeepSeekネイティブエージェント",
     taglineCode: "DeepSeekネイティブコーディングエージェント",
     taglineSub: "キャッシュファースト · フラッシュファースト",
@@ -431,7 +432,10 @@ export const JA: TranslationSchema = {
         "このセッションのQQチャンネルを接続、検査、または切断（初回接続時にApp ID / App Secretの設定をガイド）",
       argsHint: "[connect [appId appSecret [sandbox]]|status|disconnect]",
     },
-    setup: { ...EN.slash.setup, description: "終了して `reasonix setup` を実行するよう促します" },
+    setup: {
+      ...EN.slash.setup,
+      description: "終了して `reasonix-code setup` を実行するよう促します",
+    },
     semantic: {
       ...EN.slash.semantic,
       description: "semantic_search の状態を表示 — 構築済み？Ollama導入済み？有効化方法は？",
@@ -864,7 +868,7 @@ export const JA: TranslationSchema = {
       "コンテキストオーバーフロー (DeepSeek 400): セッション履歴が {requested} で、モデルのプロンプト制限（V4: 1Mトークン; 旧来のchat/reasoner: 131k）を超えています。通常、単一のツール結果が大きすぎるのが原因です。Reasonixは新しいツール結果を8kトークンに制限し、セッション読み込み時に大きすぎる履歴を自動修復します — 再起動で解決することが多いです。それでもオーバーフローする場合は、/new で新規開始するか、/sessions を開いて [d] でこのセッションを削除してください。",
     contextOverflowTooMany: "トークンが多すぎます",
     auth401:
-      "認証に失敗しました (DeepSeek 401): {inner}。APIキーが拒否されました。`reasonix setup` または `export DEEPSEEK_API_KEY=sk-...` で修正してください。https://platform.deepseek.com/api_keys から取得できます。",
+      "認証に失敗しました (DeepSeek 401): {inner}。APIキーが拒否されました。`reasonix-code setup` または `export DEEPSEEK_API_KEY=sk-...` で修正してください。https://platform.deepseek.com/api_keys から取得できます。",
     balance402:
       "残高不足 (DeepSeek 402): {inner}。https://platform.deepseek.com/top_up でチャージしてください — 残高がゼロでなくなるとパネルヘッダーに表示されます。",
     badparam422: "無効なパラメータ (DeepSeek 422): {inner}",
@@ -942,8 +946,8 @@ export const JA: TranslationSchema = {
         "                             同じURLはセッション内で1回のみ取得（インメモリキャッシュ）。",
       helpUrlPunct: "                             文末の句読点（./,/)）は自動的に除去されます。",
       helpSessionsTitle: "セッション（デフォルトで自動有効、名前は 'default'）:",
-      helpSessionCustom: "  reasonix chat --session <name>   別の名前付きセッションを使用",
-      helpSessionNone: "  reasonix chat --no-session       この実行の永続化を無効化",
+      helpSessionCustom: "  reasonix-code chat --session <name>   別の名前付きセッションを使用",
+      helpSessionNone: "  reasonix-code chat --no-session       この実行の永続化を無効化",
       retryNone:
         "再試行するものがありません — このセッションのログにユーザーメッセージがありません。",
       retryInfo: '▸ 再試行中: "{preview}"',
@@ -1041,13 +1045,14 @@ export const JA: TranslationSchema = {
       updateRetryHint:
         "新しいレジストリ取得をトリガーしました — 数秒後に `/update` を再試行してください。",
       updateRetryHint2:
-        "または別の端末で `reasonix update` を実行して同期的に強制取得してください。",
+        "または別の端末で `reasonix-code update` を実行して同期的に強制取得してください。",
       updateLatest: "最新:  reasonix {version}",
       updateUpToDate: "最新バージョンです。何もする必要はありません。",
-      updateNpxHint: "npx 経由で実行中です — 次回の `npx reasonix ...` 起動時に自動取得されます。",
+      updateNpxHint:
+        "npx 経由で実行中です — 次回の `npx reasonix-code ...` 起動時に自動取得されます。",
       updateNpxForce: "より早く強制リフレッシュするには: `npm cache clean --force`。",
       updateUpgradeHint: "アップグレードするには、このセッションを終了して以下を実行してください:",
-      updateUpgradeCmd1: "  reasonix update           （対話的、--dry-run でドライラン可能）",
+      updateUpgradeCmd1: "  reasonix-code update           （対話的、--dry-run でドライラン可能）",
       updateUpgradeCmd2: "  {command}   （直接）",
       updateInSessionDisabled:
         "セッション内インストールは意図的に無効化されています — インストールのスポーンにより",
@@ -1060,19 +1065,19 @@ export const JA: TranslationSchema = {
     edits: {
       ...EN.handlers.edits,
       undoCodeOnly:
-        "/undo は `reasonix code` 内でのみ利用可能です — チャットモードでは編集を適用しません。",
-      historyCodeOnly: "/history は `reasonix code` 内でのみ利用可能です。",
-      showCodeOnly: "/show は `reasonix code` 内でのみ利用可能です。",
+        "/undo は `reasonix-code code` 内でのみ利用可能です — チャットモードでは編集を適用しません。",
+      historyCodeOnly: "/history は `reasonix-code code` 内でのみ利用可能です。",
+      showCodeOnly: "/show は `reasonix-code code` 内でのみ利用可能です。",
       applyCodeOnly:
-        "/apply は `reasonix code` 内でのみ利用可能です（ここで適用するものはありません）。",
-      discardCodeOnly: "/discard は `reasonix code` 内でのみ利用可能です。",
+        "/apply は `reasonix-code code` 内でのみ利用可能です（ここで適用するものはありません）。",
+      discardCodeOnly: "/discard は `reasonix-code code` 内でのみ利用可能です。",
       planCodeOnly:
-        "/plan は `reasonix code` 内でのみ利用可能です — チャットモードではツール書き込みを制御しません。",
+        "/plan は `reasonix-code code` 内でのみ利用可能です — チャットモードではツール書き込みを制御しません。",
       planOn:
         "▸ プランモード ON — 書き込みツールが制御されます; モデルは実行前に `submit_plan` を呼び出す必要があります。（プランモードがオフでも、大きなタスクではモデルが自主的に submit_plan を呼び出せます — このトグルはより強い明示的な制約です。）/plan off で終了。",
       planOff:
         "▸ プランモード OFF — 書き込みツールが再有効化されました。大きなタスクではモデルが自主的にプランを提案できます。",
-      modeCodeOnly: "/mode は `reasonix code` 内でのみ利用可能です。",
+      modeCodeOnly: "/mode は `reasonix-code code` 内でのみ利用可能です。",
       modeUsage: "使い方: /mode <review|auto|yolo>   （Shift+Tab でも切り替え可能）",
       modeYolo:
         "▸ 編集モード: YOLO — 編集とシェルコマンドがプロンプトなしで自動実行されます。/undo で編集のロールバックは可能です。注意して使用してください。",
@@ -1081,12 +1086,12 @@ export const JA: TranslationSchema = {
       modeReview:
         "▸ 編集モード: review — 編集は /apply（または y）/ /discard（または n）のキューに入ります",
       commitCodeOnly:
-        "/commit は `reasonix code` 内でのみ利用可能です（git リポジトリが必要です）。",
+        "/commit は `reasonix-code code` 内でのみ利用可能です（git リポジトリが必要です）。",
       commitUsage:
         '使い方: /commit "コミットメッセージ"  — {root} で `git add -A && git commit -m "…"` を実行します',
-      walkCodeOnly: "/walk は `reasonix code` 内でのみ利用可能です。",
+      walkCodeOnly: "/walk は `reasonix-code code` 内でのみ利用可能です。",
       checkpointCodeOnly:
-        "/checkpoint は `reasonix code` 内でのみ利用可能です — チャットモードでは編集を適用しません。",
+        "/checkpoint は `reasonix-code code` 内でのみ利用可能です — チャットモードでは編集を適用しません。",
       checkpointNone:
         "まだチェックポイントはありません — `/checkpoint <name>` でセッションが触れた全ファイルのスナップショットを保存します。後で `/restore <name>` で復元できます。",
       checkpointHeader: "◈ チェックポイント · {count} 件保存",
@@ -1102,7 +1107,7 @@ export const JA: TranslationSchema = {
         '▸ チェックポイント "{name}" を保存しました ({id}) — しかし、まだファイルが触られていないため空のベースラインです。この後の編集は復元可能になります。',
       checkpointSaved:
         '▸ チェックポイント "{name}" を保存しました ({id}) — {files} ファイル, {size} KB。復元: /restore {name}',
-      restoreCodeOnly: "/restore は `reasonix code` 内でのみ利用可能です。",
+      restoreCodeOnly: "/restore は `reasonix-code code` 内でのみ利用可能です。",
       restoreUsage: "使い方: /restore <name|id>   （/checkpoint list でIDを確認）",
       restoreNoMatch:
         '▸ "{target}" に一致するチェックポイントはありません — /checkpoint list を試してください',
@@ -1111,7 +1116,7 @@ export const JA: TranslationSchema = {
       restoreRemoved:
         "  · {count} ファイルを削除しました（チェックポイント時点では存在しませんでした）",
       restoreSkipped: "  ✗ {count} ファイルをスキップしました:",
-      cwdCodeOnly: "/cwd は `reasonix code` 内でのみ利用可能です。",
+      cwdCodeOnly: "/cwd は `reasonix-code code` 内でのみ利用可能です。",
       cwdUsage:
         "使い方: /cwd <path>   （現在のルート: {current}）。ファイルシステム / シェル / メモリツールの参照先を <path> に変更します。",
       cwdUsageNoCurrent: "使い方: /cwd <path>   ワークスペースルートを <path> に変更します。",
@@ -1142,7 +1147,7 @@ export const JA: TranslationSchema = {
     permissions: {
       ...EN.handlers.permissions,
       mutateCodeOnly:
-        "/permissions add / remove / clear は `reasonix code` 内でのみ利用可能です — プロジェクトスコープの許可リストを編集します（`~/.reasonix/config.json` projects[<root>].shellAllowed）。",
+        "/permissions add / remove / clear は `reasonix-code code` 内でのみ利用可能です — プロジェクトスコープの許可リストを編集します（`~/.reasonix/config.json` projects[<root>].shellAllowed）。",
       addUsage:
         '使い方: /permissions add <prefix>   （複数トークン可: /permissions add "git push origin"）',
       addAlready: "▸ 既に許可済み: {prefix}",
@@ -1258,7 +1263,7 @@ export const JA: TranslationSchema = {
     plans: {
       ...EN.handlers.plans,
       noSession:
-        "セッションが接続されていません — `/plans` はセッションごとです。プロジェクトで `reasonix code` を実行するとセッションが取得できます。",
+        "セッションが接続されていません — `/plans` はセッションごとです。プロジェクトで `reasonix-code code` を実行するとセッションが取得できます。",
       activePlan: "▸ アクティブプラン{label} — {done}/{total} ステップ完了 · 最終更新 {when}",
       activeNone: "▸ アクティブプラン: （なし）",
       noArchives:
@@ -1269,7 +1274,7 @@ export const JA: TranslationSchema = {
       evidenceLine: "  エビデンス {stepId}: {summary}",
       archivedEvidenceLine: "    エビデンス: {summary}",
       replayNoSession:
-        "セッションが接続されていません — `/replay` はセッションごとです。プロジェクトで `reasonix code` を実行するとセッションが取得できます。",
+        "セッションが接続されていません — `/replay` はセッションごとです。プロジェクトで `reasonix-code code` を実行するとセッションが取得できます。",
       replayNoArchives:
         "このセッションにはまだアーカイブ済みプランがありません — プランが完了すると `/replay` が使えるようになります（全ステップ完了時に自動アーカイブ）。",
       replayInvalidIndex:
@@ -1291,9 +1296,9 @@ export const JA: TranslationSchema = {
     },
     jobs: {
       ...EN.handlers.jobs,
-      codeOnly: "/jobs は `reasonix code` 内でのみ利用可能です。",
-      killCodeOnly: "/kill は `reasonix code` 内でのみ利用可能です。",
-      logsCodeOnly: "/logs は `reasonix code` 内でのみ利用可能です。",
+      codeOnly: "/jobs は `reasonix-code code` 内でのみ利用可能です。",
+      killCodeOnly: "/kill は `reasonix-code code` 内でのみ利用可能です。",
+      logsCodeOnly: "/logs は `reasonix-code code` 内でのみ利用可能です。",
       empty:
         "◈ jobs · 0 実行中 · 0 合計\n  （run_background がスポーンします — 開発サーバー、ウォッチャー、長時間スクリプト）",
       header: "◈ jobs · {running} 実行中 · {total} 合計",
@@ -1352,17 +1357,18 @@ export const JA: TranslationSchema = {
     mcp: {
       ...EN.handlers.mcp,
       noServers:
-        'MCPサーバーが接続されていません。`reasonix setup` を実行して選択するか、--mcp "<spec>" で起動してください。`reasonix mcp list` でカタログを表示します。注意: モデル起動のシェルコマンドは呼び出しごとに制御されます（allow once / allow always / deny）— 全許可フラグはありません。',
+        'MCPサーバーが接続されていません。`reasonix-code setup` を実行して選択するか、--mcp "<spec>" で起動してください。`reasonix-code mcp list` でカタログを表示します。注意: モデル起動のシェルコマンドは呼び出しごとに制御されます（allow once / allow always / deny）— 全許可フラグはありません。',
       toolsLabel: "  tools     {count}",
       resourcesHint: "`/resource` で閲覧+読取",
       promptsHint: "`/prompt` で閲覧+取得",
       awarenessOnly:
         "チャットモードは現在ツールのみ利用; リソースとプロンプトは参照用にここに表示されています。",
       catalogHint:
-        "完全なカタログ: `reasonix mcp list` · 詳細診断: `reasonix mcp inspect <spec>`。",
+        "完全なカタログ: `reasonix-code mcp list` · 詳細診断: `reasonix-code mcp inspect <spec>`。",
       fallbackServers: "MCPサーバー ({count}):",
       fallbackTools: "登録済みツール ({count}):",
-      fallbackChange: "このセットを変更するには、終了して `reasonix setup` を実行してください。",
+      fallbackChange:
+        "このセットを変更するには、終了して `reasonix-code setup` を実行してください。",
       usageDisableEnable:
         "使い方: /mcp {action} <name>  ·  /mcp に表示される名前を選択（匿名サーバーは名前で切り替え不可）。",
       usageReconnect: "使い方: /mcp reconnect <name>  ·  /mcp に表示される名前を選択。",
@@ -1376,7 +1382,7 @@ export const JA: TranslationSchema = {
     init: {
       ...EN.handlers.init,
       codeOnly:
-        "/init はコードモードでのみ動作します（ファイルシステムツールが必要です）。\n初期化したいプロジェクトをルートとして `reasonix code [path]` でセッションを開始し、/init を実行してください。",
+        "/init はコードモードでのみ動作します（ファイルシステムツールが必要です）。\n初期化したいプロジェクトをルートとして `reasonix-code code [path]` でセッションを開始し、/init を実行してください。",
       exists: "▸ REASONIX.md は既に {path} に存在します",
       existsForce: "  /init force   ゼロから再生成（上書き）",
       existsEdit: "  または手動で編集してください — 単なるmarkdownです。現在のファイルは",
@@ -1441,7 +1447,7 @@ export const JA: TranslationSchema = {
         "  · <project>/.reasonix/skills/<name>/SKILL.md  （または <name>.md） — プロジェクトスコープ",
       listGlobalScope:
         "  · ~/.reasonix/skills/<name>/SKILL.md  （または <name>.md） — グローバルスコープ",
-      listProjectOnly: "  （プロジェクトスコープは `reasonix code` 内でのみアクティブ）",
+      listProjectOnly: "  （プロジェクトスコープは `reasonix-code code` 内でのみアクティブ）",
       listFrontmatter:
         "各ファイルのフロントマターには少なくとも `name` と `description` が必要です。",
       listInvoke:
@@ -1744,7 +1750,7 @@ export const JA: TranslationSchema = {
   startup: {
     ...EN.startup,
     codeRooted:
-      '\u25b8 reasonix code: ルート {rootDir}, セッション "{session}" \u00b7 {tools} ネイティブツール{semantic}',
+      '\u25b8 reasonix-code code: ルート {rootDir}, セッション "{session}" \u00b7 {tools} ネイティブツール{semantic}',
     ephemeral: "（エフェメラル）",
     semanticOn: " \u00b7 semantic_search オン",
   },
@@ -1973,7 +1979,7 @@ export const JA: TranslationSchema = {
     verySlow: "非常に低速 \u00b7 {ms}ms",
     slowToast: "\u26a0 MCP `{name}` が低速 \u00b7 直近 {sampleSize} 回の呼び出しで p95 {seconds}秒",
     emptyHint:
-      "\u2139 MCPサーバーが設定されていません \u2014 対処: `reasonix setup` で再選択するか、`reasonix mcp install filesystem` \u00b7 シェルコマンドは毎回確認（allow once / allow always / deny）、全許可フラグなし",
+      "\u2139 MCPサーバーが設定されていません \u2014 対処: `reasonix-code setup` で再選択するか、`reasonix-code mcp install filesystem` \u00b7 シェルコマンドは毎回確認（allow once / allow always / deny）、全許可フラグなし",
   },
   denyContextInput: {
     ...EN.denyContextInput,
@@ -2021,8 +2027,8 @@ export const JA: TranslationSchema = {
     bridged: "\u2713 {name} をインストール - ブリッジ済み",
     bridgeFailed: "\u25b2 {name} をインストール - ブリッジ失敗: {reason}",
     bridgeReloadFailed:
-      "\u2713 {name} をインストール - `reasonix code` を再起動してブリッジ（再読込失敗: {message}）",
-    restartBridge: "\u2713 {name} をインストール - `reasonix code` を再起動してブリッジ",
+      "\u2713 {name} をインストール - `reasonix-code code` を再起動してブリッジ（再読込失敗: {message}）",
+    restartBridge: "\u2713 {name} をインストール - `reasonix-code code` を再起動してブリッジ",
     needsEnv: "  \u00b7  要環境変数: {env}",
     badgeOfficial: "[公式]",
     badgeSmithery: "[smt]",
@@ -2037,7 +2043,7 @@ export const JA: TranslationSchema = {
     ...EN.mcpBrowser,
     title: "\u25c8 MCP ブラウザ",
     empty:
-      "MCPサーバーが接続されていません。`reasonix setup` を実行して選択するか、--mcp で起動してください。",
+      "MCPサーバーが接続されていません。`reasonix-code setup` を実行して選択するか、--mcp で起動してください。",
     serverCount: "{count} サーバー",
     footer: "\u2191\u2193 選択 \u00b7 [r] 再接続 \u00b7 [d] 無効化 \u00b7 esc 終了",
   },
@@ -2068,9 +2074,9 @@ export const JA: TranslationSchema = {
     reconnectDetail: "切断中 \u00b7 再ハンドシェイク \u00b7 ツール一覧取得",
     disabledDetail: "/mcp disable {name} 経由",
     failedSetupHint:
-      "→ `reasonix setup` を実行してこのエントリを削除するか、根本的な問題（npmパッケージ不足、ネットワークなど）を修正してください。",
+      "→ `reasonix-code setup` を実行してこのエントリを削除するか、根本的な問題（npmパッケージ不足、ネットワークなど）を修正してください。",
     failedSetupConfigHint:
-      "→ `reasonix setup` を実行して、保存された設定から壊れたエントリを削除してください。",
+      "→ `reasonix-code setup` を実行して、保存された設定から壊れたエントリを削除してください。",
     abortedHint:
       "MCP起動が中断されました — {count} サーバーがスキップされました。根本的な問題を修正した後、/mcp で再試行してください。",
     toolsReady: "ツール準備完了",
@@ -2099,7 +2105,7 @@ export const JA: TranslationSchema = {
   },
   diffApp: {
     ...EN.diffApp,
-    title: "reasonix diff",
+    title: "reasonix-code diff",
     turnLabel: "ターン {turn} ({current}/{total})",
     turnsAligned: "{count} ターンが一致",
     paneEmpty: "（この側にはこのターンのレコードがありません）",
@@ -2181,19 +2187,19 @@ export const JA: TranslationSchema = {
     moreAvailable: "さらに利用可能",
     allLoaded: "全件読み込み済み",
     morePagesAvailable:
-      "\u25b8 さらにページがあります \u2014 `reasonix mcp list --pages <n>` または --all",
-    installHint: "インストール:  reasonix mcp install <name>",
-    usageSearch: "使い方: reasonix mcp search <query>",
-    usageInstall: "使い方: reasonix mcp install <name>",
+      "\u25b8 さらにページがあります \u2014 `reasonix-code mcp list --pages <n>` または --all",
+    installHint: "インストール:  reasonix-code mcp install <name>",
+    usageSearch: "使い方: reasonix-code mcp search <query>",
+    usageInstall: "使い方: reasonix-code mcp install <name>",
     noMatchesFor: '{count} 件の読み込み済みエントリ中に "{q}" の一致はありません（{source}）',
     matchCount: '{source} レジストリで "{q}" に {count} 件一致（{loaded} エントリをスキャン）:',
     moreLoaded:
-      "\u2026 さらに {count} 件読み込み済み \u2014 `reasonix mcp search <query>` でフィルタしてください",
+      "\u2026 さらに {count} 件読み込み済み \u2014 `reasonix-code mcp search <query>` でフィルタしてください",
     moreMatches: "\u2026 さらに {count} 件一致",
     installed: "インストール済み: {spec}",
     noServerFound:
       '{source} レジストリの {pages} ページを走査しましたが、"{target}" という名前のMCPサーバーは見つかりませんでした。',
-    noServerTryMore: "試す: reasonix mcp install {target} --max-pages 100",
+    noServerTryMore: "試す: reasonix-code mcp install {target} --max-pages 100",
     noInstallMeta:
       '"{name}" のインストールメタデータを導出できませんでした \u2014 `npx -y @smithery/cli install {name}` を直接試してください。',
     buildSpecFailed: "{name} のインストール仕様を構築できません: {message}",

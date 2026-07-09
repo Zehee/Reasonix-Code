@@ -30,7 +30,7 @@ export interface LoopEvent {
   severity?: EventSeverity;
   reasoningDelta?: string;
   toolName?: string;
-  /** Raw args JSON — needed by `reasonix diff` to explain why a tool was called. */
+  /** Raw args JSON — needed by `reasonix-code diff` to explain why a tool was called. */
   toolArgs?: string;
   /** Cumulative arguments-string length for `role === "tool_call_delta"`. */
   toolCallArgsChars?: number;

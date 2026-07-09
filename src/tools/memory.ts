@@ -51,7 +51,7 @@ export function registerMemoryTools(
           type: "string",
           enum: ["global", "project"],
           description:
-            "global = across all projects; project = current sandbox only (needs `reasonix code`).",
+            "global = across all projects; project = current sandbox only (needs `reasonix-code code`).",
         },
         name: {
           type: "string",
@@ -92,7 +92,7 @@ export function registerMemoryTools(
       if (args.scope === "project" && !hasProject) {
         return JSON.stringify({
           error:
-            "scope='project' is unavailable in this session (no sandbox root). Retry with scope='global', or ask the user to switch to `reasonix code` for project-scoped memory.",
+            "scope='project' is unavailable in this session (no sandbox root). Retry with scope='global', or ask the user to switch to `reasonix-code code` for project-scoped memory.",
         });
       }
       try {

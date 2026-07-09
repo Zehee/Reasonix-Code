@@ -7,7 +7,7 @@ import { t } from "../../i18n/index.js";
 import { FG, TONE } from "./theme/tokens.js";
 
 export interface WelcomeBannerProps {
-  /** True when running `reasonix code`. Surfaces code-mode hints. */
+  /** True when running `reasonix-code code`. Surfaces code-mode hints. */
   inCodeMode?: boolean;
   /** Pinned workspace root — only meaningful in code mode. Surfaced so first-time users see they can pass --dir at next launch. */
   workspaceRoot?: string;

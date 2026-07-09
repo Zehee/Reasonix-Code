@@ -53,7 +53,7 @@ export async function handlePermissions(
       status: 503,
       body: {
         error:
-          "no active project — mutations require an attached dashboard session (run `/dashboard` from inside `reasonix code`).",
+          "no active project — mutations require an attached dashboard session (run `/dashboard` from inside `reasonix-code code`).",
       },
     };
   }

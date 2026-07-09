@@ -323,7 +323,7 @@ export async function mcpInstallCommand(name: string, opts: McpInstallOptions = 
   }
   console.log("");
   console.log(
-    "Use it:  reasonix chat   (or `reasonix code`) — the server will be bridged automatically.",
+    "Use it:  reasonix-code chat   (or `reasonix-code code`) — the server will be bridged automatically.",
   );
 }
 

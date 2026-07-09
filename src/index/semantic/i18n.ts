@@ -91,7 +91,7 @@ const EN = {
   slashEnabledDetail: "  index size: {chunks} chunks across {files} files",
   slashEnabledHowto: "  the model will call semantic_search automatically when it fits.",
   slashIndexMissing: "✗ no index built yet for this project.",
-  slashHowToBuild: "  to enable, exit Reasonix and run in your shell:\n      reasonix index",
+  slashHowToBuild: "  to enable, exit Reasonix and run in your shell:\n      reasonix-code index",
   slashOllamaMissing: "  prerequisite: install Ollama from https://ollama.com",
   slashDaemonDown:
     "  Ollama is installed but the daemon isn't running. start it with: ollama serve",
@@ -135,7 +135,7 @@ const ZH: Partial<Record<keyof typeof EN, string>> = {
   slashEnabledDetail: "  索引规模：{chunks} 个片段，{files} 个文件",
   slashEnabledHowto: "  模型在合适的时候会自动调用 semantic_search。",
   slashIndexMissing: "✗ 当前项目还没有索引。",
-  slashHowToBuild: "  启用方式：退出 Reasonix，在终端运行：\n      reasonix index",
+  slashHowToBuild: "  启用方式：退出 Reasonix，在终端运行：\n      reasonix-code index",
   slashOllamaMissing: "  前置依赖：从 https://ollama.com 安装 Ollama",
   slashDaemonDown: "  已装 Ollama 但守护进程未启动，请运行：ollama serve",
   slashIndexInfo:

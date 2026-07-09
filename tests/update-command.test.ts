@@ -1,4 +1,4 @@
-/** reasonix update — pure planUpdate + orchestrator with every side effect mocked via test seams. */
+/** reasonix-code update — pure planUpdate + orchestrator with every side effect mocked via test seams. */
 
 import { describe, expect, it } from "vitest";
 import { planUpdate, updateCommand } from "../src/cli/commands/update.js";
@@ -27,7 +27,7 @@ describe("planUpdate", () => {
   it("emits npm install -g for npm-installed binaries", () => {
     const plan = planUpdate({ current: "0.4.21", latest: "0.4.22", installSource: "npm" });
     expect(plan.action).toBe("run-install");
-    expect(plan.command).toEqual(["npm", "install", "-g", "reasonix@latest"]);
+    expect(plan.command).toEqual(["npm", "install", "-g", "reasonix-code@latest"]);
   });
 
   it("pins npm to the install prefix when one was extracted (nvm/fnm robustness)", () => {
@@ -43,37 +43,37 @@ describe("planUpdate", () => {
       "/Users/me/.nvm/versions/node/v22.11.0",
       "install",
       "-g",
-      "reasonix@latest",
+      "reasonix-code@latest",
     ]);
   });
 
   it("emits bun add -g for bun-installed binaries", () => {
     const plan = planUpdate({ current: "0.4.21", latest: "0.4.22", installSource: "bun" });
     expect(plan.action).toBe("run-install");
-    expect(plan.command).toEqual(["bun", "add", "-g", "reasonix"]);
+    expect(plan.command).toEqual(["bun", "add", "-g", "reasonix-code"]);
     expect(plan.message).toContain("bun");
   });
 
   it("emits pnpm add -g for pnpm-installed binaries", () => {
     const plan = planUpdate({ current: "0.4.21", latest: "0.4.22", installSource: "pnpm" });
     expect(plan.action).toBe("run-install");
-    expect(plan.command).toEqual(["pnpm", "add", "-g", "reasonix@latest"]);
+    expect(plan.command).toEqual(["pnpm", "add", "-g", "reasonix-code@latest"]);
   });
 
   it("emits yarn global add for yarn-installed binaries", () => {
     const plan = planUpdate({ current: "0.4.21", latest: "0.4.22", installSource: "yarn" });
     expect(plan.action).toBe("run-install");
-    expect(plan.command).toEqual(["yarn", "global", "add", "reasonix@latest"]);
+    expect(plan.command).toEqual(["yarn", "global", "add", "reasonix-code@latest"]);
   });
 
   it("returns manual-hint when source cannot be detected — no silent npm fallback", () => {
     const plan = planUpdate({ current: "0.4.21", latest: "0.4.22", installSource: "unknown" });
     expect(plan.action).toBe("manual-hint");
     expect(plan.command).toBeUndefined();
-    expect(plan.message).toContain("npm install -g reasonix@latest");
+    expect(plan.message).toContain("npm install -g reasonix-code@latest");
     expect(plan.message).toContain("bun add -g reasonix");
-    expect(plan.message).toContain("pnpm add -g reasonix@latest");
-    expect(plan.message).toContain("yarn global add reasonix@latest");
+    expect(plan.message).toContain("pnpm add -g reasonix-code@latest");
+    expect(plan.message).toContain("yarn global add reasonix-code@latest");
   });
 });
 
@@ -142,7 +142,7 @@ describe("updateCommand", () => {
       exit: h.exit,
       spawnInstall: h.spawnInstall,
     });
-    expect(h.spawnCalls).toEqual([["npm", "install", "-g", "reasonix@latest"]]);
+    expect(h.spawnCalls).toEqual([["npm", "install", "-g", "reasonix-code@latest"]]);
     expect(h.exitCode).toBeUndefined();
   });
 
@@ -156,7 +156,7 @@ describe("updateCommand", () => {
       exit: h.exit,
       spawnInstall: h.spawnInstall,
     });
-    expect(h.spawnCalls).toEqual([["bun", "add", "-g", "reasonix"]]);
+    expect(h.spawnCalls).toEqual([["bun", "add", "-g", "reasonix-code"]]);
   });
 
   it("refuses with manual hint and exits 1 when source cannot be detected", async () => {
@@ -171,7 +171,7 @@ describe("updateCommand", () => {
     });
     const joined = h.output.join("");
     expect(joined).toContain("could not be determined");
-    expect(joined).toContain("npm install -g reasonix@latest");
+    expect(joined).toContain("npm install -g reasonix-code@latest");
     expect(joined).toContain("bun add -g reasonix");
     expect(h.spawnCalls).toHaveLength(0);
     expect(h.exitCode).toBe(1);

@@ -6,25 +6,25 @@ Every shell subcommand, every TUI slash command, every keybinding. The in-app `/
 
 ## Shell subcommands
 
-Run `reasonix --help` (or any subcommand with `--help`) for the full flag list. Headline subcommands:
+Run `reasonix-code --help` (or any subcommand with `--help`) for the full flag list. Headline subcommands:
 
 | Subcommand | What it does |
 |---|---|
-| `reasonix code [dir]` | Code-mode TUI — file edits, plan mode, edit-gate, project-scoped sessions |
-| `reasonix chat` | Chat-only TUI — no filesystem access, no code mode |
-| `reasonix run <task>` | Headless run — read prompt, execute, exit (CI-friendly) |
-| `reasonix setup` | Interactive first-run config (API key, language, theme) |
-| `reasonix sessions [name]` | List or open a saved session |
-| `reasonix prune-sessions` | Drop sessions older than `--days N` |
-| `reasonix replay <transcript>` | Re-render a JSONL transcript without calling the model |
-| `reasonix diff <a> <b>` | Compare two transcripts (cost / cache / tokens) |
-| `reasonix events <name>` | Tail the event log for a session |
-| `reasonix stats [transcript]` | One-shot cost / cache breakdown |
-| `reasonix doctor` | Health check — API reach, config, hooks, project |
-| `reasonix commit` | `git add -A && git commit` with an LLM-written message |
-| `reasonix mcp <list\|search\|install\|inspect\|browse>` | MCP server management |
-| `reasonix index` | Build the local semantic index (Ollama or OpenAI-compatible embeddings) |
-| `reasonix version` / `reasonix update` | Version info + upgrade hint |
+| `reasonix-code code [dir]` | Code-mode TUI — file edits, plan mode, edit-gate, project-scoped sessions |
+| `reasonix-code chat` | Chat-only TUI — no filesystem access, no code mode |
+| `reasonix-code run <task>` | Headless run — read prompt, execute, exit (CI-friendly) |
+| `reasonix-code setup` | Interactive first-run config (API key, language, theme) |
+| `reasonix-code sessions [name]` | List or open a saved session |
+| `reasonix-code prune-sessions` | Drop sessions older than `--days N` |
+| `reasonix-code replay <transcript>` | Re-render a JSONL transcript without calling the model |
+| `reasonix-code diff <a> <b>` | Compare two transcripts (cost / cache / tokens) |
+| `reasonix-code events <name>` | Tail the event log for a session |
+| `reasonix-code stats [transcript]` | One-shot cost / cache breakdown |
+| `reasonix-code doctor` | Health check — API reach, config, hooks, project |
+| `reasonix-code commit` | `git add -A && git commit` with an LLM-written message |
+| `reasonix-code mcp <list\|search\|install\|inspect\|browse>` | MCP server management |
+| `reasonix-code index` | Build the local semantic index (Ollama or OpenAI-compatible embeddings) |
+| `reasonix-code version` / `reasonix-code update` | Version info + upgrade hint |
 
 ### Notable runtime flags (chat / code)
 

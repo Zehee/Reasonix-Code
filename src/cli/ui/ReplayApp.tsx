@@ -1,5 +1,5 @@
 /**
- * Ink TUI for `reasonix replay`. Read-only: no input box, no loop.
+ * Ink TUI for `reasonix-code replay`. Read-only: no input box, no loop.
  * j/k navigation across turn-pages, cumulative stats sidebar updates
  * as you move through time.
  *

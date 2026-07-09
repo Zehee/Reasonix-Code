@@ -1,4 +1,4 @@
-/** `reasonix events <name>` formatter — per-event-type detail rendering + filter / projection flags. */
+/** `reasonix-code events <name>` formatter — per-event-type detail rendering + filter / projection flags. */
 
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

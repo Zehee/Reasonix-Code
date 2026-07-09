@@ -60,7 +60,7 @@ describe("isNpxInstall", () => {
   });
 
   it("detects _npx path fragment", () => {
-    process.argv[1] = "/Users/x/.npm/_npx/abc123/node_modules/.bin/reasonix";
+    process.argv[1] = "/Users/x/.npm/_npx/abc123/node_modules/.bin/reasonix-code";
     // biome-ignore lint/performance/noDelete: cover the no-env case
     delete process.env.npm_config_user_agent;
     expect(isNpxInstall()).toBe(true);
@@ -73,7 +73,7 @@ describe("isNpxInstall", () => {
   });
 
   it("returns false for plain global install", () => {
-    process.argv[1] = "/usr/local/lib/node_modules/reasonix/dist/cli/index.js";
+    process.argv[1] = "/usr/local/lib/node_modules/reasonix-code/dist/cli/index.js";
     // biome-ignore lint/performance/noDelete: cover the no-env case
     delete process.env.npm_config_user_agent;
     expect(isNpxInstall()).toBe(false);
@@ -81,8 +81,8 @@ describe("isNpxInstall", () => {
 });
 
 describe("detectInstallSource", () => {
-  it("identifies npm via lib/node_modules/reasonix", () => {
-    expect(detectInstallSource("/usr/local/lib/node_modules/reasonix/dist/cli/index.js")).toBe(
+  it("identifies npm via lib/node_modules/reasonix-code", () => {
+    expect(detectInstallSource("/usr/local/lib/node_modules/reasonix-code/dist/cli/index.js")).toBe(
       "npm",
     );
   });
@@ -90,7 +90,7 @@ describe("detectInstallSource", () => {
   it("identifies npm via Windows %APPDATA%/npm path", () => {
     expect(
       detectInstallSource(
-        "C:\\Users\\me\\AppData\\Roaming\\npm\\node_modules\\reasonix\\dist\\cli\\index.js",
+        "C:\\Users\\me\\AppData\\Roaming\\npm\\node_modules\\reasonix-code\\dist\\cli\\index.js",
       ),
     ).toBe("npm");
   });
@@ -98,14 +98,16 @@ describe("detectInstallSource", () => {
   it("identifies npm via nvm path", () => {
     expect(
       detectInstallSource(
-        "/Users/me/.nvm/versions/node/v22.11.0/lib/node_modules/reasonix/dist/cli/index.js",
+        "/Users/me/.nvm/versions/node/v22.11.0/lib/node_modules/reasonix-code/dist/cli/index.js",
       ),
     ).toBe("npm");
   });
 
   it("identifies bun via .bun install dir", () => {
     expect(
-      detectInstallSource("/Users/me/.bun/install/global/node_modules/reasonix/dist/cli/index.js"),
+      detectInstallSource(
+        "/Users/me/.bun/install/global/node_modules/reasonix-code/dist/cli/index.js",
+      ),
     ).toBe("bun");
   });
 
@@ -120,19 +122,23 @@ describe("detectInstallSource", () => {
   it("identifies pnpm via pnpm/global", () => {
     expect(
       detectInstallSource(
-        "/Users/me/.local/share/pnpm/global/5/node_modules/reasonix/dist/cli/index.js",
+        "/Users/me/.local/share/pnpm/global/5/node_modules/reasonix-code/dist/cli/index.js",
       ),
     ).toBe("pnpm");
   });
 
   it("identifies yarn via yarn/global", () => {
     expect(
-      detectInstallSource("/Users/me/.config/yarn/global/node_modules/reasonix/dist/cli/index.js"),
+      detectInstallSource(
+        "/Users/me/.config/yarn/global/node_modules/reasonix-code/dist/cli/index.js",
+      ),
     ).toBe("yarn");
   });
 
   it("identifies npx via _npx fragment", () => {
-    expect(detectInstallSource("/Users/me/.npm/_npx/abc/node_modules/.bin/reasonix")).toBe("npx");
+    expect(detectInstallSource("/Users/me/.npm/_npx/abc/node_modules/.bin/reasonix-code")).toBe(
+      "npx",
+    );
   });
 
   it("returns unknown for paths that match no known pattern", () => {
@@ -146,15 +152,15 @@ describe("detectInstallSource", () => {
 
 describe("detectNpmInstallPrefix", () => {
   it("extracts the prefix from a POSIX lib/node_modules path", () => {
-    expect(detectNpmInstallPrefix("/usr/local/lib/node_modules/reasonix/dist/cli/index.js")).toBe(
-      "/usr/local",
-    );
+    expect(
+      detectNpmInstallPrefix("/usr/local/lib/node_modules/reasonix-code/dist/cli/index.js"),
+    ).toBe("/usr/local");
   });
 
   it("extracts the prefix from an nvm-style path", () => {
     expect(
       detectNpmInstallPrefix(
-        "/Users/me/.nvm/versions/node/v22.11.0/lib/node_modules/reasonix/dist/cli/index.js",
+        "/Users/me/.nvm/versions/node/v22.11.0/lib/node_modules/reasonix-code/dist/cli/index.js",
       ),
     ).toBe("/Users/me/.nvm/versions/node/v22.11.0");
   });
@@ -162,7 +168,7 @@ describe("detectNpmInstallPrefix", () => {
   it("extracts the prefix from a Windows %APPDATA%/npm path", () => {
     expect(
       detectNpmInstallPrefix(
-        "C:\\Users\\me\\AppData\\Roaming\\npm\\node_modules\\reasonix\\dist\\cli\\index.js",
+        "C:\\Users\\me\\AppData\\Roaming\\npm\\node_modules\\reasonix-code\\dist\\cli\\index.js",
       ),
     ).toBe("C:/Users/me/AppData/Roaming/npm");
   });

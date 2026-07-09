@@ -264,7 +264,7 @@ export interface AppProps {
   };
   /**
    * When set, parse SEARCH/REPLACE blocks from assistant responses and
-   * apply them to disk under `rootDir`. Set by `reasonix code`. The
+   * apply them to disk under `rootDir`. Set by `reasonix-code code`. The
    * optional `jobs` registry enables /jobs + /kill slashes in the TUI
    * and the status-bar "N jobs running" indicator.
    */
@@ -970,7 +970,7 @@ function AppInner({
   if (transcript && !transcriptRef.current) {
     transcriptRef.current = openTranscriptFile(transcript, {
       version: 1,
-      source: "reasonix chat",
+      source: "reasonix-code chat",
       model,
       startedAt: new Date().toISOString(),
     });
@@ -2242,7 +2242,7 @@ function AppInner({
    */
   const startWalkthrough = useCallback((): string => {
     if (!codeMode) {
-      return "/walk is only available inside `reasonix code`.";
+      return "/walk is only available inside `reasonix-code code`.";
     }
     if (pendingEdits.current.length === 0) {
       return "nothing pending - nothing to walk through.";
@@ -4694,7 +4694,7 @@ function AppInner({
                         onSwitchSession(outcome.name);
                       } else {
                         log.pushInfo(
-                          `to switch to "${outcome.name}", quit and run: reasonix chat --session ${outcome.name}`,
+                          `to switch to "${outcome.name}", quit and run: reasonix-code chat --session ${outcome.name}`,
                         );
                       }
                       return;
@@ -4705,7 +4705,7 @@ function AppInner({
                         onSwitchSession(freshSessionName(session));
                       } else {
                         log.pushInfo(
-                          "to start a fresh session, quit and run: reasonix chat (no --session flag)",
+                          "to start a fresh session, quit and run: reasonix-code chat (no --session flag)",
                         );
                       }
                       return;

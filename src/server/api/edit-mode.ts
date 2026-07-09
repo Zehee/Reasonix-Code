@@ -34,7 +34,7 @@ export async function handleEditMode(
     if (!ctx.setEditMode) {
       return {
         status: 503,
-        body: { error: "edit-mode mutation requires an attached `reasonix code` session." },
+        body: { error: "edit-mode mutation requires an attached `reasonix-code code` session." },
       };
     }
     const { mode } = parseBody(body);

@@ -233,9 +233,9 @@ fn home_dir() -> Option<PathBuf> {
 
 fn cli_names() -> &'static [&'static str] {
     if cfg!(windows) {
-        &["reasonix.exe", "reasonix-code.exe"]
+        &["reasonix-code.exe"]
     } else {
-        &["reasonix", "reasonix-code"]
+        &["reasonix-code"]
     }
 }
 
@@ -272,64 +272,6 @@ fn find_cli() -> Option<PathBuf> {
         }
     }
     None
-}
-
-fn install_script_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    // Production: bundled resource. Dev: repo-root install.ps1.
-    let candidates: Vec<Option<PathBuf>> = vec![
-        app.path()
-            .resource_dir()
-            .ok()
-            .map(|d| d.join("install.ps1")),
-        std::env::current_dir()
-            .ok()
-            .map(|d| d.join("install.ps1")),
-        std::env::current_exe()
-            .ok()
-            .and_then(|exe| exe.parent().map(Path::to_path_buf))
-            .map(|d| d.join("install.ps1")),
-    ];
-    for candidate in candidates.into_iter().flatten() {
-        if candidate.exists() {
-            return Ok(candidate);
-        }
-    }
-    Err("install.ps1 not found".into())
-}
-
-fn install_cli(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let ps1 = install_script_path(app)?;
-
-    #[cfg(windows)]
-    {
-        let mut cmd = Command::new("powershell.exe");
-        cmd.args([
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            &ps1.to_string_lossy(),
-            "-Force",
-        ]);
-        cmd.stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .stdin(Stdio::null());
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-
-        let output = cmd.output().map_err(|e| format!("failed to run installer: {e}"))?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("install.ps1 failed: {stderr}"));
-        }
-        return find_cli().ok_or_else(|| "CLI not found after running install.ps1".into());
-    }
-
-    #[cfg(not(windows))]
-    {
-        let _ = ps1;
-        Err("Reasonix CLI is not installed. Please install it manually from https://github.com/Zehee/Reasonix-Code/releases".into())
-    }
 }
 
 fn parse_dashboard_url(line: &str) -> Option<String> {
@@ -440,10 +382,10 @@ fn start_backend(app: &tauri::AppHandle, state: &DesktopState) {
     };
     thread::spawn(move || {
         let result: Result<(), String> = (|| {
-            let cli = match find_cli() {
-                Some(p) => p,
-                None => install_cli(&app)?,
-            };
+            let cli = find_cli().ok_or(
+                "reasonix-code CLI not found. Please install it with:\n\
+                 powershell -ExecutionPolicy Bypass -File install.ps1",
+            )?;
             let cwd = std::env::current_dir().map_err(|e| format!("no current directory: {e}"))?;
             spawn_tui(&app, &state, &cli, &cwd)
         })();

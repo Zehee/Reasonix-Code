@@ -1,11 +1,10 @@
 {
   "name": "reasonix-code",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "DeepSeek-native coding agent: cache-first loop, flash-first cost control, tool-call repair.",
   "type": "module",
   "bin": {
-    "reasonix": "dist/cli/index.js",
-    "dsnix": "dist/cli/index.js"
+    "reasonix-code": "dist/cli/index.js"
   },
   "main": "./dist/index.js",
   "module": "./dist/index.js",

@@ -18,7 +18,7 @@ const PROXY_ENV_KEYS = [
 const NO_PROXY_ENV_KEYS = ["NO_PROXY", "no_proxy"] as const;
 
 // Loopback bypass protects the dashboard, MCP stdio sidecars' HTTP probes, and
-// `reasonix doctor` reachability checks; non-negotiable.
+// `reasonix-code doctor` reachability checks; non-negotiable.
 const LOOPBACK_NO_PROXY = ["localhost", "127.0.0.1", "::1"] as const;
 
 // DeepSeek's API origin is in CN; routing it through a user's clash/v2ray

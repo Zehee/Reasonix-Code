@@ -1,4 +1,4 @@
-/** `reasonix doctor --json` — structured report shape and exit-code semantics. */
+/** `reasonix-code doctor --json` — structured report shape and exit-code semantics. */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

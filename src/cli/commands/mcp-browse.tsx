@@ -1,4 +1,4 @@
-/** `reasonix mcp browse` — Ink TUI for the MCP marketplace. Lazy-loads pages on scroll. */
+/** `reasonix-code mcp browse` — Ink TUI for the MCP marketplace. Lazy-loads pages on scroll. */
 
 import { Box, Text, render, useApp, useInput } from "ink";
 import React, { useCallback, useEffect, useMemo, useState } from "react";

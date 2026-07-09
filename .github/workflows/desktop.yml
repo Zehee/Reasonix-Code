@@ -29,18 +29,6 @@ jobs:
         working-directory: desktop
         run: npm ci --ignore-scripts
 
-      - name: Build Node binary (bun compile)
-        run: bun build ./src/cli/index.ts --compile --outfile desktop/src-tauri/binaries/node.exe
-
-      - name: Verify Node binary size
-        run: |
-          $size = (Get-Item "desktop/src-tauri/binaries/node.exe").Length
-          if ($size -lt 1048576) {  # 1 MB
-            Write-Error "Node binary too small: $size bytes (min 1 MB)"
-            exit 1
-          }
-          Write-Host "Node binary size: $([math]::Round($size / 1MB, 1)) MB"
-
       - name: Build Tauri app
         working-directory: desktop
         run: npm run tauri build
@@ -67,18 +55,6 @@ jobs:
       - name: Install desktop dependencies
         working-directory: desktop
         run: npm ci --ignore-scripts
-
-      - name: Build Node binary (bun compile)
-        run: bun build ./src/cli/index.ts --compile --outfile desktop/src-tauri/binaries/node
-
-      - name: Verify Node binary size
-        run: |
-          SIZE=$(stat -f%z "desktop/src-tauri/binaries/node" 2>/dev/null || stat --format=%s "desktop/src-tauri/binaries/node")
-          if [ "$SIZE" -lt 1048576 ]; then
-            echo "Node binary too small: $SIZE bytes (min 1 MB)"
-            exit 1
-          fi
-          echo "Node binary size: $(echo "scale=1; $SIZE / 1048576" | bc) MB"
 
       - name: Build Tauri app
         working-directory: desktop
@@ -117,18 +93,6 @@ jobs:
       - name: Install desktop dependencies
         working-directory: desktop
         run: npm ci --ignore-scripts
-
-      - name: Build Node binary (bun compile)
-        run: bun build ./src/cli/index.ts --compile --outfile desktop/src-tauri/binaries/node
-
-      - name: Verify Node binary size
-        run: |
-          SIZE=$(stat --format=%s "desktop/src-tauri/binaries/node")
-          if [ "$SIZE" -lt 1048576 ]; then
-            echo "Node binary too small: $SIZE bytes (min 1 MB)"
-            exit 1
-          fi
-          echo "Node binary size: $(echo "scale=1; $SIZE / 1048576" | bc) MB"
 
       - name: Build Tauri app
         working-directory: desktop

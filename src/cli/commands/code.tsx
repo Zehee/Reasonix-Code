@@ -1,4 +1,4 @@
-/** `reasonix code [dir]` — native filesystem tools + code system prompt, wraps `chat`. */
+/** `reasonix-code code [dir]` — native filesystem tools + code system prompt, wraps `chat`. */
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -60,7 +60,7 @@ export async function codeCommand(opts: CodeOptions = {}): Promise<void> {
   const resolvedModel = opts.model?.trim() || loadModel() || DEFAULT_MODEL;
   // Bridge .env + ~/.reasonix/config.json into process.env so buildCodeToolset's
   // eager DeepSeekClient constructions (subagent client; semantic embedder) can
-  // pick up a key the user already configured via `reasonix setup`. chatCommand
+  // pick up a key the user already configured via `reasonix-code setup`. chatCommand
   // does the same dance — code.tsx wraps chatCommand but must also seed env
   // before buildCodeToolset runs, which is BEFORE chatCommand.
   loadDotenv();

@@ -1,5 +1,5 @@
 /**
- * Ink TUI for `reasonix diff`. Split-pane: A on the left, B on the right,
+ * Ink TUI for `reasonix-code diff`. Split-pane: A on the left, B on the right,
  * shared cursor. Header shows aggregate deltas; footer shows the current
  * pair's divergence note (if any) + key cheat sheet.
  *

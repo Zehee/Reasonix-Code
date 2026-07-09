@@ -8,7 +8,7 @@
  * Run from the repo root:
  *   npx tsx examples/replay-and-diff.ts
  *
- * Anything you can do with `reasonix replay` / `reasonix diff` is available
+ * Anything you can do with `reasonix-code replay` / `reasonix-code diff` is available
  * here as a function you can drive from your own scripts (CI gates, eval
  * dashboards, blog post generation, etc.).
  */
@@ -51,7 +51,7 @@ const report = diffTranscripts(
 );
 
 // renderDiffSummary returns a monochrome stdout-ready string. Equivalent to
-// what `reasonix diff --print` outputs.
+// what `reasonix-code diff --print` outputs.
 console.log(renderDiffSummary(report));
 
 // ---------- 3. Direct programmatic access to pairs ----------

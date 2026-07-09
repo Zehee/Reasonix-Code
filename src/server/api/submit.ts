@@ -29,7 +29,7 @@ export async function handleSubmit(
       status: 503,
       body: {
         error:
-          "submit requires an attached dashboard session — open `/dashboard` from inside `reasonix code` or `reasonix chat`.",
+          "submit requires an attached dashboard session — open `/dashboard` from inside `reasonix-code code` or `reasonix-code chat`.",
       },
     };
   }

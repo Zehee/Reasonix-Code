@@ -204,7 +204,7 @@ export interface ReasonixConfig {
   /** Canonical MCP server configuration — merges with and overrides legacy `mcp`/`mcpEnv`/`mcpDisabled`. */
   mcpServers?: Record<string, McpServerConfig>;
   session?: string | null;
-  /** When false, each `reasonix code` / `reasonix chat` launch starts a fresh session instead
+  /** When false, each `reasonix-code code` / `reasonix-code chat` launch starts a fresh session instead
    *  of resuming the last one (#2238). Default true preserves existing behavior. */
   autoResumeSession?: boolean;
   setupCompleted?: boolean;

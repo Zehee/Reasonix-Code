@@ -369,7 +369,7 @@ function reduceRaw(state: State, action: Action): State {
         queuedSends: [],
         messages: [
           ...state.messages,
-          { kind: "error", message: `reasonix exited (code ${action.code ?? "?"})` },
+          { kind: "error", message: `reasonix-code exited (code ${action.code ?? "?"})` },
         ],
       };
     case "incoming":
@@ -3112,7 +3112,7 @@ export function App() {
           }
         }),
         listen<{ data: string }>("rpc:stderr", (e) => {
-          console.warn("[reasonix stderr]", e.payload.data);
+          console.warn("[reasonix-code stderr]", e.payload.data);
         }),
         listen<{ code: number | null }>("rpc:exit", (e) => {
           for (const tabId of dispatchersRef.current.keys()) flushTabDeltas(tabId);

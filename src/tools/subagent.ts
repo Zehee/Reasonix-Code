@@ -451,7 +451,7 @@ export function formatSubagentResult(r: SubagentResult): string {
   });
 }
 
-/** Library surface only — `reasonix code` uses Skills `runAs: subagent` as the user-facing path. */
+/** Library surface only — `reasonix-code code` uses Skills `runAs: subagent` as the user-facing path. */
 export function registerSubagentTool(
   parentRegistry: ToolRegistry,
   opts: SubagentToolOptions,

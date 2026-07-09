@@ -91,7 +91,7 @@ Only read a file in full when it is small (under a few hundred lines) or you alr
 
 # Workspace is pinned
 
-You can't switch project / working directory mid-session — tell the user to quit and relaunch (e.g. `cd ../other-project && reasonix code`). Don't try `cd` via `run_command` either; the sandbox is pinned and `cd` doesn't carry between calls.
+You can't switch project / working directory mid-session — tell the user to quit and relaunch (e.g. `cd ../other-project && reasonix-code code`). Don't try `cd` via `run_command` either; the sandbox is pinned and `cd` doesn't carry between calls.
 
 # Foreground vs background
 
@@ -196,7 +196,7 @@ transcripts/
 sessions/
 *.jsonl
 !tests/**/*.jsonl
-# Committed reference transcripts so readers can reasonix replay / diff
+# Committed reference transcripts so readers can reasonix-code replay / diff
 # the v0.1 bench results without an API key.
 !benchmarks/tau-bench/transcripts/
 !benchmarks/tau-bench/transcripts/*.jsonl

@@ -39,7 +39,7 @@ export interface WizardProps {
   onCancel?: () => void;
   /** Skip the API-key step if a key already exists (env or config). */
   existingApiKey?: string;
-  /** Force the API-key step so `reasonix setup` can replace a saved key. */
+  /** Force the API-key step so `reasonix-code setup` can replace a saved key. */
   forceApiKeyStep?: boolean;
   /** Verifies the submitted key before the wizard can continue. */
   validateApiKey?: (apiKey: string) => Promise<ApiKeyValidationResult>;

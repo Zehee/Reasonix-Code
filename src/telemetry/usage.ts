@@ -196,7 +196,7 @@ function isValidRecord(rec: unknown): rec is UsageRecord {
   );
 }
 
-/** One row of the `reasonix stats` dashboard — a rolled-up window. */
+/** One row of the `reasonix-code stats` dashboard — a rolled-up window. */
 export interface UsageBucket {
   label: string;
   /** Start of the window as epoch millis. `0` = unbounded (all-time). */

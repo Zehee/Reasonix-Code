@@ -166,7 +166,7 @@ export async function handleMcp(
         status: 503,
         body: {
           error:
-            "live MCP reload not wired in this session — restart `reasonix code` to apply spec edits.",
+            "live MCP reload not wired in this session — restart `reasonix-code code` to apply spec edits.",
         },
       };
     }

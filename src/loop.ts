@@ -106,7 +106,7 @@ export interface CacheFirstLoopOptions {
   session?: string;
   /** PreToolUse + PostToolUse only — UserPromptSubmit / Stop live at the App boundary. */
   hooks?: ResolvedHook[];
-  /** `cwd` reported to hooks; `reasonix code` sets this to the sandbox root, not shell home. */
+  /** `cwd` reported to hooks; `reasonix-code code` sets this to the sandbox root, not shell home. */
   hookCwd?: string;
   /** PauseGate bridge — defaults to singleton, injectable for tests. */
   confirmationGate?: PauseGate;

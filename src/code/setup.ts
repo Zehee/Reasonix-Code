@@ -112,7 +112,7 @@ export async function buildCodeToolset(opts: CodeToolsetOpts): Promise<CodeTools
     registerJavaSourceTool(tools, { projectRoot: opts.rootDir });
   }
   // Lazy: constructing DeepSeekClient throws when DEEPSEEK_API_KEY is unset,
-  // which would kill `reasonix code` before the setup wizard can prompt for
+  // which would kill `reasonix-code code` before the setup wizard can prompt for
   // one. Defer to first subagent dispatch — by then the user has either keyed
   // in or we error per-call instead of at boot.
   let subagentClient: DeepSeekClient | null = null;
@@ -138,7 +138,7 @@ export async function buildCodeToolset(opts: CodeToolsetOpts): Promise<CodeTools
         // Late-bound: the TUI's `useSubagent` writes the live callback into
         // SHARED_SUBAGENT_SINK after mount. Until then `.current` is null
         // and the events are silently dropped — that's fine for non-TUI
-        // callers (`reasonix chat --transcript`, library use).
+        // callers (`reasonix-code chat --transcript`, library use).
         sink: opts.subagentSink ?? SHARED_SUBAGENT_SINK,
       });
       return formatSubagentResult(result);

@@ -29,7 +29,7 @@ describe("formatLoopError", () => {
     );
     const out = formatLoopError(raw);
     expect(out).toMatch(/Authentication failed/);
-    expect(out).toMatch(/reasonix setup/);
+    expect(out).toMatch(/reasonix-code setup/);
     expect(out).toMatch(/DEEPSEEK_API_KEY/);
     // Inner error.message survives the unwrap
     expect(out).toContain("Your api key is invalid");
@@ -218,7 +218,7 @@ describe("formatLoopError — zh-CN runtime switch", () => {
     );
     expect(out).toContain("认证失败");
     expect(out).toContain("Authentication Fails");
-    expect(out).toContain("reasonix setup");
+    expect(out).toContain("reasonix-code setup");
   });
 });
 

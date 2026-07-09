@@ -3,6 +3,16 @@
 All notable changes to Reasonix. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] — 2026-07-09
+
+**CLI renamed to `reasonix-code`.** The command entry point is now `reasonix-code`; the old `reasonix` and `dsnix` bin aliases have been removed. README, docs, examples, dashboard i18n, internal help strings, and the test suite have been updated to use the new name.
+
+**Desktop shell now downloads the CLI at install time.** The desktop installer no longer bundles a Node binary. Instead, the NSIS `postinstall` hook downloads and executes `install.ps1` from the latest GitHub release, which installs `reasonix-code.exe` and its runtime dependencies (Node, SQLite). `main.rs` only locates the installed `reasonix-code.exe` and still honours the `REASONIX_CLI` environment override.
+
+**Install script refresh.** `install.ps1` now installs `reasonix-code.exe`, compares the local version with the latest GitHub release, prompts before updating, supports a `-Silent` switch, and runs a `--version` health check after download.
+
+**GitHub Actions desktop workflow simplified.** Removed the Node binary compilation and bundling steps; the desktop runner now only builds the Tauri shell and lets the installer fetch the CLI on the end-user machine.
+
 ## [0.1.5] — 2026-07-09
 
 **Desktop shell cleanup.** Removed per-platform Tauri config files, `desktop/tsconfig.json`, `tauri-dev.cmd`, and the obsolete `sync-desktop-version.mjs` script. `tauri.conf.json` now bundles for Windows (NSIS), macOS (DMG), and Linux (DEB).

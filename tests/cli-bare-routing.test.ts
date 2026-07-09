@@ -111,7 +111,7 @@ describe("bare CLI routing", () => {
     );
   });
 
-  it("keeps explicit reasonix chat in chat mode even inside a project", async () => {
+  it("keeps explicit reasonix-code chat in chat mode even inside a project", async () => {
     writeConfig({ setupCompleted: true }, join(home, ".reasonix", "config.json"));
     writeFileSync(join(cwd, "package.json"), "{}\n", "utf8");
 

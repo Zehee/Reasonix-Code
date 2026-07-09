@@ -41,22 +41,23 @@ export const ru: TranslationSchema = {
   },
   stats: {
     ...EN.stats,
-    usageHint: "запусти `reasonix chat`, `reasonix code` или `reasonix run <task>` — каждый шаг",
-    usageDetail: "добавляет одну строку в лог, а `reasonix stats` сводит всё вместе.",
+    usageHint:
+      "запусти `reasonix-code chat`, `reasonix-code code` или `reasonix-code run <task>` — каждый шаг",
+    usageDetail: "добавляет одну строку в лог, а `reasonix-code stats` сводит всё вместе.",
   },
   run: {
     ...EN.run,
     missingApiKey:
       "DEEPSEEK_API_KEY не задан и stdin не TTY (нельзя запросить).\n" +
-      "Установи переменную окружения или запусти `reasonix chat` один раз для сохранения ключа.\n",
+      "Установи переменную окружения или запусти `reasonix-code chat` один раз для сохранения ключа.\n",
   },
   sessions: {
     ...EN.sessions,
     emptyHint:
-      "ещё нет сохранённых сессий — запусти `reasonix chat` (сессии авто-сохраняются, если не указан --no-session).",
+      "ещё нет сохранённых сессий — запусти `reasonix-code chat` (сессии авто-сохраняются, если не указан --no-session).",
     listHeader: "Сохранённые сессии (~/.reasonix/sessions/):",
-    inspectHint: "Просмотр:  reasonix sessions <имя>",
-    resumeHint: "Возобновить: reasonix chat --session <имя>",
+    inspectHint: "Просмотр:  reasonix-code sessions <имя>",
+    resumeHint: "Возобновить: reasonix-code chat --session <имя>",
     noSession: 'нет сессии "{name}" (или она пуста).',
     lookedAt: "просмотрено: {path}",
     noIdleSessions: "нет неактивных сессий ≥{days} дн. Ничего не удалено.",
@@ -127,7 +128,7 @@ export const ru: TranslationSchema = {
     jsonHintReport: "вывести отчёт проверки в JSON",
     modelOverrideFlash: "переопределить модель (по умолч.: deepseek-v4-flash)",
     skipConfirmHint: "пропустить запрос подтверждения",
-    welcome: "Запускай `reasonix` в любое время — настройки сохраняются.",
+    welcome: "Запускай `reasonix-code` в любое время — настройки сохраняются.",
     taglineChat: "Нативный агент DeepSeek",
     taglineCode: "Нативный кодинг-агент DeepSeek",
     taglineSub: "кэш-первый · flash-первый",
@@ -300,7 +301,7 @@ export const ru: TranslationSchema = {
       description:
         "подключить, проверить или отключить QQ-канал для этой сессии (первое подключение проводит через App ID / App Secret настройку)",
     },
-    setup: { ...EN.slash.setup, description: "напоминает выйти и запустить `reasonix setup`" },
+    setup: { ...EN.slash.setup, description: "напоминает выйти и запустить `reasonix-code setup`" },
     semantic: {
       ...EN.slash.semantic,
       description: "показать статус semantic_search — построен? Ollama установлен? как включить",

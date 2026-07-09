@@ -41,22 +41,23 @@ export const de: TranslationSchema = {
   },
   stats: {
     ...EN.stats,
-    usageHint: "Führe `reasonix chat`, `reasonix code` oder `reasonix run <task>` aus – jeden Turn",
-    usageDetail: "Hängt eine Zeile an das Log an; `reasonix stats` fasst sie zusammen.",
+    usageHint:
+      "Führe `reasonix-code chat`, `reasonix-code code` oder `reasonix-code run <task>` aus – jeden Turn",
+    usageDetail: "Hängt eine Zeile an das Log an; `reasonix-code stats` fasst sie zusammen.",
   },
   run: {
     ...EN.run,
     missingApiKey:
       "DEEPSEEK_API_KEY ist nicht gesetzt und stdin ist kein TTY (Nachfrage nicht möglich).\n" +
-      "Setze die Umgebungsvariable oder starte einmal interaktiv `reasonix chat`, um einen Schlüssel zu speichern.\n",
+      "Setze die Umgebungsvariable oder starte einmal interaktiv `reasonix-code chat`, um einen Schlüssel zu speichern.\n",
   },
   sessions: {
     ...EN.sessions,
     emptyHint:
-      "Noch keine gespeicherten Sitzungen – starte `reasonix chat` (Sitzungen werden automatisch gespeichert, außer mit --no-session).",
+      "Noch keine gespeicherten Sitzungen – starte `reasonix-code chat` (Sitzungen werden automatisch gespeichert, außer mit --no-session).",
     listHeader: "Gespeicherte Sitzungen (~/.reasonix/sessions/):",
-    inspectHint: "Ansehen:       reasonix sessions <name>",
-    resumeHint: "Fortsetzen:    reasonix chat --session <name>",
+    inspectHint: "Ansehen:       reasonix-code sessions <name>",
+    resumeHint: "Fortsetzen:    reasonix-code chat --session <name>",
     noSession: 'Keine Sitzung namens "{name}" (oder sie ist leer).',
     lookedAt: "Angesehen: {path}",
     noIdleSessions: "Keine Sitzungen seit >= {days} Tagen inaktiv. Nichts bereinigt.",
@@ -136,7 +137,7 @@ export const de: TranslationSchema = {
     yoloHint:
       "Plan-Checkpoints für diesen Aufruf automatisch genehmigen (entspricht editMode=yolo, ohne die Konfiguration zu ändern)",
     welcome:
-      "Starte jederzeit `reasonix`, um zu chatten – deine Einstellungen bleiben gespeichert.",
+      "Starte jederzeit `reasonix-code`, um zu chatten – deine Einstellungen bleiben gespeichert.",
     taglineChat: "DeepSeek-nativer Agent",
     taglineCode: "DeepSeek-nativer Coding-Agent",
     taglineSub: "cache-first · flash-first",
@@ -328,7 +329,10 @@ export const de: TranslationSchema = {
       description:
         "QQ-Kanal verbinden, inspizieren oder trennen (erste Verbindung führt durch App-ID / App-Secret-Setup)",
     },
-    setup: { ...EN.slash.setup, description: "Erinnert dich daran, `reasonix setup` auszuführen" },
+    setup: {
+      ...EN.slash.setup,
+      description: "Erinnert dich daran, `reasonix-code setup` auszuführen",
+    },
     semantic: {
       ...EN.slash.semantic,
       description:
@@ -760,7 +764,7 @@ export const de: TranslationSchema = {
       "Context-Überlauf (DeepSeek 400): Sitzungsverlauf ist {requested}, über dem Prompt-Limit des Modells (V4: 1M Tokens; legacy chat/reasoner: 131k). Meist ist ein einzelnes Tool-Ergebnis zu groß geworden. Reasonix begrenzt neue Tool-Ergebnisse auf 8k Tokens und heilt überdimensionierte Verläufe automatisch beim Sitzungsladen – ein Neustart behebt es oft. Falls es weiterhin überläuft, führe /new für einen frischen Start aus oder öffne /sessions und drücke [d], um diese Sitzung zu löschen.",
     contextOverflowTooMany: "Zu viele Tokens",
     auth401:
-      "Authentifizierung fehlgeschlagen (DeepSeek 401): {inner}. Dein API-Schlüssel wird abgewiesen. Behebe mit `reasonix setup` oder `export DEEPSEEK_API_KEY=sk-...`. Erhalte einen unter https://platform.deepseek.com/api_keys.",
+      "Authentifizierung fehlgeschlagen (DeepSeek 401): {inner}. Dein API-Schlüssel wird abgewiesen. Behebe mit `reasonix-code setup` oder `export DEEPSEEK_API_KEY=sk-...`. Erhalte einen unter https://platform.deepseek.com/api_keys.",
     balance402:
       "Kontoguthaben aufgebraucht (DeepSeek 402): {inner}. Lade auf unter https://platform.deepseek.com/top_up — der Panel-Header zeigt dein Guthaben, sobald es nicht Null ist.",
     badparam422: "Ungültiger Parameter (DeepSeek 422): {inner}",
@@ -844,8 +848,9 @@ export const de: TranslationSchema = {
         "                             Abschluss-Satzzeichen (./,/)) werden automatisch entfernt.",
       helpSessionsTitle: "Sitzungen (standardmäßig aktiviert, heißen 'default'):",
       helpSessionCustom:
-        "  reasonix chat --session <name>   eine andere benannte Sitzung verwenden",
-      helpSessionNone: "  reasonix chat --no-session       Persistenz für diesen Lauf deaktivieren",
+        "  reasonix-code chat --session <name>   eine andere benannte Sitzung verwenden",
+      helpSessionNone:
+        "  reasonix-code chat --no-session       Persistenz für diesen Lauf deaktivieren",
       retryNone: "Nichts zu wiederholen — keine vorherige Benutzernachricht im Log dieser Sitzung.",
       retryInfo: '▸ wiederhole: "{preview}"',
       loopTuiOnly: "/loop ist nur in der interaktiven TUI verfügbar (nicht in run/replay).",
@@ -946,14 +951,15 @@ export const de: TranslationSchema = {
       updateRetryHint:
         "hat einen frischen Registry-Abruf ausgelöst — versuche `/update` in ein paar Sekunden erneut,",
       updateRetryHint2:
-        "oder führe `reasonix update` in einem anderen Terminal aus, um es synchron zu erzwingen.",
+        "oder führe `reasonix-code update` in einem anderen Terminal aus, um es synchron zu erzwingen.",
       updateLatest: "Neueste:  reasonix {version}",
       updateUpToDate: "Du bist auf dem neuesten Stand. Nichts zu tun.",
       updateNpxHint:
-        "Du verwendest npx — der nächste `npx reasonix ...`-Start lädt automatisch die neueste Version.",
+        "Du verwendest npx — der nächste `npx reasonix-code ...`-Start lädt automatisch die neueste Version.",
       updateNpxForce: "Um früher zu aktualisieren: `npm cache clean --force`.",
       updateUpgradeHint: "Zum Aktualisieren beende diese Sitzung und führe aus:",
-      updateUpgradeCmd1: "  reasonix update           (interaktiv, --dry-run wird unterstützt)",
+      updateUpgradeCmd1:
+        "  reasonix-code update           (interaktiv, --dry-run wird unterstützt)",
       updateUpgradeCmd2: "  {command}   (direkt)",
       updateInSessionDisabled:
         "Die Installation innerhalb einer Sitzung ist bewusst deaktiviert — der Installationsprozess würde",
@@ -967,19 +973,19 @@ export const de: TranslationSchema = {
     edits: {
       ...EN.handlers.edits,
       undoCodeOnly:
-        "/undo ist nur innerhalb von `reasonix code` verfügbar — der Chat-Modus wendet keine Edits an.",
-      historyCodeOnly: "/history ist nur innerhalb von `reasonix code` verfügbar.",
-      showCodeOnly: "/show ist nur innerhalb von `reasonix code` verfügbar.",
+        "/undo ist nur innerhalb von `reasonix-code code` verfügbar — der Chat-Modus wendet keine Edits an.",
+      historyCodeOnly: "/history ist nur innerhalb von `reasonix-code code` verfügbar.",
+      showCodeOnly: "/show ist nur innerhalb von `reasonix-code code` verfügbar.",
       applyCodeOnly:
-        "/apply ist nur innerhalb von `reasonix code` verfügbar (hier gibt es nichts anzuwenden).",
-      discardCodeOnly: "/discard ist nur innerhalb von `reasonix code` verfügbar.",
+        "/apply ist nur innerhalb von `reasonix-code code` verfügbar (hier gibt es nichts anzuwenden).",
+      discardCodeOnly: "/discard ist nur innerhalb von `reasonix-code code` verfügbar.",
       planCodeOnly:
-        "/plan ist nur innerhalb von `reasonix code` verfügbar — der Chat-Modus blockiert keine Tool-Schreibzugriffe.",
+        "/plan ist nur innerhalb von `reasonix-code code` verfügbar — der Chat-Modus blockiert keine Tool-Schreibzugriffe.",
       planOn:
         "▸ Plan-Modus EIN — Schreibwerkzeuge sind blockiert; das Modell MUSS `submit_plan` aufrufen, bevor etwas ausgeführt wird. (Das Modell kann auch eigenständig submit_plan für große Aufgaben aufrufen, selbst wenn der Plan-Modus aus ist — dieser Schalter ist die strengere, explizite Einschränkung.) Tippe /plan off zum Verlassen.",
       planOff:
         "▸ Plan-Modus AUS — Schreibwerkzeuge sind wieder aktiv. Modelle können weiterhin eigenständig Pläne für große Aufgaben vorschlagen.",
-      modeCodeOnly: "/mode ist nur innerhalb von `reasonix code` verfügbar.",
+      modeCodeOnly: "/mode ist nur innerhalb von `reasonix-code code` verfügbar.",
       modeUsage: "Verwendung: /mode <review|auto|yolo>   (Shift+Tab schaltet auch um)",
       modeYolo:
         "▸ Edit-Modus: YOLO — Edits UND Shell-Befehle auto-ausführen ohne Nachfrage. /undo macht Edits immer noch rückgängig. Vorsicht.",
@@ -987,12 +993,12 @@ export const de: TranslationSchema = {
         "▸ Edit-Modus: AUTO — Edits werden sofort angewandt; drücke u innerhalb von 5s zum Rückgängigmachen, oder /undo später. Shell-Befehle fragen weiterhin.",
       modeReview: "▸ Edit-Modus: review — Edits warten auf /apply (oder y) / /discard (oder n)",
       commitCodeOnly:
-        "/commit ist nur innerhalb von `reasonix code` verfügbar (benötigt ein Git-Repo als Wurzel).",
+        "/commit ist nur innerhalb von `reasonix-code code` verfügbar (benötigt ein Git-Repo als Wurzel).",
       commitUsage:
         'Verwendung: /commit "deine Commit-Nachricht"  — führt `git add -A && git commit -m "…"` in {root} aus',
-      walkCodeOnly: "/walk ist nur innerhalb von `reasonix code` verfügbar.",
+      walkCodeOnly: "/walk ist nur innerhalb von `reasonix-code code` verfügbar.",
       checkpointCodeOnly:
-        "/checkpoint ist nur innerhalb von `reasonix code` verfügbar — der Chat-Modus wendet keine Edits an.",
+        "/checkpoint ist nur innerhalb von `reasonix-code code` verfügbar — der Chat-Modus wendet keine Edits an.",
       checkpointNone:
         "Noch keine Checkpoints — `/checkpoint <name>` sichert jede Datei, die die Sitzung berührt hat. Später mit `/restore <name>` wiederherstellbar.",
       checkpointHeader: "◈ Checkpoints · {count} gespeichert",
@@ -1008,14 +1014,14 @@ export const de: TranslationSchema = {
         '▸ Checkpoint "{name}" gespeichert ({id}) — aber es wurden noch keine Dateien berührt, daher ist es eine leere Basislinie. Nach diesem Punkt vorgenommene Edits können rückgängig gemacht werden.',
       checkpointSaved:
         '▸ Checkpoint "{name}" gespeichert ({id}) — {files} Datei(en), {size} KB. Wiederherstellen: /restore {name}',
-      restoreCodeOnly: "/restore ist nur innerhalb von `reasonix code` verfügbar.",
+      restoreCodeOnly: "/restore ist nur innerhalb von `reasonix-code code` verfügbar.",
       restoreUsage: "Verwendung: /restore <name|id>   (siehe /checkpoint list für IDs)",
       restoreNoMatch: '▸ kein Checkpoint gefunden für "{target}" — versuche /checkpoint list',
       restoreInfo: '▸ "{name}" ({id}) wiederhergestellt von {when}',
       restoreWrote: "  · {count} Datei(en) zurückgeschrieben",
       restoreRemoved: "  · {count} Datei(en) entfernt (existierten zum Checkpoint-Zeitpunkt nicht)",
       restoreSkipped: "  ✗ {count} Datei(en) übersprungen:",
-      cwdCodeOnly: "/cwd ist nur innerhalb von `reasonix code` verfügbar.",
+      cwdCodeOnly: "/cwd ist nur innerhalb von `reasonix-code code` verfügbar.",
       cwdUsage:
         "Verwendung: /cwd <pfad>   (aktuelles Root: {current}). Richtet Dateisystem-/Shell-/Memory-Tools auf <pfad> neu aus.",
       cwdUsageNoCurrent: "Verwendung: /cwd <pfad>   richtet den Workspace-Root auf <pfad> neu aus.",
@@ -1048,7 +1054,7 @@ export const de: TranslationSchema = {
     permissions: {
       ...EN.handlers.permissions,
       mutateCodeOnly:
-        "/permissions add / remove / clear sind nur innerhalb von `reasonix code` verfügbar — sie bearbeiten die projektbezogene Allowlist (`~/.reasonix/config.json` projects[<root>].shellAllowed).",
+        "/permissions add / remove / clear sind nur innerhalb von `reasonix-code code` verfügbar — sie bearbeiten die projektbezogene Allowlist (`~/.reasonix/config.json` projects[<root>].shellAllowed).",
       addUsage:
         'Verwendung: /permissions add <präfix>   (mehrere Tokens OK: /permissions add "git push origin")',
       addAlready: "▸ bereits erlaubt: {prefix}",
@@ -1170,7 +1176,7 @@ export const de: TranslationSchema = {
     plans: {
       ...EN.handlers.plans,
       noSession:
-        "Keine Sitzung angehängt — `/plans` ist pro Sitzung. Führe `reasonix code` in einem Projekt aus, um eine Sitzung zu erhalten.",
+        "Keine Sitzung angehängt — `/plans` ist pro Sitzung. Führe `reasonix-code code` in einem Projekt aus, um eine Sitzung zu erhalten.",
       activePlan:
         "▸ aktiver Plan{label} — {done}/{total} Schritt(e) erledigt · zuletzt bearbeitet {when}",
       activeNone: "▸ aktiver Plan: (keiner)",
@@ -1182,7 +1188,7 @@ export const de: TranslationSchema = {
       evidenceLine: "  Nachweis {stepId}: {summary}",
       archivedEvidenceLine: "    Nachweis: {summary}",
       replayNoSession:
-        "Keine Sitzung angehängt — `/replay` ist pro Sitzung. Führe `reasonix code` in einem Projekt aus, um eine Sitzung zu erhalten.",
+        "Keine Sitzung angehängt — `/replay` ist pro Sitzung. Führe `reasonix-code code` in einem Projekt aus, um eine Sitzung zu erhalten.",
       replayNoArchives:
         "Noch keine archivierten Pläne für diese Sitzung — `/replay` wird aktiv, sobald ein Plan abgeschlossen ist (auto-archiviert wenn alle Schritte erledigt).",
       replayInvalidIndex:
@@ -1204,9 +1210,9 @@ export const de: TranslationSchema = {
     },
     jobs: {
       ...EN.handlers.jobs,
-      codeOnly: "/jobs ist nur innerhalb von `reasonix code` verfügbar.",
-      killCodeOnly: "/kill ist nur innerhalb von `reasonix code` verfügbar.",
-      logsCodeOnly: "/logs ist nur innerhalb von `reasonix code` verfügbar.",
+      codeOnly: "/jobs ist nur innerhalb von `reasonix-code code` verfügbar.",
+      killCodeOnly: "/kill ist nur innerhalb von `reasonix-code code` verfügbar.",
+      logsCodeOnly: "/logs ist nur innerhalb von `reasonix-code code` verfügbar.",
       empty:
         "◈ Jobs · 0 laufend · 0 gesamt\n  (run_background startet einen — Dev-Server, Watcher, langlebige Skripte)",
       header: "◈ Jobs · {running} laufend · {total} gesamt",
@@ -1266,17 +1272,17 @@ export const de: TranslationSchema = {
     mcp: {
       ...EN.handlers.mcp,
       noServers:
-        'Keine MCP-Server angehängt. Führe `reasonix setup` aus, um welche auszuwählen, oder starte mit --mcp "<spec>". `reasonix mcp list` zeigt den Katalog. Hinweis: vom Modell aufgerufene Shell-Befehle werden pro Aufruf abgefragt (einmal erlauben / immer erlauben / ablehnen) — kein globales Allow-All-Flag.',
+        'Keine MCP-Server angehängt. Führe `reasonix-code setup` aus, um welche auszuwählen, oder starte mit --mcp "<spec>". `reasonix-code mcp list` zeigt den Katalog. Hinweis: vom Modell aufgerufene Shell-Befehle werden pro Aufruf abgefragt (einmal erlauben / immer erlauben / ablehnen) — kein globales Allow-All-Flag.',
       toolsLabel: "  Tools     {count}",
       resourcesHint: "`/resource` zum Durchsuchen+Lesen",
       promptsHint: "`/prompt` zum Durchsuchen+Abrufen",
       awarenessOnly:
         "Der Chat-Modus verbraucht Tools aktuell; Ressourcen+Prompts werden hier zur Information angezeigt.",
       catalogHint:
-        "Vollständiger Katalog: `reasonix mcp list` · tiefere Diagnose: `reasonix mcp inspect <spec>`.",
+        "Vollständiger Katalog: `reasonix-code mcp list` · tiefere Diagnose: `reasonix-code mcp inspect <spec>`.",
       fallbackServers: "MCP-Server ({count}):",
       fallbackTools: "Tools im Register ({count}):",
-      fallbackChange: "Um diesen Satz zu ändern, beende und führe `reasonix setup` aus.",
+      fallbackChange: "Um diesen Satz zu ändern, beende und führe `reasonix-code setup` aus.",
       usageDisableEnable:
         "Verwendung: /mcp {action} <name>  ·  wähle einen in /mcp angezeigten Namen (anonyme Server können nicht nach Namen umgeschaltet werden).",
       usageReconnect:
@@ -1291,7 +1297,7 @@ export const de: TranslationSchema = {
     init: {
       ...EN.handlers.init,
       codeOnly:
-        "/init funktioniert nur im Code-Modus (es benötigt Dateisystem-Werkzeuge).\nFühre `reasonix code [pfad]` aus, um eine Sitzung zu starten, die im\nProjekt verwurzelt ist, das du initialisieren möchtest, und führe dann /init aus.",
+        "/init funktioniert nur im Code-Modus (es benötigt Dateisystem-Werkzeuge).\nFühre `reasonix-code code [pfad]` aus, um eine Sitzung zu starten, die im\nProjekt verwurzelt ist, das du initialisieren möchtest, und führe dann /init aus.",
       exists: "▸ REASONIX.md existiert bereits unter {path}",
       existsForce: "  /init force   von Grund auf neu generieren (überschreibt)",
       existsEdit: "  Oder bearbeite es von Hand — es ist nur Markdown. Die aktuelle Datei wird",
@@ -1356,7 +1362,7 @@ export const de: TranslationSchema = {
         "  · <projekt>/.reasonix/skills/<name>/SKILL.md  (oder <name>.md)  — Projekt-Bereich",
       listGlobalScope:
         "  · ~/.reasonix/skills/<name>/SKILL.md  (oder <name>.md)  — globaler Bereich",
-      listProjectOnly: "  (Projekt-Bereich ist nur in `reasonix code` aktiv)",
+      listProjectOnly: "  (Projekt-Bereich ist nur in `reasonix-code code` aktiv)",
       listFrontmatter: "Die Frontmatter jeder Datei benötigt mindestens `name` und `description`.",
       listInvoke:
         "Führe einen Skill aus mit `/skill <name> [args]` oder indem du das Modell bittest, `run_skill` aufzurufen.",
@@ -1658,7 +1664,7 @@ export const de: TranslationSchema = {
   startup: {
     ...EN.startup,
     codeRooted:
-      '▸ reasonix code: verwurzelt in {rootDir}, Sitzung "{session}" · {tools} native Tool{s}{semantic}',
+      '▸ reasonix-code code: verwurzelt in {rootDir}, Sitzung "{session}" · {tools} native Tool{s}{semantic}',
     ephemeral: "(ephemer)",
     semanticOn: " · Semantic-Search an",
   },
@@ -1877,7 +1883,7 @@ export const de: TranslationSchema = {
     verySlow: "Sehr langsam · {ms}ms",
     slowToast: "⚠ MCP `{name}` langsam · {seconds}s p95 über die letzten {sampleSize} Aufrufe",
     emptyHint:
-      "ℹ keine MCP-Server konfiguriert — versuche: `reasonix setup` zur erneuten Auswahl, oder `reasonix mcp install filesystem` · Shell-Befehle werden pro Aufruf abgefragt (einmal erlauben / immer erlauben / ablehnen), kein globales Allow-All",
+      "ℹ keine MCP-Server konfiguriert — versuche: `reasonix-code setup` zur erneuten Auswahl, oder `reasonix-code mcp install filesystem` · Shell-Befehle werden pro Aufruf abgefragt (einmal erlauben / immer erlauben / ablehnen), kein globales Allow-All",
   },
   denyContextInput: {
     ...EN.denyContextInput,
@@ -1925,8 +1931,8 @@ export const de: TranslationSchema = {
     bridged: "✓ {name} installiert - verbunden",
     bridgeFailed: "▲ {name} installiert - Verbindung fehlgeschlagen: {reason}",
     bridgeReloadFailed:
-      "✓ {name} installiert - starte `reasonix code` neu zur Verbindung (Neuladen fehlgeschlagen: {message})",
-    restartBridge: "✓ {name} installiert - starte `reasonix code` neu zur Verbindung",
+      "✓ {name} installiert - starte `reasonix-code code` neu zur Verbindung (Neuladen fehlgeschlagen: {message})",
+    restartBridge: "✓ {name} installiert - starte `reasonix-code code` neu zur Verbindung",
     needsEnv: "  ·  benötigt Umgebungsvariable: {env}",
     badgeOfficial: "[off]",
     badgeSmithery: "[smt]",
@@ -1941,7 +1947,7 @@ export const de: TranslationSchema = {
     ...EN.mcpBrowser,
     title: "◈ MCP-Browser",
     empty:
-      "Keine MCP-Server angehängt. Führe `reasonix setup` aus, um welche auszuwählen, oder starte mit --mcp.",
+      "Keine MCP-Server angehängt. Führe `reasonix-code setup` aus, um welche auszuwählen, oder starte mit --mcp.",
     serverCount: "{count} Server",
     footer: "↑↓ auswählen · [r] neu verbinden · [d] deaktivieren · Esc beenden",
   },
@@ -1972,9 +1978,9 @@ export const de: TranslationSchema = {
     reconnectDetail: "baue ab · neuer Handshake · liste Tools",
     disabledDetail: "via /mcp disable {name}",
     failedSetupHint:
-      "→ führe `reasonix setup` aus, um diesen Eintrag zu entfernen, oder behebe das zugrunde liegende Problem (fehlendes npm-Paket, Netzwerk usw.).",
+      "→ führe `reasonix-code setup` aus, um diesen Eintrag zu entfernen, oder behebe das zugrunde liegende Problem (fehlendes npm-Paket, Netzwerk usw.).",
     failedSetupConfigHint:
-      "→ führe `reasonix setup` aus, um fehlerhafte Einträge aus deiner gespeicherten Konfiguration zu entfernen.",
+      "→ führe `reasonix-code setup` aus, um fehlerhafte Einträge aus deiner gespeicherten Konfiguration zu entfernen.",
     abortedHint:
       "MCP-Start abgebrochen — {count} Server übersprungen. Führe /mcp aus, um es erneut zu versuchen, sobald du das zugrunde liegende Problem behoben hast.",
     toolsReady: "Tools bereit",
@@ -2003,7 +2009,7 @@ export const de: TranslationSchema = {
   },
   diffApp: {
     ...EN.diffApp,
-    title: "reasonix diff",
+    title: "reasonix-code diff",
     turnLabel: "Turn {turn} ({current}/{total})",
     turnsAligned: "{count} Turns ausgerichtet",
     paneEmpty: "(keine Datensätze auf dieser Seite für diesen Turn)",
@@ -2083,18 +2089,19 @@ export const de: TranslationSchema = {
     cachedAge: "Zwischengespeichert, {age}",
     moreAvailable: "Mehr verfügbar",
     allLoaded: "Alle geladen",
-    morePagesAvailable: "▸ mehr Seiten verfügbar — `reasonix mcp list --pages <n>` oder --all",
-    installHint: "Installieren:  reasonix mcp install <name>",
-    usageSearch: "Verwendung: reasonix mcp search <abfrage>",
-    usageInstall: "Verwendung: reasonix mcp install <name>",
+    morePagesAvailable: "▸ mehr Seiten verfügbar — `reasonix-code mcp list --pages <n>` oder --all",
+    installHint: "Installieren:  reasonix-code mcp install <name>",
+    usageSearch: "Verwendung: reasonix-code mcp search <abfrage>",
+    usageInstall: "Verwendung: reasonix-code mcp install <name>",
     noMatchesFor: 'Keine Treffer für "{q}" in {count} geladenen Einträgen ({source})',
     matchCount: '{count} Treffer für "{q}" in {source}-Registry ({loaded} durchsuchte Einträge):',
-    moreLoaded: "… {count} weitere geladen — verwende `reasonix mcp search <abfrage>` zum Filtern",
+    moreLoaded:
+      "… {count} weitere geladen — verwende `reasonix-code mcp search <abfrage>` zum Filtern",
     moreMatches: "… {count} weitere Treffer",
     installed: "Installiert: {spec}",
     noServerFound:
       'Kein MCP-Server namens "{target}" gefunden nach {pages} Seite(n) der {source}-Registry.',
-    noServerTryMore: "Versuche: reasonix mcp install {target} --max-pages 100",
+    noServerTryMore: "Versuche: reasonix-code mcp install {target} --max-pages 100",
     noInstallMeta:
       'Konnte Installationsmetadaten für "{name}" nicht ableiten — versuche `npx -y @smithery/cli install {name}` direkt.',
     buildSpecFailed: "Kann Installationsspec für {name} nicht erstellen: {message}",

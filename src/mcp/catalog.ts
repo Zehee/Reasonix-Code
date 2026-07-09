@@ -3,7 +3,7 @@
 export interface CatalogEntry {
   /** Short name, used as the namespace prefix when suggested. */
   name: string;
-  /** One-line description shown in `reasonix mcp list`. */
+  /** One-line description shown in `reasonix-code mcp list`. */
   summary: string;
   /** npm package id (for `npx -y <pkg>`). */
   package: string;

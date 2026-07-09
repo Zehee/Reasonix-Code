@@ -31,10 +31,10 @@ export interface PlanUpdateInput {
 }
 
 export const MANUAL_UPDATE_COMMANDS: readonly string[] = [
-  "npm install -g reasonix@latest",
-  "bun add -g reasonix",
-  "pnpm add -g reasonix@latest",
-  "yarn global add reasonix@latest",
+  "npm install -g reasonix-code@latest",
+  "bun add -g reasonix-code",
+  "pnpm add -g reasonix-code@latest",
+  "yarn global add reasonix-code@latest",
 ];
 
 /** Pure decision — split out so tests don't need to spawn child processes or hit the network. */
@@ -47,14 +47,14 @@ export function planUpdate(input: PlanUpdateInput): UpdatePlan {
     };
   }
   if (diff === 0) {
-    return { action: "up-to-date", message: `reasonix ${input.current} is up to date.` };
+    return { action: "up-to-date", message: `reasonix-code ${input.current} is up to date.` };
   }
   if (input.installSource === "npx") {
     return {
       action: "npx-hint",
       message: [
-        `reasonix ${input.latest} is available.`,
-        "you're running via npx — the next `npx reasonix ...` launch will auto-fetch",
+        `reasonix-code ${input.latest} is available.`,
+        "you're running via npx — the next `npx reasonix-code ...` launch will auto-fetch",
         "the latest (npx caches packages for a short window). to force a refresh",
         "sooner, clear the cache: `npm cache clean --force`.",
       ].join("\n"),
@@ -64,8 +64,8 @@ export function planUpdate(input: PlanUpdateInput): UpdatePlan {
     return {
       action: "manual-hint",
       message: [
-        `reasonix ${input.latest} is available, but the install source could not be determined automatically.`,
-        "run one of these manually based on how you installed reasonix:",
+        `reasonix-code ${input.latest} is available, but the install source could not be determined automatically.`,
+        "run one of these manually based on how you installed reasonix-code:",
         ...MANUAL_UPDATE_COMMANDS.map((c) => `  ${c}`),
       ].join("\n"),
     };
@@ -73,7 +73,7 @@ export function planUpdate(input: PlanUpdateInput): UpdatePlan {
   const command = buildUpdateCommand(input.installSource, input.npmPrefix ?? null);
   return {
     action: "run-install",
-    message: `upgrading reasonix ${input.current} → ${input.latest} (via ${input.installSource})`,
+    message: `upgrading reasonix-code ${input.current} → ${input.latest} (via ${input.installSource})`,
     command,
   };
 }
@@ -85,14 +85,14 @@ function buildUpdateCommand(
   switch (source) {
     case "npm":
       return npmPrefix
-        ? ["npm", "--prefix", npmPrefix, "install", "-g", "reasonix@latest"]
-        : ["npm", "install", "-g", "reasonix@latest"];
+        ? ["npm", "--prefix", npmPrefix, "install", "-g", "reasonix-code@latest"]
+        : ["npm", "install", "-g", "reasonix-code@latest"];
     case "bun":
-      return ["bun", "add", "-g", "reasonix"];
+      return ["bun", "add", "-g", "reasonix-code"];
     case "pnpm":
-      return ["pnpm", "add", "-g", "reasonix@latest"];
+      return ["pnpm", "add", "-g", "reasonix-code@latest"];
     case "yarn":
-      return ["yarn", "global", "add", "reasonix@latest"];
+      return ["yarn", "global", "add", "reasonix-code@latest"];
   }
 }
 
@@ -137,14 +137,14 @@ export async function updateCommand(opts: UpdateCommandOptions = {}): Promise<vo
   const detectPrefix = opts.detectPrefix ?? (() => detectNpmInstallPrefix());
   const doSpawn = opts.spawnInstall ?? defaultSpawn;
 
-  write(`current: reasonix ${VERSION}\n`);
+  write(`current: reasonix-code ${VERSION}\n`);
   const latest = await fetchLatest();
   if (!latest) {
     write("could not reach registry.npmjs.org — check your network.\n");
     exit(1);
     return;
   }
-  write(`latest:  reasonix ${latest}\n`);
+  write(`latest:  reasonix-code ${latest}\n`);
 
   const installSource = detectSource();
   const npmPrefix = installSource === "npm" ? detectPrefix() : null;
