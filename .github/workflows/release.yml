@@ -29,12 +29,16 @@ jobs:
           npm run build
 
       - name: Publish to npm
-        run: npm publish --access public
+        run: |
+          if npm view reasonix-code@${{ github.ref_name }} version >/dev/null 2>&1; then
+            echo "reasonix-code@${{ github.ref_name }} already published, skipping."
+            exit 0
+          fi
+          npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   build-desktop:
-    needs: publish-npm
     permissions:
       contents: write
     strategy:
