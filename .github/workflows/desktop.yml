@@ -34,18 +34,18 @@ jobs:
         shell: powershell
         run: |
           $exe = Get-ChildItem -Path "desktop/src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1
-          Copy-Item $exe.FullName -Destination "reasonix-desktop-windows.exe"
+          Copy-Item $exe.FullName -Destination "reasonix-code-desktop-windows.exe"
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: reasonix-desktop-windows
-          path: reasonix-desktop-windows.exe
+          name: reasonix-code-desktop-windows
+          path: reasonix-code-desktop-windows.exe
 
       - name: Publish Windows installer to release
         uses: softprops/action-gh-release@v2
         with:
-          files: reasonix-desktop-windows.exe
+          files: reasonix-code-desktop-windows.exe
 
   build-macos:
     runs-on: macos-latest
@@ -69,18 +69,18 @@ jobs:
       - name: Rename installer to stable name
         run: |
           dmg=$(ls desktop/src-tauri/target/release/bundle/dmg/*.dmg | head -n 1)
-          cp "$dmg" reasonix-desktop-macos.dmg
+          cp "$dmg" reasonix-code-desktop-macos.dmg
 
       - name: Upload macOS .dmg
         uses: actions/upload-artifact@v4
         with:
-          name: reasonix-desktop-macos
-          path: reasonix-desktop-macos.dmg
+          name: reasonix-code-desktop-macos
+          path: reasonix-code-desktop-macos.dmg
 
       - name: Publish macOS installer to release
         uses: softprops/action-gh-release@v2
         with:
-          files: reasonix-desktop-macos.dmg
+          files: reasonix-code-desktop-macos.dmg
 
   build-linux:
     runs-on: ubuntu-latest
@@ -114,15 +114,15 @@ jobs:
       - name: Rename installer to stable name
         run: |
           deb=$(ls desktop/src-tauri/target/release/bundle/deb/*.deb | head -n 1)
-          cp "$deb" reasonix-desktop-linux.deb
+          cp "$deb" reasonix-code-desktop-linux.deb
 
       - name: Upload Linux .deb
         uses: actions/upload-artifact@v4
         with:
-          name: reasonix-desktop-linux
-          path: reasonix-desktop-linux.deb
+          name: reasonix-code-desktop-linux
+          path: reasonix-code-desktop-linux.deb
 
       - name: Publish Linux installer to release
         uses: softprops/action-gh-release@v2
         with:
-          files: reasonix-desktop-linux.deb
+          files: reasonix-code-desktop-linux.deb

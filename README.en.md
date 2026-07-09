@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  Desktop downloads: <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-windows.exe">Windows</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-macos.dmg">macOS</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-linux.deb">Linux</a>
+  Desktop downloads: <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-desktop-windows.exe">Windows</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-desktop-macos.dmg">macOS</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-desktop-linux.deb">Linux</a>
 </p>
 
 > **Note:** The desktop app is only a launcher shell; underneath it calls the same `reasonix-code code` TUI / Dashboard loop. If the CLI is already installed, the desktop installer reuses it and just opens the window; otherwise it downloads and configures the CLI first. The `reasonix-code-v*.exe` (~102 MB) on the Release page is the CLI itself; the desktop installer (~2 MB) is just this shell.
