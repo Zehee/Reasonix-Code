@@ -107,23 +107,8 @@ trace_theme "auth-flow"
 
 需要 **Node.js >= 22** 和 npm。
 
-### 通过 npm（推荐）
-
 ```bash
 npm install -g reasonix-code
-```
-
-### Windows（PowerShell 一键脚本）
-
-```powershell
-# 自动检测 Node.js，安装并加入 PATH
-irm https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.ps1 | iex
-```
-
-### macOS / Linux（Shell 一键脚本）
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.sh | sh
 ```
 
 ---

@@ -105,18 +105,10 @@ The original DeepSeek optimization core: automatic prefix caching, flash-model l
 
 ## Installation
 
-### Windows (PowerShell)
+Requires **Node.js >= 22** and npm.
 
-```powershell
-# Download and install (auto-adds to PATH, restart terminal after)
-irm https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.ps1 | iex
-```
-
-### Manual (standalone binary)
-
-```powershell
-# Download the latest release
-iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.6.exe -OutFile reasonix-code.exe
+```bash
+npm install -g reasonix-code
 ```
 
 ---
@@ -126,7 +118,7 @@ iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-cod
 ```bash
 # First run: setup wizard guides you through API key configuration.
 # After that, cd into your project directory and run:
-reasonix              # auto-detects cwd as workspace, enters code mode
+reasonix-code              # auto-detects cwd as workspace, enters code mode
 reasonix-code chat         # interactive chat (no filesystem)
 ```
 
