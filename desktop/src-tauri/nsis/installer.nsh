@@ -6,5 +6,5 @@
   DetailPrint "Checking Reasonix-Code CLI..."
   ; Run the GitHub-hosted install.ps1 in a visible PowerShell window so the
   ; user can see the version comparison prompt and the download progress bar.
-  ExecWait 'powershell.exe -ExecutionPolicy Bypass -Command "Invoke-RestMethod -Uri ''https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.ps1'' | Invoke-Expression"'
+  ExecWait 'powershell.exe -ExecutionPolicy Bypass -Command "iex (irm https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.ps1)"'
 !macroend
