@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="desktop/src-tauri/icons/icon.png" alt="Reasonix-Code" width="200"/>
+  <img src="desktop/icons/source.svg" alt="Reasonix-Code" width="200"/>
 </p>
 
 <p align="center">
@@ -10,18 +10,10 @@
 
 <p align="center">
   <a href="https://github.com/Zehee/Reasonix-Code"><img src="https://img.shields.io/github/v/release/Zehee/Reasonix-Code?style=flat-square&color=3fb950&labelColor=161b22&logo=github&logoColor=white" alt="release"/></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/github/license/Zehee/Reasonix-Code?style=flat-square&color=8b949e&labelColor=161b22" alt="license"/></a>
-  <a href="./package.json"><img src="https://img.shields.io/node/v/reasonix-code.svg?style=flat-square&color=5fa04e&labelColor=161b22&logo=nodedotjs&logoColor=white" alt="node"/></a>
-  <a href="https://github.com/Zehee/Reasonix-Code/stargazers"><img src="https://img.shields.io/github/stars/Zehee/Reasonix-Code?style=flat-square&color=dbab09&labelColor=161b22&logo=github&logoColor=white" alt="stars"/></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Zehee/Reasonix-Code/releases/latest">
-    <img src="https://img.shields.io/badge/Download_CLI-blue?style=for-the-badge&logo=github&label=CLI%20.exe" alt="Download CLI"/>
-  </a>
-  <a href="https://github.com/Zehee/Reasonix-Code/releases/latest">
-    <img src="https://img.shields.io/badge/Download_Desktop-blue?style=for-the-badge&logo=windows&label=Desktop%20.msi" alt="Download Desktop"/>
-  </a>
+  桌面版下载：<a href="https://github.com/Zehee/Reasonix-Code/releases/latest">Windows</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest">macOS</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest">Linux</a>
 </p>
 
 **Reasonix-Code** 是一个轻量、透明、可控的编程 agent，专为需要 AI 记住跨 session 决策的开发者设计——不需要向量数据库、知识图谱、黑盒式的"AI 记忆"，也不需要安装任何 MCP 服务器。
