@@ -3,6 +3,14 @@
 All notable changes to Reasonix. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] — 2026-07-09
+
+**Desktop shell cleanup.** Removed per-platform Tauri config files, `desktop/tsconfig.json`, `tauri-dev.cmd`, and the obsolete `sync-desktop-version.mjs` script. `tauri.conf.json` now bundles for Windows (NSIS), macOS (DMG), and Linux (DEB).
+
+**REASONIX_CLI override.** The desktop shell now reads the `REASONIX_CLI` environment variable to let developers override the bundled CLI path.
+
+**New Reasonix-Code icon.** Source SVG redrawn in green (`#339933`) with a centered `Reasonix-Code` wordmark; all Tauri icon assets regenerated from it.
+
 ## [0.1.4] — 2026-07-08
 
 **Single-jump fold without gradual truncation.** Removed all proactive

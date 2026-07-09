@@ -122,7 +122,7 @@ irm https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.ps1 | iex
 
 ```powershell
 # Download the latest release
-iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.4.exe -OutFile reasonix.exe
+iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.5.exe -OutFile reasonix.exe
 ```
 
 ---
