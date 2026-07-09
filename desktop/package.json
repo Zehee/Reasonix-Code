@@ -7,12 +7,12 @@
     "dev": "node scripts/dev-server.mjs",
     "build": "node scripts/build-shell.mjs",
     "tauri": "tauri",
-    "sync-version": "node scripts/sync-version.mjs"
+    "icon": "tauri icon icons/source.svg"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.1.0"
-  },
-  "dependencies": {
-    "reasonix-code": "file:.."
+    "@resvg/resvg-js": "^2.6.2",
+    "@tauri-apps/cli": "^2.1.0",
+    "icon-gen": "^5.0.0",
+    "sharp": "^0.35.3"
   }
 }

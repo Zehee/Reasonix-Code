@@ -240,6 +240,15 @@ fn cli_names() -> &'static [&'static str] {
 }
 
 fn find_cli() -> Option<PathBuf> {
+    // 0. Allow developers to override the CLI path for debugging.
+    if let Some(override_path) = std::env::var("REASONIX_CLI").ok().filter(|s| !s.is_empty()) {
+        let p = PathBuf::from(override_path);
+        if p.is_file() {
+            return Some(p);
+        }
+        eprintln!("[reasonix] REASONIX_CLI is set but file does not exist: {}", p.display());
+    }
+
     // 1. Known install location used by install.ps1.
     if let Some(home) = home_dir() {
         let install_dir = home.join(".reasonix-code").join("bin");

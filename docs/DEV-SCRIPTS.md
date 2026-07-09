@@ -62,7 +62,6 @@
 |------|------|----------|
 | `coverage-summary.mjs` | 在 GitHub Actions 中读取 coverage-summary.json，写入 Step Summary | CI 中自动运行 |
 | `prepare-tokenizer.ts` | 精简 tokenizer 文件（7.5MB → 1.7MB），仅保留 encode 字段 | `node scripts/prepare-tokenizer.ts <tokenizer.json>` |
-| `sync-desktop-version.mjs` | 同步桌面端版本号（桌面端已移除，仅供历史参考） | `node scripts/sync-desktop-version.mjs [tag]` |
 
 ---
 
