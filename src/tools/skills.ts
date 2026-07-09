@@ -271,7 +271,7 @@ export function registerSkillTools(
           type: "array",
           items: { type: "string" },
           description:
-            "Optional tool allowlist for runAs=subagent (e.g. ['read_file','search_content']).",
+            "Optional tool allowlist for runAs=subagent (e.g. ['read_file','grep']).",
         },
       },
       required: ["name", "description", "body"],

@@ -231,6 +231,29 @@ fn main() {
         ])
         .setup(|app| {
             use tauri::Manager;
+
+            // #1119: Updater pubkey is empty — auto-updates will not be
+            // cryptographically verified. Generate a keypair before release:
+            //   cargo tauri signer generate -w ~/.tauri/reasonix.key
+            // then set the public key in tauri.conf.json's updater.pubkey.
+            // This warning is best-effort; the real check happens at build time.
+            {
+                let ctx = tauri::generate_context!();
+                let updater_config = &ctx.config().plugins.updater;
+                let pubkey_empty = updater_config
+                    .as_ref()
+                    .and_then(|u| u.pubkey.as_deref())
+                    .map(|k| k.is_empty())
+                    .unwrap_or(true);
+                if pubkey_empty {
+                    eprintln!(
+                        "[reasonix] WARNING: updater.pubkey is empty — auto-update artifacts are NOT cryptographically verified.\n\
+                         [reasonix] Generate a signing key: `cargo tauri signer generate -w ~/.tauri/reasonix.key`\n\
+                         [reasonix] Then set the public key in tauri.conf.json's updater.pubkey."
+                    );
+                }
+            }
+
             if let Some(w) = app.get_webview_window("main") {
                 // HiDPI fit: the JSON config asks for 1024x720 logical px.
                 // On Windows laptops at 200% scale (1920x1080 → 960x540
@@ -252,6 +275,18 @@ fn main() {
                         }));
                         let _ = w.center();
                     }
+                }
+                // macOS 透明窗口：默认 macOS 配置启用透明背景（视觉效果更原生）。
+                // 设置 REASONIX_DESKTOP_OPAQUE=1 可强制使用不透明深色背景，
+                // 解决部分 macOS 版本（Ventura/Sonoma）下 WebKit 透明渲染的兼容性问题。
+                #[cfg(target_os = "macos")]
+                if std::env::var("REASONIX_DESKTOP_OPAQUE").is_ok() {
+                    let _ = w.set_background_color(tauri::window::Color {
+                        r: 11,
+                        g: 11,
+                        b: 11,
+                        a: 255,
+                    });
                 }
                 if std::env::var("REASONIX_DEVTOOLS").is_ok() {
                     #[cfg(debug_assertions)]

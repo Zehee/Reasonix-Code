@@ -19,7 +19,7 @@ const SAFE_TOOL_NAMES = new Set([
   "list_directory",
   "directory_tree",
   "search_files",
-  "search_content",
+  "grep",
   "glob",
   "get_file_info",
   "semantic_search",

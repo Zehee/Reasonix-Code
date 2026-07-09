@@ -74,7 +74,7 @@ try {
     list_directory: { path: "." },
     directory_tree: { path: "." },
     search_files: { pattern: "*.ts" },
-    search_content: { pattern: "export", path: "src" },
+    grep: { pattern: "export", path: "src" },
     glob: { pattern: "**/*.ts" },
     get_file_info: { path: "hello.txt" },
     create_directory: { path: "made-by-test" },

@@ -17,7 +17,7 @@ describe("toolKindFor", () => {
   });
 
   it("classifies search tools", () => {
-    expect(toolKindFor("search_content")).toBe("search");
+    expect(toolKindFor("grep")).toBe("search");
     expect(toolKindFor("search_files")).toBe("search");
   });
 

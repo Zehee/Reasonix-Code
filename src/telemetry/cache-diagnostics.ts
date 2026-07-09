@@ -209,7 +209,7 @@ export function renderCacheMissReport(
   ];
   for (const entry of recent) {
     lines.push(
-      `#${entry.turn} ${entry.model} · input ${entry.inputTokens.toLocaleString()} · cached ${entry.cachedTokens.toLocaleString()} · miss ${entry.cacheMissTokens.toLocaleString()} · hit ${pct(entry.cacheHitRate)} · cost ${usd(entry.estimatedCostUsd)} · saved ${usd(entry.savedCostUsd)}`,
+      `#${entry.turn} @ ${formatTimestamp(entry.ts)} · ${entry.model} · input ${entry.inputTokens.toLocaleString()} · cached ${entry.cachedTokens.toLocaleString()} · miss ${entry.cacheMissTokens.toLocaleString()} · hit ${pct(entry.cacheHitRate)} · cost ${usd(entry.estimatedCostUsd)} · saved ${usd(entry.savedCostUsd)}`,
       `  reason: ${entry.missReason} — ${entry.missReasonDetail}`,
       `  prefix: ${short(entry.prefixHash)} · system ${short(entry.systemHash)} · tools ${short(entry.toolSpecsHash)} (${entry.toolCount}) · few-shot ${short(entry.fewShotsHash)}`,
     );
@@ -245,6 +245,17 @@ function looksLikeMcpToolNames(names: readonly string[]): boolean {
 
 function short(hash: string): string {
   return hash.slice(0, 8);
+}
+
+function formatTimestamp(ts: number): string {
+  const d = new Date(ts);
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mi = String(d.getUTCMinutes()).padStart(2, "0");
+  const ss = String(d.getUTCSeconds()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss} UTC`;
 }
 
 function pct(value: number): string {

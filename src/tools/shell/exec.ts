@@ -7,6 +7,27 @@ import { tokenizeCommand } from "./parse.js";
 export const DEFAULT_TIMEOUT_SEC = 60;
 export const DEFAULT_MAX_OUTPUT_CHARS = 32_000;
 
+/** Snip hint for command output — keep both ends because failures usually sit
+ *  at the tail while the command and early context sit at the head. */
+const SNIP_HEAD_LINES = 40;
+const SNIP_TAIL_LINES = 40;
+
+/** Fit head+tail inside the caller's char budget. Keeps early context and
+ *  late failures, which is the usual shape of build/test output. */
+export function snipOutput(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  const marker = "\n\n[… truncated …]\n\n";
+  const contentBudget = Math.max(0, maxChars - marker.length);
+  const headChars = Math.floor(contentBudget / 2);
+  const tailChars = contentBudget - headChars;
+
+  const lines = text.split("\n");
+  const head = lines.slice(0, SNIP_HEAD_LINES).join("\n").slice(0, headChars);
+  const tail = lines.slice(-SNIP_TAIL_LINES).join("\n").slice(-tailChars);
+  return `${head}${marker}${tail}`;
+}
+
+
 /** Kill child + descendants. Windows: taskkill /T /F. Unix: SIGKILL the process group when detached, else fall back to SIGKILL on the leader. */
 export function killProcessTree(child: ChildProcess): void {
   if (!child.pid || child.killed) return;
@@ -164,10 +185,7 @@ export async function runCommand(
       opts.signal?.removeEventListener("abort", onAbort);
       const merged = Buffer.concat(chunks);
       const buf = smartDecodeOutput(merged);
-      const output =
-        buf.length > maxChars
-          ? `${buf.slice(0, maxChars)}\n\n[… truncated ${buf.length - maxChars} chars …]`
-          : buf;
+      const output = snipOutput(buf, maxChars);
       resolve({ exitCode: code, output, timedOut });
     });
   });

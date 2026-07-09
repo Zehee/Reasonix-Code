@@ -46,6 +46,9 @@ function renderSettingsModal(
         lastCallCacheHit: null,
         lastCallCacheMiss: null,
         reservedTokens: 0,
+        logTokens: 0,
+        lastPromptTokens: 0,
+        lastTurnCostUsd: 0,
       }}
       currency="CNY"
       theme="auto"

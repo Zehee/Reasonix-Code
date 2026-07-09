@@ -7,8 +7,6 @@ import { PanelErrorBoundary } from "./error-boundary";
 
 type Tab = "files" | "tools" | "memory" | "rules";
 
-const CONTEXT_MAX_TOKENS = 1_000_000;
-
 export function ContextPanel({
   settings,
   usage,
@@ -31,15 +29,15 @@ export function ContextPanel({
   useLang();
   const [tab, setTab] = useState<Tab>("files");
   const reserved = usage.reservedTokens;
-  // After a warm cache turn the API counts the reserved prefix inside cacheHit;
-  // subtract to keep the bar segments visually disjoint. Cold cache shows the
-  // reserved portion in cacheMiss instead, so do the same for `used`.
-  const cached = Math.max(0, usage.cacheHitTokens - reserved);
-  const used = Math.max(0, usage.cacheMissTokens - Math.max(0, reserved - usage.cacheHitTokens));
-  const reservedPct = Math.min(100, (reserved / CONTEXT_MAX_TOKENS) * 100);
-  const usedPct = Math.min(100, (used / CONTEXT_MAX_TOKENS) * 100);
-  const cachedPct = Math.min(100, (cached / CONTEXT_MAX_TOKENS) * 100);
-  const free = Math.max(0, CONTEXT_MAX_TOKENS - reserved - used - cached);
+  const context = usage.logTokens ?? 0;
+  const ctxMax = usage.contextCapTokens ?? 1_000_000;
+  // Prefer the actual prompt-token count from the last API call; fall back to
+  // the live log estimate when the server hasn't reported usage yet.
+  const totalInWindow =
+    usage.lastPromptTokens > 0 ? usage.lastPromptTokens : reserved + context;
+  const reservedPct = Math.min(100, (reserved / ctxMax) * 100);
+  const contextPct = Math.min(100, (context / ctxMax) * 100);
+  const free = Math.max(0, ctxMax - totalInWindow);
   return (
     <aside className="ctx">
       <div className="ctx-tabs">
@@ -62,14 +60,13 @@ export function ContextPanel({
           <div className="h">
             <span>{t("contextPanel.contextTokens")}</span>
             <span className="right">
-              {(reserved + used + cached).toLocaleString()} /{" "}
-              {CONTEXT_MAX_TOKENS.toLocaleString()}
+              {totalInWindow.toLocaleString()} /{" "}
+              {ctxMax.toLocaleString()}
             </span>
           </div>
           <div className="meter">
             <span className="rsvd" style={{ width: `${reservedPct}%` }} />
-            <span className="cached" style={{ width: `${cachedPct}%` }} />
-            <span className="used" style={{ width: `${usedPct}%` }} />
+            <span className="used" style={{ width: `${contextPct}%` }} />
           </div>
           <div className="legend">
             <span className="l">
@@ -77,12 +74,8 @@ export function ContextPanel({
               {t("contextPanel.reservedKey")} <span className="v">{reserved.toLocaleString()}</span>
             </span>
             <span className="l">
-              <span className="sw c" />
-              {t("contextPanel.cacheKey")} <span className="v">{cached.toLocaleString()}</span>
-            </span>
-            <span className="l">
               <span className="sw u" />
-              {t("contextPanel.usedKey")} <span className="v">{used.toLocaleString()}</span>
+              {t("contextPanel.contextKey")} <span className="v">{context.toLocaleString()}</span>
             </span>
             <span className="l">
               {t("contextPanel.freeKey")} <span className="v">{free.toLocaleString()}</span>

@@ -63,15 +63,15 @@ describe("create_skill", () => {
     const r = await call(s.reg, "create_skill", {
       name: "deep-explore",
       description: "Wide-net read-only investigation.",
-      body: "Use read_file + search_content.",
+      body: "Use read_file + grep.",
       run_as: "subagent",
-      allowed_tools: ["read_file", "search_content"],
+      allowed_tools: ["read_file", "grep"],
       model: "deepseek-v4-pro",
     });
     expect(r.success).toBe(true);
     const content = readFileSync(r.path, "utf8");
     expect(content).toContain("runAs: subagent");
-    expect(content).toContain("allowed-tools: read_file, search_content");
+    expect(content).toContain("allowed-tools: read_file, grep");
     expect(content).toContain("model: deepseek-v4-pro");
   });
 

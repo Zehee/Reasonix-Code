@@ -408,9 +408,9 @@ description: One-liner — what does this skill do?
 Replace this body with the playbook the model should follow when this skill is invoked.
 
 Tips:
-- Reference tools by name (run_command, edit_file, search_content, ...)
+- Reference tools by name (run_command, edit_file, grep, ...)
 - Add \`runAs: subagent\` to frontmatter to spawn an isolated subagent loop
-- Add \`allowed-tools: read_file, search_content\` to scope a subagent's tools
+- Add \`allowed-tools: read_file, grep\` to scope a subagent's tools
 `;
 }
 
@@ -467,9 +467,9 @@ export function applySkillsIndex(basePrompt: string, opts: SkillStoreOptions = {
 const BUILTIN_EXPLORE_BODY = `You are running as an exploration subagent. Your job is to investigate the codebase the parent agent pointed you at, then return one focused, distilled answer.
 
 How to operate:
-- Use read_file, search_files, search_content, directory_tree, list_directory, get_file_info as your primary tools. Stay read-only.
-- For "find all places that call / reference / use X" questions, use \`search_content\` (content grep) — NOT \`search_files\` (which only matches file names). This is the most common subagent mistake; using the wrong tool gives empty results and you waste your iter budget chasing a phantom.
-- Cast a wide net first (search_content for symbol references, directory_tree for structure) to map the territory; then read the 3-10 most relevant files in full.
+- Use read_file, search_files, grep, directory_tree, list_directory, get_file_info as your primary tools. Stay read-only.
+- For "find all places that call / reference / use X" questions, use \`grep\` (content regex) — NOT \`search_files\` (which only matches file names). This is the most common subagent mistake; using the wrong tool gives empty results and you waste your iter budget chasing a phantom.
+- Cast a wide net first (grep for symbol references, directory_tree for structure) to map the territory; then read the 3-10 most relevant files in full.
 - Don't read every file — be selective. Aim for breadth on the first pass, depth only where the question demands it.
 - Stop exploring as soon as you can answer the question. The parent doesn't see your tool calls, so over-exploration is pure waste.
 
@@ -511,7 +511,7 @@ How to operate:
 - Default scope: the current branch's diff vs the default branch. If the user's task names a specific commit range or files, honor that instead.
 - Discover scope first: \`run_command git status\`, \`git diff --stat\`, \`git log --oneline\` to see what changed. Then \`git diff\` (or \`git diff <base>...HEAD\`) for the actual hunks.
 - Read the touched files (\`read_file\`) when the diff alone doesn't carry enough context — function signatures, surrounding invariants, callers.
-- For "any callers depending on this?" questions: \`search_content\` against the symbol BEFORE asserting impact.
+- For "any callers depending on this?" questions: \`grep\` against the symbol BEFORE asserting impact.
 - Stay read-only. Never \`run_command git commit\`, never write files, never propose SEARCH/REPLACE blocks. The parent decides whether to act on your findings.
 - Cap yourself at ~12 tool calls. If the diff is too big to review in one pass, pick the riskiest 2-3 files and say so explicitly.
 
@@ -539,7 +539,7 @@ const BUILTIN_SECURITY_REVIEW_BODY = `You are running as a security-review subag
 How to operate:
 - Default scope: the current branch's diff vs the default branch. If the user names a different range or a directory, honor that.
 - Discover scope first: \`git status\`, \`git diff --stat\`, \`git diff <base>...HEAD\`. Read touched files (\`read_file\`) when the diff alone doesn't carry security context — auth checks, input validation, the actual handler that calls into the changed function.
-- Use \`search_content\` to verify "is this user-controlled input ever sanitized later?" / "are there other call sites that depend on this validation?" before asserting impact.
+- Use \`grep\` to verify "is this user-controlled input ever sanitized later?" / "are there other call sites that depend on this validation?" before asserting impact.
 - Stay read-only. Never write, never run destructive commands, never propose SEARCH/REPLACE blocks. The parent decides what to act on.
 - Cap yourself at ~12 tool calls. If the diff is too big, focus on the riskiest 2-3 files and say so explicitly.
 

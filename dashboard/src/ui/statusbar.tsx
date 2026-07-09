@@ -70,7 +70,7 @@ export function StatusBar({
       ? `${usage.cacheHitTokens.toLocaleString()} / ${totalTokens.toLocaleString()} tokens (${cacheHitPctDisplay}%)`
       : "";
   const runningJobs = jobs.filter((j) => j.running).length;
-  const spent = formatMoney(usage.totalCostUsd, currency);
+  const spent = formatMoney(usage.lastTurnCostUsd, currency);
   const balanceLabel = balance
     ? `${balance.currency === "USD" ? "$" : "¥"} ${balance.total.toFixed(2)}`
     : "—";

@@ -128,7 +128,7 @@ describe("codeSystemPrompt", () => {
       const out = codeSystemPrompt(root, { hasSemanticSearch: true });
       expect(out).toMatch(/# Search routing/);
       expect(out).toMatch(/semantic_search/);
-      expect(out).toMatch(/search_content/);
+      expect(out).toMatch(/grep/);
       expect(out).toMatch(/Descriptive queries/);
     });
 

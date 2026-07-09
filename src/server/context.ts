@@ -275,6 +275,12 @@ export type DashboardEvent =
   | { kind: "status"; text: string }
   | { kind: "modal-up"; modal: ActiveModal }
   | { kind: "modal-down"; modalKind: ActiveModal["kind"] }
+  | {
+      kind: "ctx_breakdown";
+      reservedTokens: number;
+      logTokens: number;
+      contextCapTokens: number;
+    }
   | { kind: "ping" };
 
 export interface SubmitResult {

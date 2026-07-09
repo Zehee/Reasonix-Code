@@ -635,8 +635,8 @@ export const de: typeof en = {
         "Liste Einträge in einem Verzeichnis rekursiv als eingerückten Baum auf. Budget-bewusst mit automatischem Einklappen für große Unterbäume.",
       search_files:
         "Finde Dateien, deren NAME einem Teilstring oder Regex entspricht. Groß-/Kleinschreibung unwichtig. Überspringt standardmäßig Abhängigkeits-/Build-Verzeichnisse.",
-      search_content:
-        "Durchsuche Dateiinhalte rekursiv mit grep nach einem Teilstring oder Regex. Liefert Treffer im Format pfad:zeile:text. Das richtige Werkzeug zum Finden von Referenzen.",
+      grep:
+        "Durchsuche Dateiinhalte mit einem Regex. Liefert Treffer als pfad:zeile:text, begrenzt auf 200 Treffer insgesamt. Verwende es, um Referenzen und Vorkommen zu finden.",
       glob: "Liste Dateien, die einem Glob-Muster entsprechen, sortiert nach Änderungsdatum. Standardlimit 200, max 1000. Überspringt node_modules/.git/dist standardmäßig.",
       get_file_info: "Ermittle Informationen zu einem Pfad unter dem Sandbox-Root. Liefert Typ, Größe in Bytes und Änderungsdatum.",
       write_file:

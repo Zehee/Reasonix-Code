@@ -19,7 +19,7 @@ describe("lifecycle risk policy", () => {
     },
     {
       name: "read-only search",
-      toolName: "search_content",
+      toolName: "grep",
       args: { pattern: "registerPlanTool" },
       risk: "safe",
       reason: "safe-tool",

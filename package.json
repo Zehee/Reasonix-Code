@@ -45,7 +45,6 @@
     "format": "biome format --write src tests",
     "typecheck": "tsc --noEmit && tsc --noEmit -p dashboard",
     "verify": "npm run build && npm run lint && npm run typecheck && npm run test --silent",
-    "prepare": "simple-git-hooks || true",
     "build:binary": "node -e \"const v=require('./package.json').version;require('child_process').execSync('bun build ./src/cli/index.ts --compile --outfile build/reasonix-code-v'+v+'.exe',{stdio:'inherit'})\"",
     "desktop:dev": "cd desktop && npm install && npm run tauri dev",
     "desktop:build": "cd desktop && npm install && npm run tauri build",
@@ -54,10 +53,6 @@
     "pitch:pdf": "npx -y @marp-team/marp-cli pitch/pitch.md -o pitch/dist/pitch.pdf --allow-local-files",
     "pitch:html": "npx -y @marp-team/marp-cli pitch/pitch.md -o pitch/dist/pitch.html --allow-local-files",
     "pitch:watch": "npx -y @marp-team/marp-cli pitch/pitch.md --preview --watch --allow-local-files"
-  },
-  "simple-git-hooks": {
-    "pre-commit": "npm run lint",
-    "pre-push": "npm run verify"
   },
   "keywords": [
     "agent",
@@ -142,8 +137,6 @@
     "marked": "^15.0.12",
     "preact": "^10.22.0",
     "react-test-renderer": "^19.2.6",
-    "simple-git-hooks": "^2.13.1",
-    "strip-ansi": "^7.1.0",
     "tree-sitter-go": "^0.25.0",
     "tree-sitter-java": "^0.23.5",
     "tree-sitter-javascript": "^0.25.0",

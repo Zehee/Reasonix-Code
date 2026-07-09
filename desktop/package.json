@@ -1,13 +1,15 @@
 {
   "name": "reasonix-desktop",
   "private": true,
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "sync-version": "node scripts/sync-version.mjs",
+    "presync-version": "node scripts/sync-version.mjs --check",
     "bundle:node": "node scripts/bundle-node.mjs"
   },
   "dependencies": {

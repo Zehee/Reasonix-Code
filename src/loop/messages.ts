@@ -1,6 +1,20 @@
 import type { ChatMessage, ToolCall } from "../types.js";
 import { isThinkingModeModel } from "./thinking.js";
 
+let _toolCallIdSeq = 0;
+
+/** DeepSeek 400s on tool_calls missing `id`. Give bare calls a stable fallback so
+ *  the matching `role: tool` messages can reference them. Mutates in place so the
+ *  same ToolCall objects used by dispatch carry the id. */
+function stampMissingToolCallIds(calls: ToolCall[]): ToolCall[] {
+  for (const c of calls) {
+    if (!c.id) {
+      c.id = `rx-call-${Date.now()}-${_toolCallIdSeq++}`;
+    }
+  }
+  return calls;
+}
+
 /** Match Go's serialization: reasoning_content only when non-empty; content=null for pure tool-call messages. */
 export function buildAssistantMessage(
   content: string,
@@ -15,7 +29,7 @@ export function buildAssistantMessage(
   } else {
     msg.content = null;
   }
-  if (toolCalls.length > 0) msg.tool_calls = toolCalls;
+  if (toolCalls.length > 0) msg.tool_calls = stampMissingToolCallIds(toolCalls);
   // Only include reasoning_content when the model produced actual reasoning text.
   // Go v2 uses omitempty on the wire — empty string is never sent.
   if (reasoningContent && reasoningContent.length > 0) {

@@ -585,8 +585,12 @@ export class CacheFirstLoop {
 
   private buildMessages(): ChatMessage[] {
     const healedMessages = stripStalePlainReasoning(this.healActiveLogBeforeSend());
-    const apiReady = healedMessages.map((m) => {
-      const { foldId: _, foldArtifact: __, ...rest } = m;
+    // Last-chance pairing repair: fold/rewind/session-import can leave stray
+    // tool messages, and DeepSeek 400s on any tool message that isn't a direct
+    // response to a preceding assistant.tool_calls.
+    const paired = fixToolCallPairing(healedMessages).messages;
+    const apiReady = paired.map((m) => {
+      const { turnId: _1, sessionId: _2, foldId: _3, foldArtifact: _4, ...rest } = m;
       return rest as ChatMessage;
     });
     return [...this.prefix.toMessages(), ...apiReady];

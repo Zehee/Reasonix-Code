@@ -660,12 +660,12 @@ describe("Skill frontmatter — runAs", () => {
       home,
       "global",
       "scoped",
-      { description: "...", runAs: "subagent", "allowed-tools": "read, search_content,write" },
+      { description: "...", runAs: "subagent", "allowed-tools": "read, grep,write" },
       "body",
       home,
     );
     const store = new SkillStore({ homeDir: home, disableBuiltins: true });
-    expect(store.read("scoped")?.allowedTools).toEqual(["read", "search_content", "write"]);
+    expect(store.read("scoped")?.allowedTools).toEqual(["read", "grep", "write"]);
   });
 
   it("treats missing allowed-tools as undefined (full inheritance)", () => {

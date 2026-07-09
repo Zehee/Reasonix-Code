@@ -1161,14 +1161,36 @@ export async function listSessionsAsync(opts?: {
       ? legacySessionPrefixForWorkspace(opts.workspaceFilter!)
       : null;
   try {
-    const files = (await readdir(dir)).filter(
-      (f) =>
-        f.endsWith(".jsonl") && !f.endsWith(".events.jsonl") && !f.endsWith(".toolcache.jsonl"),
-    );
+    // Collect all .jsonl files from root + workspace subdirectories.
+    // Code-mode sessions live in sessions/{workspace-slug}/active.jsonl,
+    // so a flat scan would hide them from the dashboard sidebar.
+    const entries: Array<{ name: string; path: string }> = [];
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      if (
+        entry.isFile() &&
+        entry.name.endsWith(".jsonl") &&
+        !entry.name.endsWith(".events.jsonl") &&
+        !entry.name.endsWith(".toolcache.jsonl")
+      ) {
+        entries.push({ name: entry.name.replace(/\.jsonl$/, ""), path: join(dir, entry.name) });
+      } else if (entry.isDirectory()) {
+        const subdir = join(dir, entry.name);
+        for (const f of await readdir(subdir)) {
+          if (
+            f.endsWith(".jsonl") &&
+            !f.endsWith(".events.jsonl") &&
+            !f.endsWith(".toolcache.jsonl")
+          ) {
+            entries.push({
+              name: `${entry.name}/${f.replace(/\.jsonl$/, "")}`,
+              path: join(subdir, f),
+            });
+          }
+        }
+      }
+    }
     const results = await Promise.all(
-      files.flatMap(async (file) => {
-        const path = join(dir, file);
-        const name = file.replace(/\.jsonl$/, "");
+      entries.flatMap(async ({ name, path }) => {
         const meta = await loadSessionMetaAsync(name);
         let workspaceStatus: SessionInfo["workspaceStatus"] | undefined;
         if (want !== null) {

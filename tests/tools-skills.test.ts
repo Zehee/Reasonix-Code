@@ -398,20 +398,20 @@ describe("install_skill tool", () => {
       body: "You are a research subagent. Investigate and answer.",
       runAs: "subagent",
       model: "deepseek-chat",
-      allowedTools: ["read_file", "search_content"],
+      allowedTools: ["read_file", "grep"],
     });
     const parsed = JSON.parse(out);
     expect(parsed.runAs).toBe("subagent");
     const raw = readFileSync(parsed.path, "utf8");
     expect(raw).toContain("runAs: subagent");
     expect(raw).toContain("model: deepseek-chat");
-    expect(raw).toContain("allowed-tools: read_file, search_content");
+    expect(raw).toContain("allowed-tools: read_file, grep");
 
     const store = new SkillStore({ homeDir: home, projectRoot, disableBuiltins: true });
     const skill = store.read("deep-research");
     expect(skill?.runAs).toBe("subagent");
     expect(skill?.model).toBe("deepseek-chat");
-    expect(skill?.allowedTools).toEqual(["read_file", "search_content"]);
+    expect(skill?.allowedTools).toEqual(["read_file", "grep"]);
   });
 
   it("skips subagent-only frontmatter for inline skills", async () => {

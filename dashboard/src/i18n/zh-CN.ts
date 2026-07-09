@@ -602,8 +602,8 @@ export const zhCN = {
       list_directory: "列出目录中的条目。每行一个条目，目录以斜杠标记。",
       directory_tree: "递归列出目录中的条目，以缩进树形结构显示。对大子目录自动折叠以节省预算。",
       search_files: "根据名称匹配子串或正则表达式查找文件。不区分大小写。默认跳过依赖/构建目录。",
-      search_content:
-        "递归搜索文件内容中的子串或正则表达式。以 path:line:text 格式返回匹配结果。查找引用的正确工具。",
+      grep:
+        "用正则搜索文件内容。以 path:line:text 格式返回匹配行，全局上限 200 条。用于查找引用和出现位置。",
       glob: "按 glob 模式列出文件，按修改时间排序。默认限制 200，最大 1000。默认跳过 node_modules/.git/dist。",
       get_file_info: "获取沙箱根目录下路径的状态信息。返回类型、字节大小和修改时间。",
       write_file: "创建或覆盖文件，内容由参数指定。按需创建父目录。",
@@ -1069,6 +1069,7 @@ export const zhCN = {
     ask: "询问",
     autoApproveTitle: "自动审批",
     cacheKey: "缓存",
+    contextKey: "对话",
     contextTokens: "上下文 tokens",
     fileInContext: "在上下文中",
     fileModified: "已修改",

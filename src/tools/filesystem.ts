@@ -28,7 +28,8 @@ import {
 } from "./fs/edit.js";
 import { globFiles } from "./fs/glob.js";
 import { extractOutline, formatOutline } from "./fs/outline.js";
-import { searchContent, searchFiles } from "./fs/search.js";
+import { runGrep } from "./grep.js";
+import { searchFiles } from "./fs/search.js";
 
 export { lineDiff } from "./fs/edit.js";
 
@@ -58,7 +59,7 @@ const OUTLINE_HEAD_LINES = 80;
 // Skipped unless `include_deps:true`. Derived from the semantic indexer's exclude
 // list, minus `.reasonix` — the indexer shouldn't embed session logs / cache, but
 // user skills live at `<root>/.reasonix/skills/` (and `~/.reasonix/skills/`) and
-// must stay reachable to read_file / search_files / search_content (#1357).
+// must stay reachable to read_file / search_files / grep (#1357).
 const SKIP_DIR_NAMES: ReadonlySet<string> = new Set(
   DEFAULT_INDEX_EXCLUDES.dirs.filter((d) => d !== ".reasonix"),
 );
@@ -250,7 +251,7 @@ export function registerFilesystemTools(
     name: "read_file",
     parallelSafe: true,
     skipTruncationSave: true,
-    description: `Read a file under the sandbox root. Default returns FULL CONTENT for files ≤ ${Math.round(DEFAULT_OUTLINE_THRESHOLD_BYTES / 1024)} KiB. Optional scoping: head/tail (N lines), range "A-B" (1-indexed inclusive). Larger files auto-switch to outline mode (metadata + head + symbol outline for TS/JS/Python/Go/Rust/Markdown/Protobuf/text) — drill in with range or search_content. Files over ${Math.round(HARD_MAX_FILE_BYTES / (1024 * 1024))} MiB and binaries are refused — use get_file_info for stat.`,
+    description: `Read a file under the sandbox root. Default returns FULL CONTENT for files ≤ ${Math.round(DEFAULT_OUTLINE_THRESHOLD_BYTES / 1024)} KiB. Optional scoping: head/tail (N lines), range "A-B" (1-indexed inclusive). Larger files auto-switch to outline mode (metadata + head + symbol outline for TS/JS/Python/Go/Rust/Markdown/Protobuf/text) — drill in with range or grep. Files over ${Math.round(HARD_MAX_FILE_BYTES / (1024 * 1024))} MiB and binaries are refused — use get_file_info for stat.`,
     readOnly: true,
     stormExempt: true,
     parameters: {
@@ -288,7 +289,7 @@ export function registerFilesystemTools(
           return [
             `[refused: ${rel} is ${formatBytes(sizeBytes)} (> ${formatBytes(HARD_MAX_FILE_BYTES)} hard ceiling) — too large to load]`,
             "Use one of:",
-            `  - search_content path:"${rel}" pattern:"<your regex>"  — grep within the file`,
+            `  - grep path:"${rel}" pattern:"<your regex>"  — grep within the file`,
             `  - read_file path:"${rel}" range:"A-B"                   — read a specific 1-indexed line range`,
             `  - read_file path:"${rel}" head:N  /  tail:N             — read N lines at the start or end`,
           ].join("\n");
@@ -367,7 +368,7 @@ export function registerFilesystemTools(
         "[to read more, call one of:",
         `  - read_file path:"${rel}" range:"A-B"          — 1-indexed line range`,
         `  - read_file path:"${rel}" head:N  /  tail:N    — first/last N lines`,
-        `  - search_content path:"${rel}" pattern:"..."   — grep within this file]`,
+        `  - grep path:"${rel}" pattern:"..."   — grep within this file]`,
       );
       return withSubdirMemory(abs, parts.join("\n"));
     },
@@ -402,7 +403,7 @@ export function registerFilesystemTools(
     name: "directory_tree",
     parallelSafe: true,
     skipTruncationSave: true,
-    description: `Recursively list entries with indented tree structure (dirs marked '/'). Budget-aware: maxDepth defaults to 2, large subtrees (>50 children) auto-collapse to "[N hidden — list_directory to inspect]", and ${[...SKIP_DIR_NAMES].sort().join(" / ")} are skipped unless include_deps:true. For single-level use list_directory; for path lookups use search_files; for code lookups use search_content.`,
+    description: `Recursively list entries with indented tree structure (dirs marked '/'). Budget-aware: maxDepth defaults to 2, large subtrees (>50 children) auto-collapse to "[N hidden — list_directory to inspect]", and ${[...SKIP_DIR_NAMES].sort().join(" / ")} are skipped unless include_deps:true. For single-level use list_directory; for path lookups use search_files; for code lookups use grep.`,
     readOnly: true,
     parameters: {
       type: "object",
@@ -520,70 +521,44 @@ export function registerFilesystemTools(
   });
 
   registry.register({
-    name: "search_content",
+    name: "grep",
     parallelSafe: true,
     skipTruncationSave: true,
     description:
-      "Recursively grep file CONTENTS for a substring or regex — 'where is X called', 'what files contain Y'. Returns one match per line as `path:line: text`. Per-file hit cap 30; when the byte budget is mostly spent, remaining files switch to a `rel: N matches` histogram. Pass `summary_only:true` for just the histogram. Skips dependency / VCS / build dirs and binary files. For file NAMES use search_files.",
+      "Search for a regular expression in a file, or recursively under a directory (skips hidden files and files matched by .gitignore-style exclude dirs). Returns matching lines as `path:line:text`, capped at 200 matches total. Use for 'where is X called', 'what files contain Y'. For file NAMES use search_files.",
     readOnly: true,
     parameters: {
       type: "object",
       properties: {
         pattern: {
           type: "string",
-          description: "Substring or regex.",
+          description: "Regular expression (JavaScript/RE2-like syntax).",
         },
         path: {
           type: "string",
-          description: "Search root (default: sandbox root).",
+          description: "File or directory to search (default \".\").",
         },
-        glob: {
-          type: "string",
-          description:
-            "Filename filter. Glob when it contains `*`/`?`/`{`/`[`; otherwise substring. Patterns with `/` match the path relative to the search root.",
-        },
-        case_sensitive: {
-          type: "boolean",
-          description: "Default false.",
-        },
-        include_deps: {
-          type: "boolean",
-          description: "Also search node_modules / .git / dist / build / etc. Default off.",
-        },
-        context: {
+        timeout_seconds: {
           type: "integer",
           description:
-            "Lines of context around each match (both sides). Default 0, capped 20. Ripgrep-style output.",
-        },
-        summary_only: {
-          type: "boolean",
-          description:
-            "Skip line content, return `rel: N matches` per file. Use for 'where does this exist at all' before drilling in.",
+            "Abort and return partial matches after this many seconds (default 30, max 300). Raise it for a large tree; lower it for a quick probe.",
+          minimum: 1,
         },
       },
       required: ["pattern"],
     },
     fn: async (
-      args: {
-        pattern: string;
-        path?: string;
-        glob?: string;
-        case_sensitive?: boolean;
-        include_deps?: boolean;
-        context?: number;
-        summary_only?: boolean;
-      },
+      args: { pattern: string; path?: string; timeout_seconds?: number },
       toolCtx,
     ) =>
-      searchContent(
+      runGrep(
         {
           rootDir,
           maxListBytes,
           skipDirNames: SKIP_DIR_NAMES,
           isBinaryByName: isLikelyBinaryByName,
-          nameMatch: compileNameFilter(typeof args.glob === "string" ? args.glob : null),
         },
-        await safePath(args.path ?? ".", "search_content", toolCtx),
+        pathMod.resolve(rootDir, args.path ?? "."),
         { ...args, signal: toolCtx?.signal },
       ),
   });
@@ -593,7 +568,7 @@ export function registerFilesystemTools(
     parallelSafe: true,
     skipTruncationSave: true,
     description:
-      "List files matching a glob pattern, sorted by mtime (most-recently-modified first) by default. Use this for 'what changed lately', 'find all *.test.ts', 'all configs under src/'. Glob syntax matches the cross-tool standard: `*` (any chars in one segment), `**` (any segments), `?` (one char), `{a,b}` (alternation). Pattern matches against the path RELATIVE to the search root (e.g. 'src/**/*.ts' from project root). Skips node_modules / .git / dist / build / etc by default. Default limit 200; raise via `limit` (max 1000). Different from `search_files` (substring on basename) and `search_content` (matches inside file contents).",
+      "List files matching a glob pattern, sorted by mtime (most-recently-modified first) by default. Use this for 'what changed lately', 'find all *.test.ts', 'all configs under src/'. Glob syntax matches the cross-tool standard: `*` (any chars in one segment), `**` (any segments), `?` (one char), `{a,b}` (alternation). Pattern matches against the path RELATIVE to the search root (e.g. 'src/**/*.ts' from project root). Skips node_modules / .git / dist / build / etc by default. Default limit 200; raise via `limit` (max 1000). Different from `search_files` (substring on basename) and `grep` (matches inside file contents).",
     readOnly: true,
     parameters: {
       type: "object",

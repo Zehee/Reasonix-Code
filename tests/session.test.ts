@@ -15,16 +15,20 @@ import { CacheFirstLoop } from "../src/loop.js";
 import { ImmutablePrefix } from "../src/memory/runtime.js";
 import {
   appendSessionMessage,
+  appendSessionMessageAsync,
   archiveSession,
   deleteSession,
   findSessionsByPrefix,
   freshSessionName,
   listSessions,
+  listSessionsAsync,
   listSessionsForWorkspace,
+  listSessionsForWorkspaceAsync,
   loadSessionId,
   loadSessionMessages,
   normalizeWorkspace,
   patchSessionMeta,
+  patchSessionMetaAsync,
   patchSessionWorkspaceIfMissing,
   promptHistoryStep,
   pruneStaleSessions,
@@ -218,6 +222,31 @@ describe("session persistence", () => {
     appendFileSync(p, JSON.stringify({ role: "user", content: "b" }), "utf8");
     const item = listSessions().find((s) => s.name === "tail")!;
     expect(item.messageCount).toBe(2);
+  });
+
+  it("listSessionsAsync recurses into workspace subdirectories", async () => {
+    await appendSessionMessageAsync("code-proj/active", { role: "user", content: "hello" });
+    await appendSessionMessageAsync("flat-session", { role: "user", content: "x" });
+
+    const all = await listSessionsAsync();
+    const names = all.map((s) => s.name);
+
+    expect(names).toContain("code-proj/active");
+    expect(names).toContain("flat-session");
+  });
+
+  it("listSessionsForWorkspaceAsync matches workspace meta in subdirectories", async () => {
+    await appendSessionMessageAsync("code-proj/active", { role: "user", content: "hello" });
+    await patchSessionMetaAsync("code-proj/active", { workspace: "/proj/a" });
+    await appendSessionMessageAsync("other-proj/active", { role: "user", content: "x" });
+    await patchSessionMetaAsync("other-proj/active", { workspace: "/proj/b" });
+
+    const matched = await listSessionsForWorkspaceAsync("/proj/a");
+
+    expect(matched.map((s) => s.name)).toEqual(["code-proj/active"]);
+    expect(matched[0]!.workspaceStatus).toBe("matched");
+    expect(matched[0]!.messageCount).toBeGreaterThan(0);
+    expect(matched[0]!.size).toBeGreaterThan(0);
   });
 
   it("promptHistoryStep browses same-session prompts in both directions", () => {

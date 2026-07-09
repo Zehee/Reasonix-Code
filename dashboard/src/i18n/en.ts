@@ -611,8 +611,8 @@ export const en = {
         "Recursively list entries in a directory as an indented tree. Budget-aware with auto-collapse for large subtrees.",
       search_files:
         "Find files whose NAME matches a substring or regex. Case-insensitive. Skips dependency/build directories by default.",
-      search_content:
-        "Recursively grep file CONTENTS for a substring or regex. Returns matches in path:line:text format. The right tool for finding references.",
+      grep:
+        "Search file contents for a regex. Returns matching lines as path:line:text, capped at 200 matches total. Use for finding references and occurrences.",
       glob: "List files matching a glob pattern, sorted by mtime. Default limit 200, max 1000. Skips node_modules/.git/dist by default.",
       get_file_info: "Stat a path under the sandbox root. Returns type, size in bytes, and mtime.",
       write_file:
@@ -1094,6 +1094,7 @@ export const en = {
     ask: "Ask",
     autoApproveTitle: "Auto-approve",
     cacheKey: "Cache",
+    contextKey: "Log",
     contextTokens: "Context tokens",
     fileInContext: "In context",
     fileModified: "Modified",

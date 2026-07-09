@@ -77,5 +77,6 @@ describe("cache diagnostics", () => {
     expect(report).toContain("DeepSeek does not return a cache-miss reason");
     expect(report).toContain("Reasonix infers");
     expect(report).toContain("cached 90");
+    expect(report).toMatch(/#1 @ \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC/);
   });
 });

@@ -173,6 +173,14 @@ export type UsageStats = {
   lastCallCacheMiss: number | null;
   /** System prompt + tool specs — constant for the session, sent on tab open. */
   reservedTokens: number;
+  /** Current turn log tokens from $ctx_breakdown — reflects real-time context usage. */
+  logTokens: number;
+  /** Actual prompt tokens from the last API usage event — more accurate than the estimate above. */
+  lastPromptTokens: number;
+  /** Model's token context capacity (1_000_000 for DeepSeek V4). */
+  contextCapTokens: number;
+  /** Cost of the most recent turn/API call — drives the "this turn" footer label. */
+  lastTurnCostUsd: number;
 };
 
 export type SessionInfo = {
@@ -554,6 +562,10 @@ function zeroUsage(): UsageStats {
     lastCallCacheHit: null,
     lastCallCacheMiss: null,
     reservedTokens: 0,
+    logTokens: 0,
+    lastPromptTokens: 0,
+    contextCapTokens: 1_000_000,
+    lastTurnCostUsd: 0,
   };
 }
 
@@ -750,6 +762,10 @@ function applyIncomingRaw(state: State, ev: IncomingEvent): State {
           totalCompletionTokens: ev.totalCompletionTokens,
           cacheHitTokens: ev.cacheHitTokens,
           cacheMissTokens: ev.cacheMissTokens,
+          lastTurnCostUsd:
+            typeof ev.lastTurnCostUsd === "number" ? ev.lastTurnCostUsd : state.usage.lastTurnCostUsd,
+          lastPromptTokens:
+            typeof ev.lastPromptTokens === "number" ? ev.lastPromptTokens : state.usage.lastPromptTokens,
           lastCallCacheHit: empty ? null : state.usage.lastCallCacheHit,
           lastCallCacheMiss: empty ? null : state.usage.lastCallCacheMiss,
         },
@@ -764,7 +780,15 @@ function applyIncomingRaw(state: State, ev: IncomingEvent): State {
     case "$skills":
       return { ...state, skills: ev.items };
     case "$ctx_breakdown":
-      return { ...state, usage: { ...state.usage, reservedTokens: ev.reservedTokens } };
+      return {
+        ...state,
+        usage: {
+          ...state.usage,
+          reservedTokens: ev.reservedTokens,
+          logTokens: ev.logTokens ?? state.usage.logTokens,
+          contextCapTokens: ev.contextCapTokens ?? state.usage.contextCapTokens,
+        },
+      };
     case "$memory":
       return {
         ...state,
@@ -962,6 +986,10 @@ function applyIncomingRaw(state: State, ev: IncomingEvent): State {
         lastCallCacheHit: hasCall ? callHit : state.usage.lastCallCacheHit,
         lastCallCacheMiss: hasCall ? callMiss : state.usage.lastCallCacheMiss,
         reservedTokens: state.usage.reservedTokens,
+        logTokens: state.usage.logTokens,
+        lastPromptTokens: u?.prompt_tokens ?? state.usage.lastPromptTokens,
+        contextCapTokens: state.usage.contextCapTokens,
+        lastTurnCostUsd: ev.costUsd ?? state.usage.lastTurnCostUsd,
       };
       return {
         ...state,
@@ -1573,7 +1601,9 @@ function TabRuntime({
     urlSessionDispatched.current = true;
     const target = initialUrlSession.current;
     if (!target) return;
-    if (target === state.currentSession) return;
+    // Always attempt to load — state.messages starts empty on initial connect
+    // even when the URL session matches the overview currentSession. Without
+    // this the conversation panel shows nothing.
     if (!state.sessions.some((s) => s.name === target)) {
       writeSessionToUrl(null);
       return;

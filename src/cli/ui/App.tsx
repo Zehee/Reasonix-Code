@@ -97,7 +97,7 @@ import type { TelegramChannel } from "../../telegram/channel.js";
 import { useTelegramChannel } from "../../telegram/use-telegram-channel.js";
 import { type SessionSummary, resolveContextTokens } from "../../telemetry/stats.js";
 import { defaultUsageLogPath } from "../../telemetry/usage.js";
-import { warmupTokenizer } from "../../tokenizer.js";
+import { countTokensBounded, warmupTokenizer } from "../../tokenizer.js";
 import type { ToolRegistry } from "../../tools.js";
 import type { ChoiceOption } from "../../tools/choice.js";
 import type { PlanStep, StepCompletion } from "../../tools/plan.js";
@@ -3489,6 +3489,25 @@ function AppInner({
           if (eventSubscribersRef.current.size > 0) {
             const dashMsg = loopEventToDashboard(ev, { assistantId });
             if (dashMsg) broadcastDashboardEvent(dashMsg);
+          }
+          // Broadcast real-time context breakdown after events that change
+          // the token count so the dashboard panel stays in sync with the
+          // CLI footer bar.
+          if ((ev.role === "assistant_final" || ev.role === "tool") && eventSubscribersRef.current.size > 0) {
+            try {
+              const sysTokens = countTokensBounded(loop.prefix.system);
+              const toolsTokens = countTokensBounded(JSON.stringify(loop.prefix.toolSpecs));
+              const logTokens = loop.getCurrentLogTokens();
+              broadcastDashboardEvent({
+                kind: "ctx_breakdown",
+                reservedTokens: sysTokens + toolsTokens,
+                logTokens,
+                contextCapTokens: resolveContextTokens(loop.model),
+              });
+            } catch {
+              // Tokenizer may not be ready yet; ctx_breakdown will be
+              // broadcast on the next event.
+            }
           }
           // Status lines are transient —any primary event (streaming
           // starts, a tool fires, etc.) means whatever we were waiting

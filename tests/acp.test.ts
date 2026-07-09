@@ -326,7 +326,7 @@ describe("ACP kernel-event dispatch", () => {
     expect(toolKindFor("glob")).toBe("read");
     expect(toolKindFor("write_file")).toBe("edit");
     expect(toolKindFor("multi_edit")).toBe("edit");
-    expect(toolKindFor("search_content")).toBe("search");
+    expect(toolKindFor("grep")).toBe("search");
     expect(toolKindFor("run_command")).toBe("execute");
     expect(toolKindFor("run_background")).toBe("execute");
     expect(toolKindFor("totally_made_up_tool")).toBe("other");

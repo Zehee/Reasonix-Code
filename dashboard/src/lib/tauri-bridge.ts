@@ -225,6 +225,16 @@ function sseToIncoming(ev: any): Record<string, any>[] {
       });
       break;
     }
+    case "ctx_breakdown": {
+      results.push({
+        type: "$ctx_breakdown",
+        tabId: "tab-1",
+        reservedTokens: ev.reservedTokens ?? 0,
+        logTokens: ev.logTokens ?? 0,
+        contextCapTokens: ev.contextCapTokens ?? 1_000_000,
+      });
+      break;
+    }
     case "ping":
       break; // keep-alive, no action needed
     default:
@@ -372,6 +382,8 @@ interface ServerOverviewStats {
   cacheHitTokens?: number;
   cacheMissTokens?: number;
   totalCompletionTokens?: number;
+  lastTurnCostUsd?: number;
+  lastPromptTokens?: number;
   balance?: ServerBalanceEntry[];
 }
 
@@ -414,6 +426,8 @@ function emitOverviewSnapshot(overview: ServerOverviewResponse | null | undefine
     totalCompletionTokens: finiteNumber(stats.totalCompletionTokens),
     cacheHitTokens,
     cacheMissTokens,
+    lastTurnCostUsd: finiteNumber(stats.lastTurnCostUsd),
+    lastPromptTokens: finiteNumber(stats.lastPromptTokens),
   });
 
   const firstBalance = stats.balance?.[0];
@@ -595,13 +609,11 @@ async function serverRpc(payload: Record<string, any>): Promise<void> {
     }
     case "session_load": {
       try {
-        const switchData = await apiFetch(`sessions/${encodeURIComponent(payload.name)}/switch`, {
+        // Best-effort session switch — ignore failure (the TUI may already
+        // have this session active), always attempt to load messages.
+        await apiFetch(`sessions/${encodeURIComponent(payload.name)}/switch`, {
           method: "POST",
-        });
-        if (!switchData?.ok) {
-          console.warn("[tauri-bridge] session switch failed:", payload.name, switchData);
-          break;
-        }
+        }).catch(() => {});
         const data = await apiFetch(`sessions/${encodeURIComponent(payload.name)}`);
         if (!Array.isArray(data?.messages)) {
           console.warn("[tauri-bridge] session_load: GET response missing messages", data);

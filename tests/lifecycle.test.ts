@@ -5,7 +5,7 @@ import { ImmutablePrefix } from "../src/memory/runtime.js";
 describe("engineering lifecycle high-risk tool detection", () => {
   it("treats read-only exploration as safe", () => {
     expect(isHighRiskLifecycleToolCall("read_file", { path: "src/index.ts" })).toBe(false);
-    expect(isHighRiskLifecycleToolCall("search_content", { pattern: "foo" })).toBe(false);
+    expect(isHighRiskLifecycleToolCall("grep", { pattern: "foo" })).toBe(false);
   });
 
   it("treats batch edits and destructive filesystem calls as high risk", () => {

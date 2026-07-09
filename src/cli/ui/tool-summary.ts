@@ -197,7 +197,7 @@ function summarizeKnownTool(toolName: string, content: string): ToolSummary | nu
     const entries = content.split(/\r?\n/).filter((l) => l.trim()).length;
     return { summary: `${entries} entr${entries === 1 ? "y" : "ies"}`, isError: false };
   }
-  if (hasSuffix("search_files") || hasSuffix("search_content")) {
+  if (hasSuffix("search_files") || hasSuffix("grep")) {
     const matches = content.split(/\r?\n/).filter((l) => l.trim()).length;
     if (matches === 0) return { summary: "no matches", isError: false };
     const first = firstNonEmptyLine(content);

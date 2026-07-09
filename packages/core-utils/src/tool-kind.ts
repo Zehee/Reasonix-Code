@@ -20,7 +20,7 @@ const EDIT_TOOLS = new Set([
   "copy_file",
 ]);
 
-const SEARCH_TOOLS = new Set(["search_content", "search_files"]);
+const SEARCH_TOOLS = new Set(["grep", "search_files"]);
 const EXECUTE_TOOLS = new Set(["run_command", "run_background"]);
 
 export type AcpToolKind = "read" | "edit" | "search" | "execute" | "other";

@@ -128,6 +128,8 @@ export type SessionUsageEvent = {
   totalCompletionTokens: number;
   cacheHitTokens: number;
   cacheMissTokens: number;
+  lastTurnCostUsd?: number;
+  lastPromptTokens?: number;
 };
 
 export type MentionResultsEvent = {
@@ -194,6 +196,10 @@ export type SkillsEvent = {
 export type CtxBreakdownEvent = {
   type: "$ctx_breakdown";
   reservedTokens: number;
+  /** Current conversation log tokens — real-time context usage. */
+  logTokens?: number;
+  /** Model context capacity in tokens — drives the dashboard panel gauge. */
+  contextCapTokens?: number;
 };
 
 export type MemoryEntryInfo = {

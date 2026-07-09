@@ -59,7 +59,7 @@ same shape it would under a fully serial dispatch.
 | `REASONIX_TOOL_DISPATCH=serial` | unset | Forces serial dispatch — escape hatch. |
 
 Built-in opt-ins: read-only filesystem (`read_file`, `list_directory`,
-`directory_tree`, `search_files`, `search_content`, `get_file_info`),
+`directory_tree`, `search_files`, `grep`, `get_file_info`),
 web (`web_search`, `web_fetch`), `recall_memory`, `semantic_search`,
 isolated child loops (`run_skill`, `spawn_subagent`), in-memory job
 queries (`job_output`, `list_jobs`). Mutating / side-effecting tools

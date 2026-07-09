@@ -225,6 +225,59 @@ describe("CacheFirstLoop (non-streaming)", () => {
     expect(loop.stats.turns.length).toBe(2); // two model round-trips
   });
 
+  it("stamps missing tool_call ids so tool results stay paired with the assistant", async () => {
+    // Some DeepSeek responses omit `id` on tool_calls. Without stable ids the
+    // following tool message has an empty tool_call_id and the API 400s.
+    const client = makeClient([
+      {
+        content: "",
+        tool_calls: [
+          {
+            type: "function",
+            function: { name: "add", arguments: '{"a":1,"b":2}' },
+          },
+        ],
+      },
+      { content: "The answer is 3." },
+    ]);
+
+    const tools = new ToolRegistry();
+    tools.register<{ a: number; b: number }, number>({
+      name: "add",
+      parameters: {
+        type: "object",
+        properties: { a: { type: "integer" }, b: { type: "integer" } },
+        required: ["a", "b"],
+      },
+      fn: ({ a, b }) => a + b,
+    });
+
+    const loop = new CacheFirstLoop({
+      client,
+      prefix: new ImmutablePrefix({
+        system: "use add tool",
+        toolSpecs: tools.specs(),
+      }),
+      tools,
+      stream: false,
+    });
+
+    for await (const ev of loop.step("1 + 2 = ?")) {
+      if (ev.role === "done") break;
+    }
+
+    const assistantMsg = loop.log.entries.find(
+      (m) => m.role === "assistant" && Array.isArray(m.tool_calls) && m.tool_calls.length > 0,
+    );
+    const toolMsg = loop.log.entries.find((m) => m.role === "tool");
+
+    expect(assistantMsg).toBeDefined();
+    expect(toolMsg).toBeDefined();
+    const callId = assistantMsg!.tool_calls![0]!.id;
+    expect(callId).toBeTruthy();
+    expect(toolMsg!.tool_call_id).toBe(callId);
+  });
+
   it("records cache diagnostics from the tool snapshot actually sent", async () => {
     const client = makeClient([
       {

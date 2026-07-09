@@ -5,6 +5,7 @@ import { constants, closeSync, lstatSync, openSync, realpathSync } from "node:fs
 import { devNull } from "node:os";
 import * as pathMod from "node:path";
 import { isDqEscape, killProcessTree, prepareSpawn, smartDecodeOutput } from "./shell.js";
+import { snipOutput } from "./shell/exec.js";
 
 export type ChainOp = "|" | "||" | "&&" | ";";
 
@@ -322,12 +323,8 @@ export async function runChain(chain: CommandChain, opts: RunChainOptions): Prom
     }
     if (opts.signal?.aborted) break;
   }
-  const output = buf.toString();
-  const truncated =
-    output.length > opts.maxOutputChars
-      ? `${output.slice(0, opts.maxOutputChars)}\n\n[… truncated ${output.length - opts.maxOutputChars} chars …]`
-      : output;
-  return { exitCode: lastExit, output: truncated, timedOut };
+  const output = snipOutput(buf.toString(), opts.maxOutputChars);
+  return { exitCode: lastExit, output, timedOut };
 }
 
 interface PipeGroupResult {

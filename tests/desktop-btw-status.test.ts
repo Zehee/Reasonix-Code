@@ -65,6 +65,7 @@ function makeState(): AppState {
       lastCallCacheHit: null,
       lastCallCacheMiss: null,
       reservedTokens: 0,
+      logTokens: 0,
       liveLogTokens: 0,
     },
     sessions: [],

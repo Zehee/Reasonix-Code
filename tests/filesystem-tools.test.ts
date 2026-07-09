@@ -99,7 +99,7 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
       expect(out).toContain("line 1");
       expect(out).toContain("line 80");
       expect(out).not.toContain("line 200");
-      expect(out).toMatch(/search_content path:"big\.txt"/);
+      expect(out).toMatch(/grep path:"big\.txt"/);
       expect(out).toMatch(/read_file path:"big\.txt" range:"A-B"/);
     });
 
@@ -189,7 +189,7 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
       expect(out).toMatch(/large file:.*outline mode/);
       expect(out).not.toMatch(/\[outline:/);
       expect(out).toContain("prose line 1");
-      expect(out).toMatch(/search_content/);
+      expect(out).toMatch(/grep/);
     });
 
     it("returns full content for small files at or below the threshold", async () => {
@@ -421,100 +421,56 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
     });
   });
 
-  describe("search_content", () => {
+  describe("grep", () => {
     it("finds a literal substring inside a file's content", async () => {
-      // src/index.ts has `export const x = 1;`
-      const out = await tools.dispatch(
-        "search_content",
-        JSON.stringify({ pattern: "export const x" }),
-      );
-      // Format: path:line: text (always slash-normalized)
+      const out = await tools.dispatch("grep", JSON.stringify({ pattern: "export const x" }));
       expect(out).toMatch(/src\/index\.ts:1: export const x = 1;/);
     });
 
     it("matches across multiple files and reports each line", async () => {
-      // Both src/index.ts and src/util.ts have `export const`.
-      const out = await tools.dispatch(
-        "search_content",
-        JSON.stringify({ pattern: "export const" }),
-      );
-      expect(out).toContain("index.ts");
-      expect(out).toContain("util.ts");
+      const out = await tools.dispatch("grep", JSON.stringify({ pattern: "export const" }));
+      expect(out).toContain("src/index.ts:1:");
+      expect(out).toContain("src/util.ts:1:");
     });
 
-    it("supports regex patterns (word-bounded match)", async () => {
+    it("supports regex patterns", async () => {
       const out = await tools.dispatch(
-        "search_content",
+        "grep",
         JSON.stringify({ pattern: "\\bexport\\s+const\\s+y\\b" }),
       );
-      expect(out).toContain("util.ts");
-      expect(out).not.toContain("index.ts");
+      expect(out).toContain("src/util.ts:1:");
+      expect(out).not.toContain("src/index.ts:1:");
     });
 
     it("is case-insensitive by default", async () => {
-      const out = await tools.dispatch("search_content", JSON.stringify({ pattern: "EXPORT" }));
-      expect(out).toContain("export");
-    });
-
-    it("respects case_sensitive when set", async () => {
-      const out = await tools.dispatch(
-        "search_content",
-        JSON.stringify({ pattern: "EXPORT", case_sensitive: true }),
-      );
-      expect(out).toMatch(/no matches/);
-    });
-
-    it("filters by glob substring on the file name", async () => {
-      const out = await tools.dispatch(
-        "search_content",
-        JSON.stringify({ pattern: "export const", glob: "util" }),
-      );
-      expect(out).toContain("util.ts");
-      expect(out).not.toContain("index.ts");
+      const out = await tools.dispatch("grep", JSON.stringify({ pattern: "EXPORT" }));
+      expect(out).toContain("src/index.ts:1:");
+      expect(out).toContain("src/util.ts:1:");
     });
 
     it("skips dependency dirs by default", async () => {
-      // Drop a node_modules-style file matching the pattern.
       await fs.mkdir(join(root, "node_modules", "junk"), { recursive: true });
       await fs.writeFile(
         join(root, "node_modules", "junk", "vendor.ts"),
         "export const NEEDLE = 1;\n",
       );
-      const out = await tools.dispatch("search_content", JSON.stringify({ pattern: "NEEDLE" }));
+      const out = await tools.dispatch("grep", JSON.stringify({ pattern: "NEEDLE" }));
       expect(out).toMatch(/no matches/);
     });
 
-    it("includes dependency dirs when include_deps:true", async () => {
-      await fs.mkdir(join(root, "node_modules", "junk"), { recursive: true });
-      await fs.writeFile(
-        join(root, "node_modules", "junk", "vendor.ts"),
-        "export const NEEDLE = 1;\n",
-      );
-      const out = await tools.dispatch(
-        "search_content",
-        JSON.stringify({ pattern: "NEEDLE", include_deps: true }),
-      );
-      expect(out).toContain("vendor.ts");
-    });
-
-    it("skips binary files by extension", async () => {
-      // A .png with searchable text inside — extension wins.
+    it("skips binary files by extension and by NUL-byte sniff", async () => {
       await fs.writeFile(join(root, "logo.png"), "this is a PNG with NEEDLE inside\n");
-      const out = await tools.dispatch("search_content", JSON.stringify({ pattern: "NEEDLE" }));
-      expect(out).not.toContain("logo.png");
-    });
-
-    it("skips binary files by content (NUL byte sniff)", async () => {
-      // A .txt that's actually binary — content sniff catches it.
       const buf = Buffer.concat([Buffer.from("NEEDLE\0"), Buffer.from([0, 1, 2, 3])]);
       await fs.writeFile(join(root, "data.txt"), buf);
-      const out = await tools.dispatch("search_content", JSON.stringify({ pattern: "NEEDLE" }));
+      const out = await tools.dispatch("grep", JSON.stringify({ pattern: "NEEDLE" }));
+      expect(out).not.toContain("logo.png");
       expect(out).not.toContain("data.txt");
+      expect(out).toMatch(/no matches/);
     });
 
     it("returns a clean (no matches) message when nothing matches", async () => {
       const out = await tools.dispatch(
-        "search_content",
+        "grep",
         JSON.stringify({ pattern: "definitely_not_present_anywhere_zxq" }),
       );
       expect(out).toMatch(/no matches/);
@@ -523,37 +479,33 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
     it("returns slash-normalized path prefixes (no backslashes)", async () => {
       await fs.mkdir(join(root, "src", "cli", "ui"), { recursive: true });
       await fs.writeFile(join(root, "src", "cli", "ui", "App.tsx"), "UNIQUE_MARKER_42\n");
-      const out = await tools.dispatch(
-        "search_content",
-        JSON.stringify({ pattern: "UNIQUE_MARKER_42" }),
-      );
+      const out = await tools.dispatch("grep", JSON.stringify({ pattern: "UNIQUE_MARKER_42" }));
       expect(out).toMatch(/src\/cli\/ui\/App\.tsx:1:/);
       expect(out).not.toMatch(/src[\\]cli/);
     });
 
-    it("scans a 1.5 MiB single-line file fully without hanging (issue #1236)", async () => {
-      // Minified-bundle shape — long single line. We want the search to
-      // (a) cover the whole line, and (b) complete in reasonable time
-      // against a literal pattern. The pattern below is literal so V8's
-      // fast regex path handles 1.5 MiB in tens of ms. The walk-level
-      // deadline (WALK_DEADLINE_MS) is the backstop if a future change
-      // regresses to quadratic behaviour.
-      const longLine = "a".repeat(1_500_000);
-      await fs.writeFile(join(root, "huge.txt"), `${longLine}\n`);
-      const start = Date.now();
-      const out = await tools.dispatch(
-        "search_content",
-        JSON.stringify({ pattern: "definitely_not_in_aaaa" }),
-      );
-      expect(Date.now() - start).toBeLessThan(2000);
-      expect(out).toMatch(/no matches/);
+    it("honors timeout_seconds and reports a timeout", async () => {
+      const reg = new ToolRegistry({ rateLimit: false });
+      registerFilesystemTools(reg, { rootDir: root });
+      const base = Date.now();
+      let calls = 0;
+      const spy = vi.spyOn(Date, "now").mockImplementation(() => {
+        calls++;
+        return calls === 1 ? base : base + 2000;
+      });
+      try {
+        const out = await reg.dispatch(
+          "grep",
+          JSON.stringify({ pattern: "line", timeout_seconds: 1 }),
+        );
+        expect(out).toMatch(/timed out after 1s/);
+        expect(out).toMatch(/no matches/);
+      } finally {
+        spy.mockRestore();
+      }
     });
 
-    it("skips a single file with catastrophic regex and keeps walking (issue #1236)", async () => {
-      // (a+)+! on a long run of 'a' is the textbook ReDoS pattern. With the
-      // worker-isolated runner, the bad file is terminated and reported as
-      // a regex-timeout in the footer; the remaining file still produces
-      // its match.
+    it("skips a single file with catastrophic regex and keeps walking", async () => {
       const { RegexRunner, __setRegexRunnerForTesting } = await import(
         "../src/tools/fs/regex-runner.js"
       );
@@ -561,7 +513,7 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
       try {
         await fs.writeFile(join(root, "evil.txt"), `${"a".repeat(40)}\n`);
         await fs.writeFile(join(root, "good.txt"), "match here\n");
-        const out = await tools.dispatch("search_content", JSON.stringify({ pattern: "(a+)+!" }));
+        const out = await tools.dispatch("grep", JSON.stringify({ pattern: "(a+)+!" }));
         expect(out).toMatch(/regex timed out on 1 file/);
         expect(out).toContain("evil.txt");
       } finally {
@@ -569,10 +521,10 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
       }
     });
 
-    it("returns an aborted error when the signal fires before dispatch (issue #1236)", async () => {
+    it("returns an aborted error when the signal fires before dispatch", async () => {
       const ctrl = new AbortController();
       ctrl.abort();
-      const out = await tools.dispatch("search_content", JSON.stringify({ pattern: "anything" }), {
+      const out = await tools.dispatch("grep", JSON.stringify({ pattern: "anything" }), {
         signal: ctrl.signal,
       });
       expect(out).toMatch(/aborted before dispatch/);
@@ -597,7 +549,7 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
 
       try {
         const out = await tools.dispatch(
-          "search_content",
+          "grep",
           JSON.stringify({ pattern: "export const" }),
           { signal: ctrl.signal },
         );
@@ -607,131 +559,16 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
       }
     });
 
-    describe("glob filter", () => {
-      beforeEach(async () => {
-        await fs.mkdir(join(root, "src", "ui"), { recursive: true });
-        await fs.writeFile(join(root, "src", "alpha.ts"), "TARGETSTRING\n");
-        await fs.writeFile(join(root, "src", "beta.tsx"), "TARGETSTRING\n");
-        await fs.writeFile(join(root, "src", "ui", "gamma.tsx"), "TARGETSTRING\n");
-        await fs.writeFile(join(root, "notes.md"), "TARGETSTRING\n");
-      });
-
-      it("real glob: '*.ts' matches only .ts (not .tsx)", async () => {
-        const out = await tools.dispatch(
-          "search_content",
-          JSON.stringify({ pattern: "TARGETSTRING", glob: "*.ts" }),
-        );
-        expect(out).toContain("src/alpha.ts:");
-        expect(out).not.toContain("beta.tsx");
-        expect(out).not.toContain("gamma.tsx");
-        expect(out).not.toContain("notes.md");
-      });
-
-      it("real glob: '**/*.tsx' matches across subdirs", async () => {
-        const out = await tools.dispatch(
-          "search_content",
-          JSON.stringify({ pattern: "TARGETSTRING", glob: "**/*.tsx" }),
-        );
-        expect(out).toContain("src/beta.tsx:");
-        expect(out).toContain("src/ui/gamma.tsx:");
-        expect(out).not.toContain("alpha.ts:");
-        expect(out).not.toContain("notes.md");
-      });
-
-      it("real glob: brace expansion '*.{ts,tsx}'", async () => {
-        const out = await tools.dispatch(
-          "search_content",
-          JSON.stringify({ pattern: "TARGETSTRING", glob: "*.{ts,tsx}" }),
-        );
-        expect(out).toContain("src/alpha.ts:");
-        expect(out).toContain("src/beta.tsx:");
-        expect(out).not.toContain("notes.md");
-      });
-
-      it("substring fallback: '.ts' still works (matches .ts and .tsx)", async () => {
-        const out = await tools.dispatch(
-          "search_content",
-          JSON.stringify({ pattern: "TARGETSTRING", glob: ".ts" }),
-        );
-        expect(out).toContain("src/alpha.ts:");
-        expect(out).toContain("src/beta.tsx:");
-        expect(out).not.toContain("notes.md");
-      });
-
-      it("substring fallback: 'beta' matches by basename substring", async () => {
-        const out = await tools.dispatch(
-          "search_content",
-          JSON.stringify({ pattern: "TARGETSTRING", glob: "beta" }),
-        );
-        expect(out).toContain("src/beta.tsx:");
-        expect(out).not.toContain("alpha.ts:");
-        expect(out).not.toContain("gamma.tsx:");
-      });
-    });
-
-    describe("per-file cap and histogram fallback", () => {
-      it("caps a single file's printed hits at 30 and footers the overflow", async () => {
-        const lines = Array.from({ length: 47 }, () => "TARGETSTRING here");
-        await fs.writeFile(join(root, "many.ts"), lines.join("\n"));
-        const out = await tools.dispatch(
-          "search_content",
-          JSON.stringify({ pattern: "TARGETSTRING", glob: "many.ts" }),
-        );
-        const hitLines = out.split("\n").filter((l) => /^many\.ts:\d+:/.test(l));
-        expect(hitLines).toHaveLength(30);
-        expect(out).toMatch(/\[many\.ts: 17 more matches in this file/);
-      });
-
-      it("does not emit the cap footer when hits fit under the cap", async () => {
-        const lines = Array.from({ length: 5 }, () => "TARGETSTRING here");
-        await fs.writeFile(join(root, "few.ts"), lines.join("\n"));
-        const out = await tools.dispatch(
-          "search_content",
-          JSON.stringify({ pattern: "TARGETSTRING", glob: "few.ts" }),
-        );
-        expect(out).not.toMatch(/more matches in this file/);
-      });
-
-      it("summary_only:true returns histogram with no line content", async () => {
-        await fs.writeFile(
-          join(root, "a.ts"),
-          ["MARK one", "noise", "MARK two", "MARK three"].join("\n"),
-        );
-        await fs.writeFile(join(root, "b.ts"), ["MARK only"].join("\n"));
-        const out = await tools.dispatch(
-          "search_content",
-          JSON.stringify({ pattern: "MARK", summary_only: true, glob: "*.ts" }),
-        );
-        expect(out).toContain("a.ts: 3 matches");
-        expect(out).toContain("b.ts: 1 match");
-        expect(out).not.toMatch(/MARK one/);
-        expect(out).not.toMatch(/MARK two/);
-      });
-
-      it("flips remaining files to summary mode once 80% of the byte budget is spent", async () => {
-        const tiny = new ToolRegistry();
-        registerFilesystemTools(tiny, { rootDir: root, maxListBytes: 4096 });
-        const dir = join(root, "histtest");
-        await fs.mkdir(dir, { recursive: true });
-        // Per-file output ≈ 8 hits × ~75 bytes ≈ 600 bytes. 5 files → 3000 bytes
-        // (~73%); 6 → ~88%, so the flip lands somewhere in the back half of
-        // the alphabetical walk.
-        const fileNames = "abcdefghij".split("");
-        const hitLine = `TARGET ${"y".repeat(50)}`;
-        for (const name of fileNames) {
-          const lines = Array.from({ length: 8 }, () => hitLine);
-          await fs.writeFile(join(dir, `${name}.ts`), lines.join("\n"));
-        }
-        const out = await tiny.dispatch(
-          "search_content",
-          JSON.stringify({ pattern: "TARGET", path: "histtest" }),
-        );
-        expect(out).toMatch(/switching to summary mode — byte budget at \d+%/);
-        const histogramLines = out
-          .split("\n")
-          .filter((l) => /^histtest\/[a-j]\.ts: \d+ match/.test(l));
-        expect(histogramLines.length).toBeGreaterThan(0);
-      });
+    it("caps total matches globally at 200", async () => {
+      const lines = Array.from({ length: 250 }, (_, i) => `TARGET line ${i}`);
+      await fs.writeFile(join(root, "many.ts"), lines.join("\n"));
+      const out = await tools.dispatch(
+        "grep",
+        JSON.stringify({ pattern: "TARGET", path: "many.ts" }),
+      );
+      const hitLines = out.split("\n").filter((l) => /^many\.ts:\d+:/.test(l));
+      expect(hitLines).toHaveLength(200);
+      expect(out).toMatch(/truncated at 200 matches/);
     });
   });
 
@@ -1311,67 +1148,7 @@ describe("filesystem tools (built-in, sandbox-enforced)", () => {
     });
   });
 
-  describe("search_content — context lines (-A/-B/-C semantics)", () => {
-    it("returns just the hit when context is omitted (default 0)", async () => {
-      await fs.writeFile(
-        join(root, "ctx.txt"),
-        ["one", "two", "TARGET", "four", "five"].join("\n"),
-      );
-      const out = await tools.dispatch(
-        "search_content",
-        JSON.stringify({ pattern: "TARGET", glob: "ctx.txt" }),
-      );
-      expect(out).toContain("ctx.txt:3: TARGET");
-      expect(out).not.toContain("ctx.txt:2");
-      expect(out).not.toContain("ctx.txt:4");
-    });
 
-    it("includes N lines before and after with `context:N`", async () => {
-      await fs.writeFile(
-        join(root, "ctx.txt"),
-        ["one", "two", "TARGET", "four", "five"].join("\n"),
-      );
-      const out = await tools.dispatch(
-        "search_content",
-        JSON.stringify({ pattern: "TARGET", glob: "ctx.txt", context: 1 }),
-      );
-      expect(out).toContain("ctx.txt:2- two");
-      expect(out).toContain("ctx.txt:3: TARGET");
-      expect(out).toContain("ctx.txt:4- four");
-      expect(out).not.toContain("ctx.txt:1-");
-      expect(out).not.toContain("ctx.txt:5-");
-    });
-
-    it("merges overlapping windows for adjacent hits and uses -- between non-adjacent windows", async () => {
-      await fs.writeFile(
-        join(root, "ctx.txt"),
-        ["zero", "HIT", "two", "three", "four", "HIT", "six", "seven"].join("\n"),
-      );
-      const out = await tools.dispatch(
-        "search_content",
-        JSON.stringify({ pattern: "HIT", glob: "ctx.txt", context: 1 }),
-      );
-      expect(out.match(/ctx\.txt:2: HIT/g)?.length).toBe(1);
-      expect(out.match(/ctx\.txt:6: HIT/g)?.length).toBe(1);
-      expect(out).toContain("--");
-    });
-
-    it("clamps `context` at 20", async () => {
-      await fs.writeFile(
-        join(root, "ctx.txt"),
-        Array.from({ length: 100 }, (_, i) => (i === 49 ? "TARGET" : `line ${i + 1}`)).join("\n"),
-      );
-      const out = await tools.dispatch(
-        "search_content",
-        JSON.stringify({ pattern: "TARGET", glob: "ctx.txt", context: 999 }),
-      );
-      expect(out).toContain("ctx.txt:50: TARGET");
-      expect(out).toContain("ctx.txt:30- line 30");
-      expect(out).toContain("ctx.txt:70- line 70");
-      expect(out).not.toMatch(/ctx\.txt:29-\s/);
-      expect(out).not.toMatch(/ctx\.txt:71-\s/);
-    });
-  });
 });
 
 describe("lineDiff — LCS line-level diff used by edit_file", () => {

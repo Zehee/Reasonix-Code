@@ -74,17 +74,17 @@ describe("summarizeToolResult — known tools", () => {
     expect(out.summary).toBe("1 entry");
   });
 
-  it("search_content: shows match count + first match", () => {
+  it("grep: shows match count + first match", () => {
     const out = summarizeToolResult(
-      "search_content",
+      "grep",
       "src/foo.ts:12: const x = 1\nsrc/bar.ts:34: const x = 2",
     );
     expect(out.summary).toMatch(/2 matches/);
     expect(out.summary).toMatch(/src\/foo\.ts/);
   });
 
-  it("search_content: explicit no-match path", () => {
-    const out = summarizeToolResult("search_content", "");
+  it("grep: explicit no-match path", () => {
+    const out = summarizeToolResult("grep", "");
     expect(out.summary).toBe("no matches");
   });
 
