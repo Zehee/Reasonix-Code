@@ -16,7 +16,7 @@
   Desktop downloads: <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-windows.exe">Windows</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-macos.dmg">macOS</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-linux.deb">Linux</a>
 </p>
 
-> **Note:** In the release page, `reasonix-code-v*.exe` (~102 MB) is the CLI build (it bundles the Bun runtime). The desktop installer is only ~2 MB and downloads the CLI automatically during installation.
+> **Note:** In the release page, `reasonix-code-v*.exe` (~102 MB) is the CLI build (it bundles the Bun runtime). The desktop installer is only ~2 MB: if the CLI is already installed, the desktop installer skips the download and just launches the UI; otherwise it downloads the CLI, adds it to PATH, and then runs the UI.
 
 **Reasonix-Code** is a lightweight, transparent, and controllable coding agent for developers who need AI to remember decisions across sessions — no vector databases, knowledge graphs, opaque "AI memory" black boxes, or MCP servers required.
 

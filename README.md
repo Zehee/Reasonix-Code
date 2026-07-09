@@ -16,7 +16,7 @@
   桌面版下载：<a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-windows.exe">Windows</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-macos.dmg">macOS</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-linux.deb">Linux</a>
 </p>
 
-> **说明：** Release 里 `reasonix-code-v*.exe`（约 102 MB）是命令行版（包含完整 Bun 运行时）。桌面安装包本身只有约 2 MB，安装时会自动下载并配置命令行版。
+> **说明：** Release 里 `reasonix-code-v*.exe`（约 102 MB）是命令行版（包含完整 Bun 运行时）。桌面安装包本身只有约 2 MB：如果系统里已经有命令行版，安装桌面版时会直接跳过下载、只启动界面；如果没有，安装程序会自动下载命令行版、添加到 PATH，然后运行 UI。
 
 **Reasonix-Code** 是一个轻量、透明、可控的编程 agent，专为需要 AI 记住跨 session 决策的开发者设计——不需要向量数据库、知识图谱、黑盒式的"AI 记忆"，也不需要安装任何 MCP 服务器。
 
