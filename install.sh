@@ -1,17 +1,15 @@
 #!/bin/sh
-# Install reasonix-code — the Reasonix-Code CLI binary.
-# Downloads the latest (or specified) release from GitHub, installs to
-# ~/.reasonix-code/bin, and adds it to PATH.
+# Install reasonix-code via npm.
+# Requires Node.js >= 22 and npm.
 #
 # Usage:
 #   ./install.sh
-#   ./install.sh v0.1.0
-#   ./install.sh -s        # silent (non-error output suppressed)
+#   ./install.sh 0.1.0
+#   ./install.sh -s        # silent
 
 set -e
 
-REPO_OWNER="Zehee"
-REPO_NAME="Reasonix-Code"
+PACKAGE_NAME="reasonix-code"
 VERSION=""
 SILENT=""
 
@@ -23,9 +21,6 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-
-INSTALL_DIR="$HOME/.reasonix-code/bin"
-TARGET="$INSTALL_DIR/reasonix-code"
 
 info() {
   if [ -z "$SILENT" ]; then
@@ -45,93 +40,73 @@ warn() {
   fi
 }
 
-detect_platform() {
-  case "$(uname -sm)" in
-    "Darwin x86_64" | "Darwin arm64") echo "macos" ;;
-    "Linux x86_64") echo "linux" ;;
-    *) echo "unsupported" ;;
+# ── Validate environment ───────────────────────────────────────────────
+node_major=""
+if command -v node >/dev/null 2>&1; then
+  node_version=$(node --version 2>/dev/null)
+  node_major=$(printf '%s' "$node_version" | sed -n 's/^v\?\([0-9]*\).*/\1/p')
+fi
+
+if [ -z "$node_major" ] || [ "$node_major" -lt 22 ]; then
+  echo "Node.js >= 22 and npm are required to install reasonix-code." >&2
+  echo "Please install Node.js first: https://nodejs.org/en/download" >&2
+  exit 1
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+  echo "npm is required but was not found." >&2
+  exit 1
+fi
+
+info "Node.js $node_version / npm $(npm --version) detected."
+
+# ── Install ────────────────────────────────────────────────────────────
+version_spec="$PACKAGE_NAME"
+if [ -n "$VERSION" ]; then
+  version_spec="$PACKAGE_NAME@$VERSION"
+fi
+
+info "Installing $version_spec via npm..."
+if ! npm install -g "$version_spec"; then
+  echo "npm install failed" >&2
+  exit 1
+fi
+
+# ── Ensure PATH contains npm global bin ────────────────────────────────
+npm_bin=$(npm bin -g 2>/dev/null || true)
+if [ -n "$npm_bin" ] && [ -d "$npm_bin" ]; then
+  case ":${PATH}:" in
+    *":$npm_bin:"*) ;;
+    *)
+      success "Adding '$npm_bin' to PATH..."
+      SHELL_PROFILE=""
+      if [ -n "${ZSH_VERSION:-}" ] || [ "${SHELL:-}" = */zsh ]; then
+        SHELL_PROFILE="$HOME/.zshrc"
+      elif [ -n "${BASH_VERSION:-}" ] || [ "${SHELL:-}" = */bash ]; then
+        SHELL_PROFILE="$HOME/.bashrc"
+      fi
+      if [ -n "$SHELL_PROFILE" ]; then
+        printf '\n# Reasonix-Code CLI\nexport PATH="%s:$PATH"\n' "$npm_bin" >> "$SHELL_PROFILE"
+        warn "Please restart your terminal or run: source $SHELL_PROFILE"
+      else
+        warn "Could not detect shell profile. Add the following to your profile:"
+        warn "export PATH=\"$npm_bin:\$PATH\""
+      fi
+      ;;
   esac
-}
+fi
 
-PLATFORM=$(detect_platform)
-if [ "$PLATFORM" = "unsupported" ]; then
-  echo "Unsupported platform: $(uname -sm)" >&2
+# ── Verify ─────────────────────────────────────────────────────────────
+if ! command -v reasonix-code >/dev/null 2>&1; then
+  echo "reasonix-code was installed but cannot be found on PATH." >&2
   exit 1
 fi
 
-if [ -z "$VERSION" ]; then
-  info "Fetching latest release info..."
-  if ! VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest" | grep '"tag_name":' | head -n 1 | cut -d'"' -f4); then
-    echo "Failed to fetch latest release" >&2
-    exit 1
-  fi
-fi
-
-info "Target version: $VERSION"
-
-# Check existing installation
-INSTALLED_VERSION=""
-if [ -x "$TARGET" ]; then
-  INSTALLED_VERSION=$("$TARGET" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
-fi
-
-TARGET_PLAIN=$(printf '%s' "$VERSION" | sed 's/^v//')
-if [ -n "$INSTALLED_VERSION" ] && [ "$INSTALLED_VERSION" = "$TARGET_PLAIN" ]; then
-  success "reasonix-code $INSTALLED_VERSION is already up to date at '$TARGET'."
-  exit 0
-fi
-
-ASSET="reasonix-code-$PLATFORM"
-URL="https://github.com/$REPO_OWNER/$REPO_NAME/releases/download/$VERSION/$ASSET"
-
-mkdir -p "$INSTALL_DIR"
-TMP_TARGET="$TARGET.$VERSION.tmp"
-
-info "Downloading $ASSET ..."
-if ! curl -fsSL "$URL" -o "$TMP_TARGET"; then
-  echo "Download failed: $URL" >&2
-  rm -f "$TMP_TARGET"
+verify=$(reasonix-code --version 2>/dev/null || true)
+if [ -z "$verify" ]; then
+  echo "Installed package does not run correctly." >&2
   exit 1
 fi
 
-chmod +x "$TMP_TARGET"
-
-info "Verifying binary..."
-if ! "$TMP_TARGET" --version >/dev/null 2>&1; then
-  echo "Installed binary does not run correctly" >&2
-  rm -f "$TMP_TARGET"
-  exit 1
-fi
-
-mv -f "$TMP_TARGET" "$TARGET"
-success "Installed reasonix-code ($VERSION) to $TARGET"
-
-# Add to PATH if not already present
-if [ -d "$INSTALL_DIR" ] && [ -n "$(command -v reasonix-code)" ]; then
-  if [ "$(command -v reasonix-code)" != "$TARGET" ]; then
-    warn "'reasonix-code' on your PATH points to a different location."
-    warn "Make sure '$INSTALL_DIR' comes before it in your PATH."
-  fi
-fi
-
-case ":${PATH}:" in
-  *":$INSTALL_DIR:"*) ;;
-  *)
-    success "Adding '$INSTALL_DIR' to PATH..."
-    SHELL_PROFILE=""
-    if [ -n "${ZSH_VERSION:-}" ] || [ "${SHELL:-}" = */zsh ]; then
-      SHELL_PROFILE="$HOME/.zshrc"
-    elif [ -n "${BASH_VERSION:-}" ] || [ "${SHELL:-}" = */bash ]; then
-      SHELL_PROFILE="$HOME/.bashrc"
-    fi
-    if [ -n "$SHELL_PROFILE" ]; then
-      printf '\n# Reasonix-Code CLI\nexport PATH="%s:$PATH"\n' "$INSTALL_DIR" >> "$SHELL_PROFILE"
-      warn "Please restart your terminal or run: source $SHELL_PROFILE"
-    else
-      warn "Could not detect shell profile. Add the following to your profile:"
-      warn "export PATH=\"$INSTALL_DIR:\$PATH\""
-    fi
-    ;;
-esac
-
+success "Verified: $verify"
 success "Done! Run 'reasonix-code' in your project directory to get started."

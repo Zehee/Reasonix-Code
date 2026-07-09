@@ -89,6 +89,12 @@ export function resolveDataPath(): string {
     /* import.meta.url unavailable — skip to the package resolution step. */
   }
   try {
+    // Standalone binary layout: data/ lives next to the executable.
+    candidates.push(join(dirname(process.execPath), "data", "deepseek-tokenizer.json.gz"));
+  } catch {
+    /* process.execPath unavailable — skip. */
+  }
+  try {
     const req = createRequire(import.meta.url);
     candidates.push(
       join(dirname(req.resolve("reasonix/package.json")), "data", "deepseek-tokenizer.json.gz"),

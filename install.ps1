@@ -1,42 +1,25 @@
 <#
 .SYNOPSIS
-    Install reasonix-code — the Reasonix-Code CLI binary.
+    Install reasonix-code via npm.
 .DESCRIPTION
-    Downloads the latest (or specified) release of reasonix-code from GitHub,
-    installs as reasonix-code.exe, and adds it to PATH.
-    If a local installation already exists, its version is compared with the
-    target release and the user is prompted to update (unless -Silent is used).
+    Requires Node.js >= 22 and npm. Installs the reasonix-code npm package
+    globally and ensures the npm global bin directory is on the user PATH.
 .PARAMETER Version
-    Release tag to download (e.g. "v0.1.0"). Defaults to the latest release.
-.PARAMETER InstallDir
-    Directory to place the binary. Defaults to "$HOME\.reasonix-code\bin".
-.PARAMETER Force
-    Overwrite an existing binary without prompting.
+    Version to install (e.g. "0.1.0"). Defaults to the latest npm dist-tag.
 .PARAMETER Silent
-    Do not prompt and suppress non-essential output. Useful for installers.
+    Suppress non-essential output.
 .EXAMPLE
     .\install.ps1
-    .\install.ps1 -Version v0.1.0
-    .\install.ps1 -InstallDir C:\tools -Force
+    .\install.ps1 -Version 0.1.0
     .\install.ps1 -Silent
 #>
 
 param(
     [string]$Version = "",
-    [string]$InstallDir = "",
-    [switch]$Force,
     [switch]$Silent
 )
 
-$RepoOwner = "Zehee"
-$RepoName  = "Reasonix-Code"
-$ExeName   = "reasonix-code.exe"
-
-# ── Resolve install directory ──────────────────────────────────────────
-if (-not $InstallDir) {
-    $InstallDir = Join-Path (Join-Path $HOME ".reasonix-code") "bin"
-}
-$TargetExe = Join-Path $InstallDir $ExeName
+$PackageName = "reasonix-code"
 
 function Write-Info($msg) {
     if (-not $Silent) { Write-Host $msg -ForegroundColor Cyan }
@@ -48,106 +31,109 @@ function Write-Warn($msg) {
     if (-not $Silent) { Write-Host $msg -ForegroundColor Yellow }
 }
 
-# ── Resolve target version ─────────────────────────────────────────────
-if (-not $Version) {
-    Write-Info "Fetching latest release info..."
-    $releases = "https://api.github.com/repos/$RepoOwner/$RepoName/releases/latest"
+function Test-NodeAvailable {
     try {
-        $latest = Invoke-RestMethod -Uri $releases -UseBasicParsing
-        $Version = $latest.tag_name
-    } catch {
-        Write-Error "Failed to fetch latest release: $_"
-        exit 1
-    }
+        $nodeOut = (& node --version 2>$null).Trim()
+        if ($nodeOut -match 'v?(\d+)') {
+            $major = [int]$Matches[1]
+            $npmOut = (& npm --version 2>$null).Trim()
+            if ($major -ge 22 -and $npmOut) {
+                return @{ Ok = $true; NodeVersion = $nodeOut; NpmVersion = $npmOut }
+            }
+        }
+    } catch {}
+    return @{ Ok = $false }
 }
-Write-Info "Target version: $Version"
 
-# ── Check existing installation ────────────────────────────────────────
-$installedVersion = $null
-if (Test-Path $TargetExe) {
+function Get-NpmGlobalPrefix {
     try {
-        $installedVersion = (& $TargetExe --version 2>$null).Trim()
-        # Version output may be "reasonix-code 0.1.5" or just "0.1.5"
-        if ($installedVersion -match '(\d+\.\d+\.\d+)') {
-            $installedVersion = $Matches[1]
-        }
-    } catch {
-        $installedVersion = $null
+        $prefix = (& npm config get prefix 2>$null).Trim()
+        if ($prefix) { return $prefix }
+    } catch {}
+    return $null
+}
+
+function Get-NpmGlobalBin {
+    $prefix = Get-NpmGlobalPrefix
+    if (-not $prefix) { return $null }
+    # On Windows npm shims live directly in the prefix; on Unix they live in prefix/bin.
+    $bin = Join-Path $prefix "bin"
+    if (Test-Path $bin) { return $bin }
+    return $prefix
+}
+
+function Add-ToUserPath($dir) {
+    $pathVar = [Environment]::GetEnvironmentVariable("PATH", "User")
+    $parts = $pathVar -split ";" | Where-Object { $_ -and ($_ -ne $dir) }
+    $newPath = ($parts + $dir) -join ";"
+    [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
+    $env:PATH = ($env:PATH -split ";" | Where-Object { $_ -ne $dir }) -join ";"
+    $env:PATH = "$env:PATH;$dir"
+}
+
+function Find-InstalledBinary {
+    try {
+        $found = (& where.exe reasonix-code 2>$null | Select-Object -First 1).Trim()
+        if ($found -and (Test-Path $found)) { return $found }
+    } catch {}
+
+    $npmBin = Get-NpmGlobalBin
+    if ($npmBin) {
+        $candidate = Join-Path $npmBin "reasonix-code.exe"
+        if (Test-Path $candidate) { return $candidate }
+        $candidateCmd = Join-Path $npmBin "reasonix-code.cmd"
+        if (Test-Path $candidateCmd) { return $candidateCmd }
     }
+    return $null
 }
 
-$targetPlain = $Version -replace '^v', ''
-if ($installedVersion -and ($installedVersion -eq $targetPlain) -and -not $Force) {
-    Write-Success "reasonix-code $installedVersion is already up to date at '$TargetExe'."
-    exit 0
+# ── Validate environment ───────────────────────────────────────────────
+$nodeInfo = Test-NodeAvailable
+if (-not $nodeInfo.Ok) {
+    Write-Error @"
+Node.js >= 22 and npm are required to install reasonix-code.
+Please install Node.js first: https://nodejs.org/en/download
+"@
+    exit 1
 }
+Write-Info "Node.js $($nodeInfo.NodeVersion) / npm $($nodeInfo.NpmVersion) detected."
 
-if ($installedVersion -and -not $Force) {
-    if ($Silent) {
-        Write-Info "Updating reasonix-code from $installedVersion to $targetPlain..."
-    } else {
-        $confirm = Read-Host "reasonix-code $installedVersion is installed. Update to $Version? [Y/n]"
-        if ($confirm -and $confirm -notmatch '^[yY]$') {
-            Write-Warn "Update skipped."
-            exit 0
-        }
-    }
-}
+# ── Resolve version ────────────────────────────────────────────────────
+$versionSpec = if ($Version) { "$PackageName@$Version" } else { $PackageName }
+Write-Info "Installing $versionSpec via npm..."
 
-# ── Download ───────────────────────────────────────────────────────────
-$assetName = "reasonix-code-$Version.exe"
-$downloadUrl = "https://github.com/$RepoOwner/$RepoName/releases/download/$Version/$assetName"
-
-$null = New-Item -ItemType Directory -Path $InstallDir -Force
-
-$tmpExe = Join-Path $InstallDir "reasonix-code-$Version.tmp.exe"
-
+# ── Install ────────────────────────────────────────────────────────────
 try {
-    Write-Info "Downloading $assetName ..."
-    Invoke-WebRequest -Uri $downloadUrl -OutFile $tmpExe -UseBasicParsing
+    $proc = Start-Process -FilePath "npm" -ArgumentList "install", "-g", $versionSpec -NoNewWindow -Wait -PassThru
+    if ($proc.ExitCode -ne 0) {
+        throw "npm install exited with code $($proc.ExitCode)"
+    }
 } catch {
-    Write-Error "Download failed: $_"
-    if (Test-Path $tmpExe) { Remove-Item $tmpExe -Force }
+    Write-Error "npm install failed: $_"
     exit 1
 }
 
-# ── Atomic replace ─────────────────────────────────────────────────────
-try {
-    if (Test-Path $TargetExe) {
-        Remove-Item $TargetExe -Force
-    }
-    Rename-Item -Path $tmpExe -NewName $ExeName -Force
-} catch {
-    Write-Error "Failed to install binary: $_"
-    exit 1
+# ── Ensure PATH contains npm global bin ────────────────────────────────
+$npmBin = Get-NpmGlobalBin
+if ($npmBin -and ($env:PATH -split ";" -notcontains $npmBin)) {
+    Add-ToUserPath $npmBin
+    Write-Success "Added '$npmBin' to user PATH."
 }
 
 # ── Verify ─────────────────────────────────────────────────────────────
-try {
-    $verify = (& $TargetExe --version 2>$null).Trim()
-    if (-not $verify) { throw "empty version output" }
-    Write-Success "Verified: $verify"
-} catch {
-    Write-Error "Installed binary does not run correctly: $_"
+$binary = Find-InstalledBinary
+if (-not $binary) {
+    Write-Error "reasonix-code was installed but cannot be found on PATH."
     exit 1
 }
 
-$size = (Get-Item $TargetExe).Length
-Write-Success "Installed $ExeName ($([math]::Round($size / 1MB, 1)) MB) to $TargetExe"
-
-# ── Add to PATH ────────────────────────────────────────────────────────
-$pathVar = [Environment]::GetEnvironmentVariable("PATH", "User")
-if ($pathVar -split ";" -notcontains $InstallDir) {
-    $newPath = "$pathVar;$InstallDir"
-    [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
-    # Also update current session
-    $env:PATH = "$env:PATH;$InstallDir"
-    Write-Success "Added '$InstallDir' to user PATH."
-    if (-not $Silent) {
-        Write-Warn "You may need to restart your terminal for the change to take effect."
-    }
-} else {
-    Write-Success "'$InstallDir' is already in your PATH."
+try {
+    $verify = (& $binary --version 2>$null).Trim()
+    if (-not $verify) { throw "empty version output" }
+    Write-Success "Verified: $verify"
+} catch {
+    Write-Error "Installed package does not run correctly: $_"
+    exit 1
 }
 
 Write-Success "Done! Run 'reasonix-code' in your project directory to get started."

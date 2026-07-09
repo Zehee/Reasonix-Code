@@ -4,7 +4,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 import { turnToRow } from "./adapter.js";
 import { rowToTurn } from "./adapter.js";
 import { LIMITS } from "./constants.js";
@@ -15,13 +15,13 @@ import { buildLikeConditions, scoreText } from "./utils/search.js";
 export class RefinedStore {
   refinedRoot: string;
   private dbPath: string;
-  private db: Database.Database;
+  private db: DatabaseSync;
 
   constructor(refinedRoot: string) {
     this.refinedRoot = refinedRoot;
     this.dbPath = path.join(refinedRoot, "refined.sqlite");
     fs.mkdirSync(refinedRoot, { recursive: true });
-    this.db = new Database(this.dbPath);
+    this.db = new DatabaseSync(this.dbPath);
     this.initDb();
   }
 
@@ -71,6 +71,18 @@ export class RefinedStore {
     return this.dbPath;
   }
 
+  private transaction<T>(fn: () => T): T {
+    this.db.exec("BEGIN");
+    try {
+      const result = fn();
+      this.db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   saveRefinedTurns(sessionId: string, refinedTurns: RefinedTurn[]): void {
     const insert = this.db.prepare(
       `INSERT OR REPLACE INTO refined_turns
@@ -84,7 +96,7 @@ export class RefinedStore {
       merged.set(turn.turnId, turn);
     }
 
-    const transaction = this.db.transaction(() => {
+    this.transaction(() => {
       for (const turn of merged.values()) {
         const row = turnToRow(turn);
         insert.run(
@@ -101,7 +113,6 @@ export class RefinedStore {
         );
       }
     });
-    transaction();
   }
 
   recordTurnAttention(query: string, refs: Array<{ sessionId: string; turnId: number }>): void {
@@ -112,12 +123,11 @@ export class RefinedStore {
                                      WHERE query = ? AND session_id = ? AND turn_id = ?), 0) + 1)`,
     );
     const now = new Date().toISOString();
-    const transaction = this.db.transaction(() => {
+    this.transaction(() => {
       for (const ref of refs) {
         insert.run(query, ref.sessionId, ref.turnId, now, query, ref.sessionId, ref.turnId);
       }
     });
-    transaction();
   }
 
   loadRefinedTurns(sessionId: string): RefinedTurn[] {
@@ -260,15 +270,14 @@ export class RefinedStore {
     const deleteStmt = this.db.prepare(
       "DELETE FROM refined_turns WHERE session_id = ? AND turn_id = ?",
     );
-    const transaction = this.db.transaction(() => {
+    return this.transaction(() => {
       let count = 0;
       for (const ref of refs) {
         const info = deleteStmt.run(ref.sessionId, ref.turnId);
-        count += info.changes;
+        count += Number(info.changes);
       }
       return count;
     });
-    return transaction();
   }
 
   close(): void {

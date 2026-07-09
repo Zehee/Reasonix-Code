@@ -71,6 +71,8 @@ function resolveGrammarPath(grammar: GrammarName, overrideDir?: string): string 
   if (resolvedGrammarDir) candidates.push(resolve(resolvedGrammarDir, filename));
   candidates.push(resolve(dirname(fileURLToPath(import.meta.url)), "..", "grammars", filename));
   candidates.push(resolve(dirname(fileURLToPath(import.meta.url)), "grammars", filename));
+  // Standalone binary layout: grammars/ lives next to the executable.
+  candidates.push(resolve(dirname(process.execPath), "grammars", filename));
   for (const pkg of DEV_PACKAGE_FOR_GRAMMAR[grammar]) {
     try {
       candidates.push(resolve(dirname(localRequire.resolve(`${pkg}/package.json`)), filename));

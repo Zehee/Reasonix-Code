@@ -13,10 +13,10 @@
 </p>
 
 <p align="center">
-  桌面版下载：<a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-windows.exe">Windows</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-macos.dmg">macOS</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-desktop-linux.deb">Linux</a>
+  桌面版下载：<a href="https://github.com/Zehee/Reasonix-Code/releases/latest">Windows / macOS / Linux</a>
 </p>
 
-> **说明：** 桌面版只是一个启动壳，底层调用的是命令行版 `reasonix-code code` 的同一个 TUI / Dashboard loop。因此系统里已有命令行版时，桌面版会直接复用它、只负责弹出界面；没有时才会自动下载命令行版并添加到 PATH。Release 里的 `reasonix-code-v*.exe`（约 102 MB）是命令行版本体，桌面安装包（约 2 MB）只是这个壳。
+> **说明：** 桌面版只是一个启动壳，底层调用的是命令行版 `reasonix-code code` 的同一个 TUI / Dashboard loop。因此系统里已有命令行版时，桌面版会直接复用它、只负责弹出界面；没有时会检测 Node.js / npm 环境，缺失则提示安装，然后通过 `npm install -g reasonix-code` 自动安装命令行版。桌面安装包本身只有约 2 MB。
 
 **Reasonix-Code** 是一个轻量、透明、可控的编程 agent，专为需要 AI 记住跨 session 决策的开发者设计——不需要向量数据库、知识图谱、黑盒式的"AI 记忆"，也不需要安装任何 MCP 服务器。
 
@@ -105,18 +105,25 @@ trace_theme "auth-flow"
 
 ## 安装
 
-### Windows (PowerShell)
+需要 **Node.js >= 22** 和 npm。
+
+### 通过 npm（推荐）
+
+```bash
+npm install -g reasonix-code
+```
+
+### Windows（PowerShell 一键脚本）
 
 ```powershell
-# 下载并安装（自动加入 PATH，重启终端后生效）
+# 自动检测 Node.js，安装并加入 PATH
 irm https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.ps1 | iex
 ```
 
-### 独立二进制
+### macOS / Linux（Shell 一键脚本）
 
-```powershell
-# 下载最新版本
-iwr https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-v0.1.6.exe -OutFile reasonix-code.exe
+```bash
+curl -fsSL https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.sh | sh
 ```
 
 ---

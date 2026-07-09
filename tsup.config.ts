@@ -10,6 +10,7 @@ export default defineConfig([
     target: "node22",
     outDir: "dist",
     noExternal: ["@reasonix/core-utils", "ink"],
+    removeNodeProtocol: false,
   },
   {
     entry: ["src/cli/index.ts"],
@@ -24,6 +25,7 @@ export default defineConfig([
     },
     platform: "node",
     noExternal: [/.*/],
+    removeNodeProtocol: false,
     esbuildOptions(opts) {
       opts.external = [...(opts.external ?? []), "react-devtools-core"];
     },

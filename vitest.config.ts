@@ -3,8 +3,32 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
+const SQLITE_VIRTUAL = "\0node-sqlite-runtime";
 
 export default defineConfig({
+  plugins: [
+    {
+      name: "node-sqlite-runtime",
+      enforce: "pre",
+      resolveId(id) {
+        if (id === "node:sqlite" || id === "sqlite") {
+          return SQLITE_VIRTUAL;
+        }
+      },
+      load(id) {
+        if (id !== SQLITE_VIRTUAL) return;
+        return `
+import { createRequire } from "node:module";
+const sqlite = createRequire(import.meta.url)("node:sqlite");
+export const DatabaseSync = sqlite.DatabaseSync;
+export const StatementSync = sqlite.StatementSync;
+export const SqliteError = sqlite.SqliteError;
+export default sqlite;
+`;
+      },
+    },
+  ],
+
   resolve: {
     alias: {
       "@": resolve(here, "src"),

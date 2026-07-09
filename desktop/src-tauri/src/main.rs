@@ -9,7 +9,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
-use tauri::{Emitter, Listener, Manager};
+use tauri::{AppHandle, Emitter, Listener, Manager, State};
 
 /// #892: bundled libwayland in AppImage can ABI-mismatch the host Wayland
 /// compositor → WebKitWebProcess `abort()`s on EGL display creation. Redirect
@@ -213,6 +213,147 @@ fn write_text_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, &content).map_err(|e| format!("write failed: {e}"))
 }
 
+// ── Environment check / install / launch commands ─────────────────────────────
+
+#[derive(Serialize)]
+struct EnvStatus {
+    node_ok: bool,
+    node_version: Option<String>,
+    npm_ok: bool,
+    cli_ok: bool,
+    cli_version: Option<String>,
+}
+
+fn run_version_cmd(cmd: &mut Command) -> Option<String> {
+    let output = cmd.output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if s.is_empty() { None } else { Some(s) }
+}
+
+fn parse_node_major(version: &str) -> Option<u32> {
+    version
+        .trim()
+        .strip_prefix('v')
+        .or(Some(version.trim()))
+        .and_then(|s| s.split('.').next())
+        .and_then(|s| s.parse().ok())
+}
+
+#[tauri::command]
+fn check_environment() -> EnvStatus {
+    let node_version = run_version_cmd(&mut Command::new("node").arg("--version"));
+    let node_ok = node_version
+        .as_ref()
+        .and_then(|v| parse_node_major(v))
+        .map(|m| m >= 22)
+        .unwrap_or(false);
+    let npm_version = run_version_cmd(&mut Command::new("npm").arg("--version"));
+    let npm_ok = npm_version.is_some();
+    let cli_version =
+        find_cli().and_then(|cli| run_version_cmd(&mut Command::new(&cli).arg("--version")));
+    let cli_ok = cli_version.is_some();
+    EnvStatus {
+        node_ok,
+        node_version,
+        npm_ok,
+        cli_version,
+        cli_ok,
+    }
+}
+
+#[tauri::command]
+fn install_node() -> Result<(), String> {
+    tauri_plugin_opener::open_url("https://nodejs.org/en/download", None::<&str>)
+        .map_err(|e| format!("failed to open browser: {e}"))
+}
+
+fn npm_install_cmd(version: Option<String>) -> Command {
+    let spec = version.unwrap_or_else(|| "reasonix-code@latest".to_string());
+    let args = vec!["install", "-g", &spec];
+    if cfg!(windows) {
+        let mut cmd = Command::new("cmd");
+        cmd.arg("/c").arg("npm").args(&args);
+        cmd
+    } else {
+        let mut cmd = Command::new("npm");
+        cmd.args(&args);
+        cmd
+    }
+}
+
+#[tauri::command]
+fn install_cli(app: AppHandle, version: Option<String>) {
+    thread::spawn(move || {
+        let result = (|| -> Result<(), String> {
+            let mut cmd = npm_install_cmd(version);
+            cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+                cmd.creation_flags(CREATE_NO_WINDOW);
+            }
+
+            let mut child = cmd
+                .spawn()
+                .map_err(|e| format!("failed to start npm: {e}"))?;
+            let stdout = child.stdout.take().ok_or("no stdout")?;
+            let stderr = child.stderr.take().ok_or("no stderr")?;
+
+            let app_stdout = app.clone();
+            thread::spawn(move || {
+                for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                    let _ = app_stdout.emit("install:stdout", line);
+                }
+            });
+
+            let app_stderr = app.clone();
+            thread::spawn(move || {
+                for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                    let _ = app_stderr.emit("install:stderr", line);
+                }
+            });
+
+            let status = child
+                .wait()
+                .map_err(|e| format!("npm process error: {e}"))?;
+            if !status.success() {
+                return Err(format!("npm exited with code {:?}", status.code()));
+            }
+            Ok(())
+        })();
+
+        let success = result.is_ok();
+        let error = result.err().map(|e| e.to_string());
+        let _ = app.emit(
+            "install:done",
+            serde_json::json!({ "success": success, "error": error }),
+        );
+    });
+}
+
+#[tauri::command]
+fn launch_backend(app: AppHandle, state: State<DesktopState>, cwd: Option<String>) {
+    let cwd_path = cwd
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    let state = DesktopState {
+        child: state.child.clone(),
+    };
+    thread::spawn(move || {
+        let result: Result<(), String> = (|| {
+            let cli = find_cli().ok_or("reasonix-code CLI not found.")?;
+            spawn_tui(&app, &state, &cli, &cwd_path)
+        })();
+        if let Err(err) = result {
+            let _ = app.emit("cli:error", err);
+        }
+    });
+}
+
 // ── Desktop shell lifecycle: detect CLI → install → start TUI → load dashboard ──
 
 #[derive(Default)]
@@ -376,6 +517,7 @@ fn spawn_tui(
 }
 
 #[cfg(not(windows))]
+#[allow(dead_code)]
 fn install_cli_unix() -> Result<(), String> {
     let url = "https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.sh";
     let output = std::process::Command::new("sh")
@@ -390,6 +532,7 @@ fn install_cli_unix() -> Result<(), String> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn start_backend(app: &tauri::AppHandle, state: &DesktopState) {
     let app = app.clone();
     let state = DesktopState {
@@ -458,13 +601,18 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(DesktopState::default())
         .invoke_handler(tauri::generate_handler![
             open_in_editor,
             list_workspace_tree,
             git_status,
-            write_text_file
+            write_text_file,
+            check_environment,
+            install_cli,
+            install_node,
+            launch_backend
         ])
         .setup(|app| {
             // #1119: Updater pubkey is empty — auto-updates will not be
@@ -531,9 +679,6 @@ fn main() {
                     w.open_devtools();
                 }
             }
-
-            let state = app.state::<DesktopState>();
-            start_backend(app.handle(), &state);
 
             Ok(())
         })
