@@ -99,11 +99,8 @@ function versionLessThan(a, b) {
 
 async function fetchLatestCliVersion() {
   try {
-    const res = await fetch("https://api.github.com/repos/Zehee/Reasonix-Code/releases/latest");
-    if (!res.ok) return null;
-    const data = await res.json();
-    const tag = data?.tag_name;
-    return typeof tag === "string" ? tag.replace(/^v/, "") : null;
+    const v = await tauri.core.invoke("latest_cli_version");
+    return typeof v === "string" ? v.replace(/^v/, "") : null;
   } catch {
     return null;
   }

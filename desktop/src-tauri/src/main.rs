@@ -265,6 +265,25 @@ fn check_environment() -> EnvStatus {
 }
 
 #[tauri::command]
+fn latest_cli_version() -> Option<String> {
+    let mut cmd = if cfg!(windows) {
+        let mut c = Command::new("cmd");
+        c.arg("/c").arg("npm");
+        c
+    } else {
+        Command::new("npm")
+    };
+    cmd.arg("view").arg("reasonix-code").arg("version");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    run_version_cmd(&mut cmd)
+}
+
+#[tauri::command]
 fn install_node() -> Result<(), String> {
     tauri_plugin_opener::open_url("https://nodejs.org/en/download", None::<&str>)
         .map_err(|e| format!("failed to open browser: {e}"))
@@ -676,6 +695,7 @@ fn main() {
             git_status,
             write_text_file,
             check_environment,
+            latest_cli_version,
             install_cli,
             install_node,
             launch_backend
