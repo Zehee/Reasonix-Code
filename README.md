@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  桌面版下载：<a href="https://github.com/Zehee/Reasonix-Code/releases/latest">Windows / macOS / Linux</a>
+  桌面版下载：<a href="https://github.com/Zehee/Reasonix-Code/releases/tag/desktop-latest">Windows / macOS / Linux</a>
 </p>
 
 > **说明：** 桌面版只是一个启动壳，底层调用的是命令行版 `reasonix-code code` 的同一个 TUI / Dashboard loop。因此系统里已有命令行版时，桌面版会直接复用它、只负责弹出界面；没有时会检测 Node.js / npm 环境，缺失则提示安装，然后通过 `npm install -g reasonix-code` 自动安装命令行版。桌面安装包本身只有约 2 MB。
