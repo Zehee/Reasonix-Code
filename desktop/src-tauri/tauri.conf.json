@@ -27,7 +27,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: asset: https://asset.localhost http://127.0.0.1:* http://localhost:*; font-src 'self' data: http://127.0.0.1:* http://localhost:*; style-src 'self' 'unsafe-inline'; script-src 'self' http://127.0.0.1:* http://localhost:*; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:* https://api.deepseek.com https://pub-147fb53b9c1e4bbf891a257968619ea7.r2.dev https://github.com"
+      "csp": "default-src 'self'; img-src 'self' data: asset: https://asset.localhost http://127.0.0.1:* http://localhost:*; font-src 'self' data: http://127.0.0.1:* http://localhost:*; style-src 'self' 'unsafe-inline'; script-src 'self' http://127.0.0.1:* http://localhost:*; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:* https://api.deepseek.com https://pub-147fb53b9c1e4bbf891a257968619ea7.r2.dev https://github.com https://api.github.com"
     }
   },
   "bundle": {

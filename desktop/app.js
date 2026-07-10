@@ -77,6 +77,38 @@ function parsePayload(ev) {
   return payload;
 }
 
+function parseVersion(version) {
+  const cleaned = version.trim().replace(/^v/, "");
+  const parts = cleaned.split(".");
+  if (parts.length !== 3) return null;
+  const nums = parts.map((p) => parseInt(p, 10));
+  if (nums.some(Number.isNaN)) return null;
+  return nums;
+}
+
+function versionLessThan(a, b) {
+  const va = parseVersion(a);
+  const vb = parseVersion(b);
+  if (!va || !vb) return false;
+  for (let i = 0; i < 3; i++) {
+    if (va[i] < vb[i]) return true;
+    if (va[i] > vb[i]) return false;
+  }
+  return false;
+}
+
+async function fetchLatestCliVersion() {
+  try {
+    const res = await fetch("https://api.github.com/repos/Zehee/Reasonix-Code/releases/latest");
+    if (!res.ok) return null;
+    const data = await res.json();
+    const tag = data?.tag_name;
+    return typeof tag === "string" ? tag.replace(/^v/, "") : null;
+  } catch {
+    return null;
+  }
+}
+
 async function launchBackend() {
   setStatus("Starting backend…");
   clearActions();
@@ -124,11 +156,6 @@ async function checkEnvironment() {
   setStatus("Checking environment…");
   try {
     const status = await tauri.core.invoke("check_environment");
-    if (status.cli_ok) {
-      setStatus("CLI ready, starting…");
-      launchBackend();
-      return;
-    }
 
     clearActions();
 
@@ -138,8 +165,23 @@ async function checkEnvironment() {
       return;
     }
 
-    setStatus("reasonix-code CLI not found");
-    addButton("Install reasonix-code", installCli);
+    if (!status.cli_ok) {
+      setStatus("reasonix-code CLI not found");
+      addButton("Install reasonix-code", installCli);
+      return;
+    }
+
+    const localVersion = status.cli_version ?? "";
+    const latestVersion = await fetchLatestCliVersion();
+    if (latestVersion && versionLessThan(localVersion, latestVersion)) {
+      setStatus(`reasonix-code ${localVersion} is installed. A newer version (${latestVersion}) is available.`);
+      addButton("Upgrade reasonix-code", installCli);
+      addButton("Continue with current version", launchBackend, "secondary");
+      return;
+    }
+
+    setStatus("CLI ready, starting…");
+    launchBackend();
   } catch (e) {
     setStatus(`Environment check failed: ${e}`, true);
   }
