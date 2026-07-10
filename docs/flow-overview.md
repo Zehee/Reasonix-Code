@@ -307,6 +307,211 @@ Storage roots (all under `~/.reasonix/` unless noted):
 
 ---
 
+## 9. Dashboard HTTP API — full inventory
+
+Served by `src/server/index.ts` on `127.0.0.1:<ephemeral>`, token-gated. Reads
+accept `?token=` or `X-Reasonix-Token`; **mutations require the header**
+(query token rejected — CSRF). `/api/events` (SSE) is wired in `index.ts`,
+**not** in `router.ts`. `cockpit`/`hooks-events` are not endpoints — they're
+embedded into `GET /api/overview` (cockpit) and `GET /api/hooks` (recentRuns).
+Many "attached" endpoints return 503 in standalone mode.
+
+**Session / turn**
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/overview` | GET | Bundled snapshot: version, mode, cwd/model, edit/plan mode, pending edits, MCP/tool counts, effort, budget, stats, cockpit |
+| `/api/messages` | GET | Current session transcript + `busy` |
+| `/api/submit` | POST | Submit a prompt to the loop (202/409) |
+| `/api/abort` | POST | Abort the current turn |
+| `/api/sessions` | GET | List sessions (workspace-scoped) + current + canSwitch |
+| `/api/sessions/new` | POST | Mint a fresh session |
+| `/api/sessions/:name` | GET, DELETE | Read transcript / delete (refuses active) |
+| `/api/sessions/:name/switch` | POST | Switch attached CLI to `:name` |
+| `/api/modal` | GET | Snapshot the active modal |
+| `/api/modal/resolve` | POST | Resolve active modal (shell/path/choice/plan/edit-review/checkpoint/picker/viewer) |
+| `/api/loop/status` | GET | Auto-loop status |
+| `/api/loop/start` | POST | Start auto-loop (`intervalMs` 5s–6h + `prompt`) |
+| `/api/loop/stop` | POST | Stop auto-loop |
+| `/api/plans` | GET | Archived plans + step completion ratio |
+| **`/api/events`** | **GET (SSE)** | DashboardEvent stream; 25s ping; replays busy + active modal on connect |
+
+**Tools / permissions / hooks**
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/tools` | GET | Registered tool specs (name/schema/readOnly/flattened) + planMode |
+| `/api/permissions` | GET, POST, DELETE | List / add / remove shell-allowlist prefixes |
+| `/api/permissions/clear` | POST | Clear project allowlist (`{confirm:true}`) |
+| `/api/hooks` | GET | Project + global + resolved hooks, event list, recentRuns |
+| `/api/hooks/save` | POST | Write hooks block (trusts project) |
+| `/api/hooks/reload` | POST | Re-apply hooks in attached session |
+
+**Memory / skills / MCP / semantic**
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/memory` | GET | List memory files |
+| `/api/memory/entries` | GET | Structured entries |
+| `/api/memory/read?path=` | GET | Read one entry |
+| `/api/memory/:scope[/:name]` | GET, POST, DELETE | CRUD; scope = project / global / project-mem |
+| `/api/skills` | GET | List skills (project/custom/global/builtin) + 7d counts |
+| `/api/skills/:scope/:name` | GET, POST, DELETE | Skill CRUD (builtin read-only) |
+| `/api/mcp` | GET | Live bridged servers + canHotReload/canInvoke |
+| `/api/mcp/specs` | GET, POST, DELETE | Persisted MCP specs |
+| `/api/mcp/reload` | POST | Hot-reload MCP bridge |
+| `/api/mcp/registry` | GET | Browse marketplace (`?pages=&q=&maxPages=&limit=&refresh=`) |
+| `/api/mcp/registry/install` | POST | Install marketplace server into config |
+| `/api/mcp/invoke` | POST | Invoke a bridged MCP tool |
+| `/api/semantic` | GET | Index + provider + job status |
+| `/api/semantic/config` | GET, POST | Embedding provider config (redacted) |
+| `/api/semantic/start` | POST | Start index-build job |
+| `/api/semantic/stop` | POST | Abort index job |
+| `/api/semantic/ollama/start` | POST | Start Ollama daemon |
+| `/api/semantic/ollama/pull` | POST | Pull embedding model (async) |
+| `/api/semantic/search` | POST | Run semantic search |
+| `/api/index-config` | GET, POST | Read / save index exclusion config |
+| `/api/index-config/preview` | POST | Dry-run walk: included/skipped counts |
+
+**Code / files / checkpoints**
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/files` | POST | @-mention picker (`{prefix}`, depth≤4) |
+| `/api/files/search?q=` | GET | @-mention picker (query variant) |
+| `/api/browse?path=` | GET | Directory browser (dirs only; seeds home + drives) |
+| `/api/project-tree` | GET | Recursive tree (depth≤6) for attached cwd |
+| `/api/git-diffs` | GET | `git diff HEAD` + staged + untracked |
+| `/api/file/:path` | GET | Read workspace file (whole tail; ≤500KB; traversal-guarded) |
+| `/api/file-read?path=` | GET | 12-line head + totalLines preview |
+| `/api/checkpoints` | GET | List checkpoints for cwd |
+| `/api/checkpoint-diffs?id=` | GET | Diff checkpoint vs working tree |
+| `/api/checkpoint-restore` | POST | Restore checkpoint into working tree |
+| `/api/checkpoint-create` | POST | Create checkpoint (`git ls-files` scoped) |
+| `/api/checkpoint-delete` | **POST** | Delete checkpoint (uses POST, not DELETE) |
+| `/api/review-diffs` | GET | Placeholder — currently `[]` |
+
+**Settings / meta**
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/health` | GET | Version + `~/.reasonix` dir sizes + usage-log bytes + job count |
+| `/api/usage` | GET | Aggregated token/cost buckets |
+| `/api/usage/series` | GET | Daily roll-up series |
+| `/api/settings` | GET, POST | Redacted config / partial update (apiKey write-only; model/budget/effort live) |
+| `/api/edit-mode` | GET, POST | review / auto / yolo / plan |
+| `/api/models` | GET | Available models + current + pricing table |
+| `/api/slash` | GET | Slash-command catalog (code-contextual filtered when unattached) |
+
+---
+
+## 10. Slash commands — full inventory
+
+Registry `src/cli/ui/slash/commands.ts`; dispatch merges each handler file's
+`handlers` map (`dispatch.ts`). Common aliases: `/?`→help · `/reset`,`/clear`→new
+· `/quit`,`/q`→exit · `/retitle`→title · `/lang`→language · `/cache`→cache-miss-report
+· `/tg`→telegram · `/wx`→weixin · `/sandbox`→cwd · `/se`→search-engine.
+Hidden (work but not in `/help`): `/skills`, `/perms`, `/hook`.
+Intercepted before dispatch: `/btw` (side question), `/resource`, `/prompt` (MCP browse).
+
+**General / session**
+
+| Command | Purpose |
+|---|---|
+| `/help` | Full grouped command reference |
+| `/about` · `/keys` | Version / links · keyboard+mouse reference |
+| `/new` | Fresh conversation (clears log + scrollback) |
+| `/retry` | Truncate & resend last message (fresh sample) |
+| `/stop` | Abort current turn (typed Esc) |
+| `/btw <q>` | One-shot side question, never enters context |
+| `/exit` | Quit the TUI |
+| `/sessions` | List saved sessions (picker) |
+| `/title` | Ask model to rename this session |
+| `/session-persist [on\|off]` | Toggle resume-last-session on launch |
+
+**Model / cost**
+
+| Command | Purpose |
+|---|---|
+| `/model [id]` | Switch model (bare → picker) |
+| `/effort [low\|medium\|high\|max]` | reasoning_effort cap |
+| `/max-tokens [N\|off]` | Cap output tokens/turn |
+| `/budget [usd\|off]` | Session USD cap (warn 80%, refuse 100%) |
+| `/status` | Model, flags, context, session snapshot |
+| `/cost [text]` | Last-turn spend card · with text → estimate next |
+| `/context` | Context-window breakdown |
+| `/stats` | Cross-session cost dashboard |
+| `/cache-miss-report` | Explain recent cache misses |
+| `/compact` | Fold older turns into a summary (manual) |
+
+**Edits / history (code-mode)**
+
+| Command | Purpose |
+|---|---|
+| `/apply [range]` · `/discard [range]` | Commit / drop pending edits |
+| `/walk` | Step through edits git-add-p style |
+| `/undo` | Roll back last applied batch |
+| `/history` · `/show [id]` | List batches · dump a diff |
+| `/commit "msg"` | `git add -A && git commit` |
+| `/mode [review\|auto\|yolo\|plan]` | Edit-gate (bare cycles) |
+| `/plan [on\|off\|strict]` | Read-only plan / strict rails |
+| `/diff [summary\|full\|none]` | Diff display mode |
+| `/checkpoint [list\|forget\|<name>]` | Snapshot touched files |
+| `/restore [name\|id]` | Roll back to a checkpoint (bare → picker) |
+| `/cwd [path]` | Switch workspace root (bare → picker) |
+| `/init [force]` | Synthesize baseline REASONIX.md |
+| `/jobs` · `/kill <id>` · `/logs <id> [n]` | List / stop / tail background jobs |
+
+**Memory / skills**
+
+| Command | Purpose |
+|---|---|
+| `/memory` | Dump REASONIX.md + indexes |
+| `/memory list [--type X]` | List entries |
+| `/memory show <name>` | Print one entry |
+| `/memory forget <name>` | Delete entry |
+| `/memory clear <scope> confirm` | Delete a whole scope |
+| `/skill [list]` | List skills |
+| `/skill show <name>` | Print one skill |
+| `/skill new <name> [--global]` | Scaffold a skill |
+| `/skill paths [list\|add\|remove]` | Manage custom skill paths |
+| `/skill <name> [args]` | Run a skill (resubmits body) |
+
+**MCP / integrations**
+
+| Command | Purpose |
+|---|---|
+| `/mcp` | Open MCP hub (Live / Marketplace) |
+| `/mcp text` | Printed-card dump (replay/non-TTY) |
+| `/mcp enable\|disable <name>` | Toggle a server |
+| `/mcp reconnect <name>` | Reconnect + register new tools |
+| `/resource [uri]` · `/prompt [name]` | Browse + read MCP resources / prompts |
+
+**Channels**
+
+| Command | Purpose |
+|---|---|
+| `/telegram connect\|status\|disconnect` | Telegram channel |
+| `/weixin connect\|status\|disconnect` | Weixin channel |
+| `/qq connect\|status\|disconnect` | QQ channel |
+
+**Admin / observability**
+
+| Command | Purpose |
+|---|---|
+| `/doctor` | Health check (api/config/reach/index/hooks/project) |
+| `/hooks [reload]` | List hooks · reload from disk |
+| `/permissions [list]` | Show shell allowlist |
+| `/permissions add\|remove\|clear [--global]` | Manage allowlist |
+| `/search-engine <engine> [<key\|endpoint>]` | Switch web backend |
+| `/dashboard [stop\|copy\|reset-token]` | Launch / manage embedded dashboard |
+| `/loop <interval> <prompt>` · `stop` | Auto-resubmit prompt on a timer |
+| `/plans` · `/plans done <id\|all>` | List / complete plan steps |
+| `/replay [N]` | Load archived plan as Time-Travel snapshot |
+| `/feedback` · `/update` | Open issue w/ diagnostics · version + upgrade cmd |
+
+---
+
 ## Reading order for a newcomer
 
 1. `docs/ARCHITECTURE.md` — why it is shaped this way (the four pillars).
