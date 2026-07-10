@@ -287,6 +287,8 @@ fn npm_install_cmd(version: Option<String>) -> Command {
 #[tauri::command]
 fn install_cli(app: AppHandle, version: Option<String>) {
     thread::spawn(move || {
+        let stderr_lines: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+
         let result = (|| -> Result<(), String> {
             let mut cmd = npm_install_cmd(version);
             cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -311,8 +313,10 @@ fn install_cli(app: AppHandle, version: Option<String>) {
             });
 
             let app_stderr = app.clone();
+            let stderr_capture = Arc::clone(&stderr_lines);
             thread::spawn(move || {
                 for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                    stderr_capture.lock().push(line.clone());
                     let _ = app_stderr.emit("install:stderr", line);
                 }
             });
@@ -321,7 +325,18 @@ fn install_cli(app: AppHandle, version: Option<String>) {
                 .wait()
                 .map_err(|e| format!("npm process error: {e}"))?;
             if !status.success() {
-                return Err(format!("npm exited with code {:?}", status.code()));
+                let captured = stderr_lines.lock();
+                let tail: Vec<&String> = captured.iter().rev().take(5).rev().collect();
+                let detail = if tail.is_empty() {
+                    "no stderr captured".to_string()
+                } else {
+                    format!("stderr:\n{}", tail.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n"))
+                };
+                return Err(format!(
+                    "npm exited with code {:?}\n{}",
+                    status.code(),
+                    detail
+                ));
             }
             Ok(())
         })();
