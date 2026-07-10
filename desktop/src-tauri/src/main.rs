@@ -282,9 +282,13 @@ fn ensure_npm_prefix_dir() -> Result<PathBuf, String> {
 
 fn add_prefix_bin_to_path(prefix: &Path) {
     let sep = if cfg!(windows) { ';' } else { ':' };
-    let mut bins = vec![prefix.to_path_buf()];
+    let bins = vec![prefix.to_path_buf()];
     #[cfg(not(windows))]
-    bins.push(prefix.join("bin"));
+    let bins = {
+        let mut b = bins;
+        b.push(prefix.join("bin"));
+        b
+    };
 
     if let Ok(current) = std::env::var("PATH") {
         let current_parts: Vec<&str> = current.split(sep).collect();
@@ -301,8 +305,9 @@ fn add_prefix_bin_to_path(prefix: &Path) {
 
 fn npm_install_cmd(version: Option<String>) -> Result<Command, String> {
     let prefix = ensure_npm_prefix_dir()?;
+    let prefix_str = prefix.to_string_lossy().into_owned();
     let spec = version.unwrap_or_else(|| "reasonix-code@latest".to_string());
-    let args = vec!["install", "-g", "--prefix", &prefix.to_string_lossy(), &spec];
+    let args = vec!["install", "-g", "--prefix", &prefix_str, &spec];
     let mut cmd = if cfg!(windows) {
         let mut c = Command::new("cmd");
         c.arg("/c").arg("npm");
