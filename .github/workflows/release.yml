@@ -30,8 +30,9 @@ jobs:
 
       - name: Publish to npm
         run: |
-          if npm view reasonix-code@${{ github.ref_name }} version >/dev/null 2>&1; then
-            echo "reasonix-code@${{ github.ref_name }} already published, skipping."
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view reasonix-code@$VERSION version >/dev/null 2>&1; then
+            echo "reasonix-code@$VERSION already published, skipping."
             exit 0
           fi
           npm publish --access public
