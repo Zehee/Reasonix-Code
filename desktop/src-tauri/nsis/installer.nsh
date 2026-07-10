@@ -29,7 +29,7 @@
 
   npm_ok:
     DetailPrint "Installing reasonix-code via npm..."
-    nsExec::ExecToStack 'cmd /c npm install -g reasonix-code'
+    nsExec::ExecToStack 'cmd /c npm install -g --prefix "$PROFILE\.reasonix-code\npm-global" reasonix-code'
     Pop $0
     Pop $1
     IntCmp $0 0 done

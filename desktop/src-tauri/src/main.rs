@@ -270,18 +270,48 @@ fn install_node() -> Result<(), String> {
         .map_err(|e| format!("failed to open browser: {e}"))
 }
 
-fn npm_install_cmd(version: Option<String>) -> Command {
-    let spec = version.unwrap_or_else(|| "reasonix-code@latest".to_string());
-    let args = vec!["install", "-g", &spec];
-    if cfg!(windows) {
-        let mut cmd = Command::new("cmd");
-        cmd.arg("/c").arg("npm").args(&args);
-        cmd
-    } else {
-        let mut cmd = Command::new("npm");
-        cmd.args(&args);
-        cmd
+fn reasonix_npm_prefix() -> Option<PathBuf> {
+    home_dir().map(|h| h.join(".reasonix-code").join("npm-global"))
+}
+
+fn ensure_npm_prefix_dir() -> Result<PathBuf, String> {
+    let prefix = reasonix_npm_prefix().ok_or("could not determine home directory")?;
+    std::fs::create_dir_all(&prefix).map_err(|e| format!("failed to create npm prefix dir: {e}"))?;
+    Ok(prefix)
+}
+
+fn add_prefix_bin_to_path(prefix: &Path) {
+    let sep = if cfg!(windows) { ';' } else { ':' };
+    let mut bins = vec![prefix.to_path_buf()];
+    #[cfg(not(windows))]
+    bins.push(prefix.join("bin"));
+
+    if let Ok(current) = std::env::var("PATH") {
+        let current_parts: Vec<&str> = current.split(sep).collect();
+        let missing: Vec<String> = bins
+            .into_iter()
+            .filter(|b| !current_parts.contains(&b.to_string_lossy().as_ref()))
+            .map(|b| b.to_string_lossy().into_owned())
+            .collect();
+        if !missing.is_empty() {
+            std::env::set_var("PATH", format!("{}{}{}", missing.join(&sep.to_string()), sep, current));
+        }
     }
+}
+
+fn npm_install_cmd(version: Option<String>) -> Result<Command, String> {
+    let prefix = ensure_npm_prefix_dir()?;
+    let spec = version.unwrap_or_else(|| "reasonix-code@latest".to_string());
+    let args = vec!["install", "-g", "--prefix", &prefix.to_string_lossy(), &spec];
+    let mut cmd = if cfg!(windows) {
+        let mut c = Command::new("cmd");
+        c.arg("/c").arg("npm");
+        c
+    } else {
+        Command::new("npm")
+    };
+    cmd.args(&args);
+    Ok(cmd)
 }
 
 #[tauri::command]
@@ -290,7 +320,7 @@ fn install_cli(app: AppHandle, version: Option<String>) {
         let stderr_lines: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
 
         let result = (|| -> Result<(), String> {
-            let mut cmd = npm_install_cmd(version);
+            let mut cmd = npm_install_cmd(version)?;
             cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
             #[cfg(windows)]
             {
@@ -338,6 +368,9 @@ fn install_cli(app: AppHandle, version: Option<String>) {
                     detail
                 ));
             }
+            if let Some(prefix) = reasonix_npm_prefix() {
+                add_prefix_bin_to_path(&prefix);
+            }
             Ok(())
         })();
 
@@ -360,6 +393,9 @@ fn launch_backend(app: AppHandle, state: State<DesktopState>, cwd: Option<String
     };
     thread::spawn(move || {
         let result: Result<(), String> = (|| {
+            if let Some(prefix) = reasonix_npm_prefix() {
+                add_prefix_bin_to_path(&prefix);
+            }
             let cli = find_cli().ok_or("reasonix-code CLI not found.")?;
             spawn_tui(&app, &state, &cli, &cwd_path)
         })();
@@ -405,13 +441,23 @@ fn find_cli() -> Option<PathBuf> {
         eprintln!("[reasonix] REASONIX_CLI is set but file does not exist: {}", p.display());
     }
 
-    // 1. Known install location used by install.ps1.
+    // 1. Known install location used by the desktop installer.
     if let Some(home) = home_dir() {
-        let install_dir = home.join(".reasonix-code").join("bin");
+        let install_dir = home.join(".reasonix-code").join("npm-global");
         for name in cli_names() {
             let p = install_dir.join(name);
             if p.is_file() {
                 return Some(p);
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            let bin_dir = install_dir.join("bin");
+            for name in cli_names() {
+                let p = bin_dir.join(name);
+                if p.is_file() {
+                    return Some(p);
+                }
             }
         }
     }
