@@ -6,10 +6,12 @@ use serde::Serialize;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Listener, Manager, State};
+use tauri_plugin_dialog::DialogExt;
 
 /// #892: bundled libwayland in AppImage can ABI-mismatch the host Wayland
 /// compositor → WebKitWebProcess `abort()`s on EGL display creation. Redirect
@@ -244,16 +246,39 @@ fn parse_node_major(version: &str) -> Option<u32> {
 
 #[tauri::command]
 fn check_environment() -> EnvStatus {
-    let node_version = run_version_cmd(&mut Command::new("node").arg("--version"));
+    let mut node_cmd = Command::new("node");
+    node_cmd.arg("--version");
+    // npm may only exist as npm.cmd (no npm.exe) on some installs — go through
+    // cmd.exe like npm_install_cmd does.
+    let mut npm_cmd = if cfg!(windows) {
+        let mut c = Command::new("cmd");
+        c.arg("/c").arg("npm");
+        c
+    } else {
+        Command::new("npm")
+    };
+    npm_cmd.arg("--version");
+    #[cfg(windows)]
+    {
+        // GUI app (windows_subsystem = "windows") — don't flash console windows.
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        node_cmd.creation_flags(CREATE_NO_WINDOW);
+        npm_cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let node_version = run_version_cmd(&mut node_cmd);
     let node_ok = node_version
         .as_ref()
         .and_then(|v| parse_node_major(v))
         .map(|m| m >= 22)
         .unwrap_or(false);
-    let npm_version = run_version_cmd(&mut Command::new("npm").arg("--version"));
+    let npm_version = run_version_cmd(&mut npm_cmd);
     let npm_ok = npm_version.is_some();
-    let cli_version =
-        find_cli().and_then(|cli| run_version_cmd(&mut Command::new(&cli).arg("--version")));
+    let cli_version = resolve_cli().and_then(|cli| {
+        let mut cmd = cli_command(&cli);
+        cmd.arg("--version");
+        run_version_cmd(&mut cmd)
+    });
     let cli_ok = cli_version.is_some();
     EnvStatus {
         node_ok,
@@ -394,6 +419,8 @@ fn install_cli(app: AppHandle, version: Option<String>) {
             }
             if let Some(prefix) = reasonix_npm_prefix() {
                 add_prefix_bin_to_path(&prefix);
+                #[cfg(windows)]
+                persist_prefix_to_user_path(&prefix);
             }
             Ok(())
         })();
@@ -408,33 +435,99 @@ fn install_cli(app: AppHandle, version: Option<String>) {
 }
 
 #[tauri::command]
-fn launch_backend(app: AppHandle, state: State<DesktopState>, cwd: Option<String>) {
-    let cwd_path = cwd
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-    let state = DesktopState {
-        child: state.child.clone(),
-    };
+fn launch_backend(app: AppHandle, state: State<DesktopState>, cwd: String) {
+    let workspace = PathBuf::from(&cwd);
+    if !workspace.is_dir() {
+        let _ = app.emit("cli:error", format!("not a directory: {cwd}"));
+        return;
+    }
+    let state = state.inner().clone();
     thread::spawn(move || {
-        let result: Result<(), String> = (|| {
-            if let Some(prefix) = reasonix_npm_prefix() {
-                add_prefix_bin_to_path(&prefix);
-            }
-            let cli = find_cli().ok_or("reasonix-code CLI not found.")?;
-            spawn_tui(&app, &state, &cli, &cwd_path)
-        })();
-        if let Err(err) = result {
+        if let Err(err) = spawn_instance(&app, &state, &workspace) {
             let _ = app.emit("cli:error", err);
         }
     });
 }
 
+/// Open a native folder picker and start (or switch to) that workspace.
+#[tauri::command]
+fn pick_workspace(app: AppHandle, state: State<DesktopState>) {
+    let state = state.inner().clone();
+    let initial = load_last_workspace().or_else(home_dir);
+    let mut dialog = app.dialog().file();
+    if let Some(dir) = initial {
+        dialog = dialog.set_directory(dir);
+    }
+    dialog.pick_folder(move |folder| {
+        let Some(folder) = folder else { return };
+        let Ok(path) = folder.into_path() else { return };
+        if !path.is_dir() {
+            return;
+        }
+        if let Err(err) = spawn_instance(&app, &state, &path) {
+            let _ = app.emit("cli:error", err);
+        }
+    });
+}
+
+/// Switch to (or start) a workspace by explicit path.
+#[tauri::command]
+fn switch_workspace(app: AppHandle, state: State<DesktopState>, path: String) -> Result<(), String> {
+    let workspace = PathBuf::from(&path);
+    if !workspace.is_dir() {
+        return Err(format!("not a directory: {path}"));
+    }
+    spawn_instance(&app, state.inner(), &workspace).map(|_| ())
+}
+
+#[derive(Serialize)]
+struct WorkspaceInfo {
+    id: u64,
+    path: String,
+    ready: bool,
+}
+
+#[tauri::command]
+fn list_workspaces(state: State<DesktopState>) -> Vec<WorkspaceInfo> {
+    state
+        .instances
+        .lock()
+        .iter()
+        .map(|i| WorkspaceInfo {
+            id: i.id,
+            path: i.workspace.to_string_lossy().into_owned(),
+            ready: i.url.is_some(),
+        })
+        .collect()
+}
+
+/// Last workspace the user picked — offered as a shortcut on the splash screen.
+#[tauri::command]
+fn last_workspace() -> Option<String> {
+    load_last_workspace().map(|p| p.to_string_lossy().into_owned())
+}
+
 // ── Desktop shell lifecycle: detect CLI → install → start TUI → load dashboard ──
 
-#[derive(Default)]
-struct DesktopState {
-    child: Arc<Mutex<Option<Child>>>,
+/// One workspace = one background CLI process = one dashboard URL.
+struct Instance {
+    id: u64,
+    workspace: PathBuf,
+    child: Child,
+    url: Option<String>,
 }
+
+#[derive(Clone, Default)]
+struct DesktopState {
+    instances: Arc<Mutex<Vec<Instance>>>,
+    /// Instance currently shown in the webview.
+    current: Arc<Mutex<Option<u64>>>,
+    /// Splash URL captured at startup, used to navigate back when the current
+    /// instance exits.
+    start_url: Arc<Mutex<Option<tauri::Url>>>,
+}
+
+static NEXT_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 
 fn home_dir() -> Option<PathBuf> {
     #[cfg(windows)]
@@ -449,13 +542,14 @@ fn home_dir() -> Option<PathBuf> {
 
 fn cli_names() -> &'static [&'static str] {
     if cfg!(windows) {
-        &["reasonix-code.exe"]
+        // npm creates `.cmd` / `.ps1` / extensionless shims on Windows — never an .exe.
+        &["reasonix-code.cmd"]
     } else {
         &["reasonix-code"]
     }
 }
 
-fn find_cli() -> Option<PathBuf> {
+fn resolve_cli() -> Option<PathBuf> {
     // 0. Allow developers to override the CLI path for debugging.
     if let Some(override_path) = std::env::var("REASONIX_CLI").ok().filter(|s| !s.is_empty()) {
         let p = PathBuf::from(override_path);
@@ -465,7 +559,9 @@ fn find_cli() -> Option<PathBuf> {
         eprintln!("[reasonix] REASONIX_CLI is set but file does not exist: {}", p.display());
     }
 
-    // 1. Known install location used by the desktop installer.
+    // 1. Known install location used by the desktop installer. Checked before
+    //    PATH because an Explorer that predates the HKCU PATH write won't have
+    //    the prefix in its environment yet.
     if let Some(home) = home_dir() {
         let install_dir = home.join(".reasonix-code").join("npm-global");
         for name in cli_names() {
@@ -486,43 +582,346 @@ fn find_cli() -> Option<PathBuf> {
         }
     }
 
-    // 2. PATH lookup.
-    let path_var = std::env::var("PATH").ok()?;
-    let sep = if cfg!(windows) { ';' } else { ':' };
-    for dir in path_var.split(sep) {
-        for name in cli_names() {
-            let p = Path::new(dir).join(name);
-            if p.is_file() {
-                return Some(p);
+    // 2. PATH resolution — `where` (Windows, respects PATHEXT) / `which`.
+    let probe = if cfg!(windows) { "where" } else { "which" };
+    let mut cmd = Command::new(probe);
+    cmd.arg("reasonix-code");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    if let Ok(out) = cmd.output() {
+        if out.status.success() {
+            if let Some(first) = String::from_utf8_lossy(&out.stdout).lines().next() {
+                let p = PathBuf::from(first.trim());
+                if p.is_file() {
+                    return Some(p);
+                }
             }
         }
     }
     None
 }
 
-fn parse_dashboard_url(line: &str) -> Option<String> {
-    if !line.contains("/dashboard") {
-        return None;
+/// Build a Command for the resolved CLI. On Windows a `.cmd` shim cannot be
+/// executed directly by CreateProcess — run it through cmd.exe, the same way
+/// `npm_install_cmd` and `open_in_editor` already do.
+fn cli_command(cli: &Path) -> Command {
+    #[cfg(windows)]
+    {
+        let is_cmd = cli
+            .extension()
+            .map(|e| e.eq_ignore_ascii_case("cmd"))
+            .unwrap_or(false);
+        if is_cmd {
+            let mut c = Command::new("cmd");
+            c.arg("/c").arg(cli);
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            c.creation_flags(CREATE_NO_WINDOW);
+            return c;
+        }
     }
-    let arrow = "→";
-    let idx = line.find(arrow)?;
-    let arrow_len = arrow.chars().next().map(|c| c.len_utf8()).unwrap_or(1);
-    let url = line[idx + arrow_len..].trim();
-    if url.starts_with("http://") || url.starts_with("https://") {
-        Some(url.to_string())
+    Command::new(cli)
+}
+
+fn desktop_config_path() -> Option<PathBuf> {
+    home_dir().map(|h| h.join(".reasonix-code").join("desktop.json"))
+}
+
+fn load_last_workspace() -> Option<PathBuf> {
+    let path = desktop_config_path()?;
+    let content = std::fs::read_to_string(path).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let ws = v.get("last_workspace")?.as_str()?;
+    let p = PathBuf::from(ws);
+    if p.is_dir() {
+        Some(p)
     } else {
         None
     }
 }
 
-fn spawn_tui(
-    app: &tauri::AppHandle,
-    state: &DesktopState,
-    cli: &Path,
-    cwd: &Path,
-) -> Result<(), String> {
-    let mut cmd = Command::new(cli);
-    cmd.arg("code").arg(cwd);
+fn save_last_workspace(workspace: &Path) {
+    let Some(path) = desktop_config_path() else { return };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let v = serde_json::json!({ "last_workspace": workspace.to_string_lossy() });
+    let _ = std::fs::write(path, v.to_string());
+}
+
+/// Extract the data of the `Path` value from `reg query` output.
+#[cfg(windows)]
+fn parse_reg_path_value(output: &str) -> String {
+    for line in output.lines() {
+        let t = line.trim();
+        if !t.to_lowercase().starts_with("path") {
+            continue;
+        }
+        for ty in ["REG_EXPAND_SZ", "REG_SZ"] {
+            if let Some(idx) = t.find(ty) {
+                return t[idx + ty.len()..].trim().to_string();
+            }
+        }
+    }
+    String::new()
+}
+
+/// Persist the npm prefix to the user-level PATH (HKCU\Environment) so
+/// `reasonix-code` works in new terminals. Uses `reg` instead of `setx`
+/// (which truncates at 1024 chars); HKCU needs no admin rights.
+#[cfg(windows)]
+fn persist_prefix_to_user_path(prefix: &Path) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+    let prefix_str = prefix.to_string_lossy();
+    let current = Command::new("reg")
+        .args(["query", r"HKCU\Environment", "/v", "Path"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| parse_reg_path_value(&String::from_utf8_lossy(&o.stdout)))
+        .unwrap_or_default();
+
+    let present = current
+        .split(';')
+        .any(|p| p.trim().eq_ignore_ascii_case(&prefix_str));
+    if present {
+        return;
+    }
+
+    let merged = if current.trim().is_empty() {
+        prefix_str.to_string()
+    } else {
+        format!("{};{}", current.trim_end_matches(';'), prefix_str)
+    };
+    let _ = Command::new("reg")
+        .args([
+            "add",
+            r"HKCU\Environment",
+            "/v",
+            "Path",
+            "/t",
+            "REG_EXPAND_SZ",
+            "/d",
+            &merged,
+            "/f",
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+/// True for the ink-rendered `/dashboard  →  http://…` success line. We do NOT
+/// parse the URL out of this line: ink wraps piped stdout to 80 columns, which
+/// truncates the 64-hex token. The line is only a "server is up and config is
+/// persisted" signal — the authoritative URL is read from config afterwards.
+/// Requiring '→' excludes the auto-start-failure hint, which also mentions
+/// "/dashboard" but carries no arrow.
+fn is_dashboard_ready_line(line: &str) -> bool {
+    line.contains("/dashboard") && line.contains('→')
+}
+
+/// Read the dashboard connection parts (host, port, token) from the CLI's
+/// persisted config (~/.reasonix/config.json → dashboard.{host,port,token}).
+/// The CLI persists the actual bound port (saveDashboardPort) and the auth
+/// token before it prints the /dashboard line, so once that line appears the
+/// config holds the correct, complete values.
+fn dashboard_config_from_text(text: &str) -> Option<(String, u64, String)> {
+    let v: serde_json::Value = serde_json::from_str(text).ok()?;
+    let dash = v.get("dashboard")?;
+    let token = dash.get("token")?.as_str()?.trim();
+    if token.len() < 16 {
+        return None;
+    }
+    let port = dash.get("port")?.as_u64()?;
+    if !(1..=65535).contains(&port) {
+        return None;
+    }
+    let host = dash
+        .get("host")
+        .and_then(|h| h.as_str())
+        .map(str::trim)
+        .filter(|h| !h.is_empty())
+        .unwrap_or("127.0.0.1")
+        .to_string();
+    Some((host, port, token.to_string()))
+}
+
+/// Base dashboard URL (no session) — pure, used by tests.
+#[cfg(test)]
+fn dashboard_url_from_config_text(text: &str) -> Option<String> {
+    let (host, port, token) = dashboard_config_from_text(text)?;
+    Some(format!("http://{host}:{port}/?token={token}"))
+}
+
+/// Build the full dashboard URL the webview navigates to: the config's
+/// host/port/token plus the instance's current session as `&session=`. The
+/// dashboard only renders conversation history when told which session to show
+/// (the TUI appends it in getDashboardUrl); without it the history panel stays
+/// empty and the already-active session can't be re-clicked to load.
+fn dashboard_url_from_config() -> Option<String> {
+    let path = home_dir()?.join(".reasonix").join("config.json");
+    let text = std::fs::read_to_string(path).ok()?;
+    let (host, port, token) = dashboard_config_from_text(&text)?;
+    let mut url = format!("http://{host}:{port}/?token={token}");
+    if let Some(session) = fetch_current_session(&host, port, &token) {
+        url.push_str("&session=");
+        url.push_str(&url_encode(&session));
+    }
+    Some(url)
+}
+
+/// Best-effort fetch of the instance's current session name from its dashboard
+/// server (`/api/overview`). Any failure yields None → a session-less URL.
+fn fetch_current_session(host: &str, port: u64, token: &str) -> Option<String> {
+    let url = format!("http://{host}:{port}/api/overview?token={token}");
+    let mut cmd = Command::new("curl");
+    cmd.args(["-sS", "--max-time", "5", &url]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let out = cmd.output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let body = String::from_utf8(out.stdout).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&body).ok()?;
+    let session = v.get("session")?.as_str()?.trim();
+    if session.is_empty() {
+        None
+    } else {
+        Some(session.to_string())
+    }
+}
+
+/// Percent-encode a query value — session names may contain '/' and other
+/// reserved chars. Leaves unreserved [A-Za-z0-9-_.~] untouched.
+fn url_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builds_url_from_config() {
+        let text = r#"{"dashboard":{"port":51300,"token":"568c149c7a3711a9b44ced658dcac6e263e16a25eb0cbffa457046eeb3ca7cea"}}"#;
+        assert_eq!(
+            dashboard_url_from_config_text(text).as_deref(),
+            Some("http://127.0.0.1:51300/?token=568c149c7a3711a9b44ced658dcac6e263e16a25eb0cbffa457046eeb3ca7cea")
+        );
+    }
+
+    #[test]
+    fn respects_host_and_rejects_bad_values() {
+        // Explicit host is honored.
+        let text = r#"{"dashboard":{"host":"0.0.0.0","port":1420,"token":"0123456789abcdef"}}"#;
+        assert_eq!(
+            dashboard_url_from_config_text(text).as_deref(),
+            Some("http://0.0.0.0:1420/?token=0123456789abcdef")
+        );
+        // Token below the CLI's 16-char floor → rejected.
+        assert_eq!(
+            dashboard_url_from_config_text(r#"{"dashboard":{"port":1,"token":"short"}}"#),
+            None
+        );
+        // Out-of-range port → rejected.
+        assert_eq!(
+            dashboard_url_from_config_text(r#"{"dashboard":{"port":70000,"token":"0123456789abcdef"}}"#),
+            None
+        );
+        // Missing dashboard section → rejected.
+        assert_eq!(dashboard_url_from_config_text(r#"{"lang":"EN"}"#), None);
+    }
+
+    #[test]
+    fn detects_ready_line_but_not_failure_hint() {
+        // Success line (the token may be mid-wrap — we never read it here).
+        assert!(is_dashboard_ready_line(
+            "  ▸ /dashboard  →  http://127.0.0.1:51300/?token=568c149c"
+        ));
+        // Auto-start failure hint mentions /dashboard but has no arrow.
+        assert!(!is_dashboard_ready_line(
+            "▲ dashboard auto-start failed (boom) — try /dashboard or pass --no-dashboard"
+        ));
+        assert!(!is_dashboard_ready_line("reasonix-code code: rooted at D:\\x"));
+    }
+
+    #[test]
+    fn url_encode_leaves_unreserved_and_encodes_rest() {
+        assert_eq!(url_encode("plain-name_1.2~"), "plain-name_1.2~");
+        // Session names carry a '/' (e.g. "<sanitized-cwd>/active") → encoded.
+        assert_eq!(url_encode("a/b c"), "a%2Fb%20c");
+    }
+}
+
+/// Record the dashboard URL for an instance, make it current, and notify the
+/// UI (which navigates the webview via the `cli:url` listener).
+fn register_dashboard_url(
+    app: &AppHandle,
+    instances: &Arc<Mutex<Vec<Instance>>>,
+    current: &Arc<Mutex<Option<u64>>>,
+    id: u64,
+    url: String,
+) {
+    {
+        let mut guard = instances.lock();
+        if let Some(inst) = guard.iter_mut().find(|i| i.id == id) {
+            inst.url = Some(url.clone());
+        }
+    }
+    *current.lock() = Some(id);
+    // Emit the JSON object directly — passing a serialized String would be
+    // double-encoded (listeners would see Value::String, not an object).
+    let _ = app.emit("cli:url", serde_json::json!({ "id": id, "url": url }));
+    rebuild_menu(app, instances);
+}
+
+/// Start a new workspace instance, or just navigate to it if already running.
+/// One workspace = one background `cmd /c reasonix-code code <cwd>` process =
+/// one dashboard URL. Switching between running instances is pure navigation.
+fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Result<u64, String> {
+    // Already running? Switch = navigate only, never a second process.
+    {
+        let instances = state.instances.lock();
+        if let Some(existing) = instances.iter().find(|i| i.workspace == workspace) {
+            let id = existing.id;
+            let url = existing.url.clone();
+            drop(instances);
+            if let Some(url) = url {
+                *state.current.lock() = Some(id);
+                navigate_main_window(app, &url);
+            }
+            return Ok(id);
+        }
+    }
+
+    if let Some(prefix) = reasonix_npm_prefix() {
+        add_prefix_bin_to_path(&prefix);
+    }
+    let cli = resolve_cli().ok_or("reasonix-code CLI not found.")?;
+    let mut cmd = cli_command(&cli);
+    cmd.arg("code").arg(workspace);
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -539,110 +938,121 @@ fn spawn_tui(
     let stdout = child.stdout.take().ok_or("no stdout")?;
     let stderr = child.stderr.take().ok_or("no stderr")?;
 
-    *state.child.lock() = Some(child);
+    let id = NEXT_INSTANCE_ID.fetch_add(1, Ordering::SeqCst);
+    state.instances.lock().push(Instance {
+        id,
+        workspace: workspace.to_path_buf(),
+        child,
+        url: None,
+    });
+    *state.current.lock() = Some(id);
+    save_last_workspace(workspace);
+    rebuild_menu(app, &state.instances);
 
-    // Drain stdout so the child never blocks on a full pipe.
+    // The ink TUI prints a `/dashboard  →  URL` line to STDOUT once the server
+    // is up — but piped output wraps to 80 columns and truncates the token, so
+    // we treat that line only as a readiness signal and read the authoritative
+    // URL from the CLI's config. Watch both streams — first hit wins.
+    let found_url = Arc::new(AtomicBool::new(false));
+
+    // stdout: drain (so the child never blocks) and watch for the ready line.
+    let app_out = app.clone();
+    let instances_out = state.instances.clone();
+    let current_out = state.current.clone();
+    let found_out = found_url.clone();
     thread::spawn(move || {
-        let _ = BufReader::new(stdout).lines().count();
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if found_out.load(Ordering::SeqCst) {
+                continue;
+            }
+            if is_dashboard_ready_line(&line) {
+                if let Some(url) = dashboard_url_from_config() {
+                    if found_out
+                        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                        .is_ok()
+                    {
+                        register_dashboard_url(&app_out, &instances_out, &current_out, id, url);
+                    }
+                }
+            }
+        }
     });
 
-    // Parse stderr for the dashboard URL, then keep emitting lines for the splash UI.
+    // stderr: forward lines to the splash UI, and watch the exit of the process.
     let app_stderr = app.clone();
-    let child_for_exit = state.child.clone();
+    let instances_ref = state.instances.clone();
+    let current_ref = state.current.clone();
+    let start_url_ref = state.start_url.clone();
     thread::spawn(move || {
         let reader = BufReader::new(stderr);
-        let mut found_url = false;
         for line in reader.lines().map_while(Result::ok) {
             let _ = app_stderr.emit("cli:stderr", line.clone());
-            if !found_url {
-                if let Some(url) = parse_dashboard_url(&line) {
-                    found_url = true;
-                    let _ = app_stderr.emit("cli:url", url);
+            if !found_url.load(Ordering::SeqCst) {
+                if is_dashboard_ready_line(&line) {
+                    if let Some(url) = dashboard_url_from_config() {
+                        if found_url
+                            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                            .is_ok()
+                        {
+                            register_dashboard_url(&app_stderr, &instances_ref, &current_ref, id, url);
+                        }
+                    }
                 }
             }
         }
 
-        // Stderr closed — watch for process exit and notify the UI.
+        // Stderr closed — the process is gone or about to be. Reap it, drop the
+        // instance from the table, and fall back to the splash if it was the
+        // one on screen.
         let app_exit = app_stderr.clone();
-        let watcher = child_for_exit.clone();
+        let instances_exit = instances_ref.clone();
+        let current_exit = current_ref.clone();
+        let start_url = start_url_ref.clone();
         thread::spawn(move || {
             let deadline = Instant::now() + Duration::from_secs(10);
             loop {
-                let done = {
-                    let mut guard = watcher.lock();
-                    match guard.as_mut() {
-                        Some(c) => match c.try_wait() {
-                            Ok(Some(status)) => {
-                                let code = status.code();
-                                let _ = app_exit.emit("cli:exit", code);
-                                guard.take();
+                let removed = {
+                    let mut instances = instances_exit.lock();
+                    match instances.iter().position(|i| i.id == id) {
+                        Some(pos) => match instances[pos].child.try_wait() {
+                            Ok(Some(_)) | Err(_) => {
+                                instances.remove(pos);
                                 true
                             }
                             Ok(None) => false,
-                            Err(_) => {
-                                guard.take();
-                                true
-                            }
                         },
                         None => true,
                     }
                 };
-                if done {
+                if removed {
                     break;
                 }
                 if Instant::now() >= deadline {
+                    instances_exit.lock().retain(|i| i.id != id);
                     break;
                 }
                 thread::sleep(Duration::from_millis(250));
             }
+            let _ = app_exit.emit("cli:exit", serde_json::json!({ "id": id }));
+            rebuild_menu(&app_exit, &instances_exit);
+            let was_current = {
+                let mut cur = current_exit.lock();
+                if *cur == Some(id) {
+                    *cur = None;
+                    true
+                } else {
+                    false
+                }
+            };
+            if was_current {
+                if let Some(url) = start_url.lock().clone() {
+                    navigate_to(&app_exit, url);
+                }
+            }
         });
     });
 
-    Ok(())
-}
-
-#[cfg(not(windows))]
-#[allow(dead_code)]
-fn install_cli_unix() -> Result<(), String> {
-    let url = "https://raw.githubusercontent.com/Zehee/Reasonix-Code/main/install.sh";
-    let output = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(format!("curl -fsSL {url} | sh"))
-        .output()
-        .map_err(|e| format!("failed to run install script: {e}"))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("install.sh failed:\n{stderr}"));
-    }
-    Ok(())
-}
-
-#[allow(dead_code)]
-fn start_backend(app: &tauri::AppHandle, state: &DesktopState) {
-    let app = app.clone();
-    let state = DesktopState {
-        child: state.child.clone(),
-    };
-    thread::spawn(move || {
-        let result: Result<(), String> = (|| {
-            if find_cli().is_none() {
-                #[cfg(not(windows))]
-                install_cli_unix()?;
-                #[cfg(windows)]
-                return Err(
-                    "reasonix-code CLI not found. Please install it with:\n\
-                     powershell -ExecutionPolicy Bypass -File install.ps1"
-                        .into(),
-                );
-            }
-            let cli = find_cli().ok_or("reasonix-code CLI not found.")?;
-            let cwd = std::env::current_dir().map_err(|e| format!("no current directory: {e}"))?;
-            spawn_tui(&app, &state, &cli, &cwd)
-        })();
-        if let Err(err) = result {
-            let _ = app.emit("cli:error", err);
-        }
-    });
+    Ok(id)
 }
 
 fn kill_process_tree(pid: u32) {
@@ -668,11 +1078,68 @@ fn kill_process_tree(pid: u32) {
     }
 }
 
-fn navigate_main_window(app: &tauri::AppHandle, url: &str) {
+fn navigate_to(app: &AppHandle, url: tauri::Url) {
     if let Some(w) = app.get_webview_window("main") {
-        if let Ok(parsed) = url.parse::<tauri::Url>() {
-            let _ = w.navigate(parsed);
-        }
+        let _ = w.navigate(url);
+    }
+}
+
+fn navigate_main_window(app: &AppHandle, url: &str) {
+    if let Ok(parsed) = url.parse::<tauri::Url>() {
+        navigate_to(app, parsed);
+    }
+}
+
+/// Rebuild the window menu: a "Switch Workspace…" entry plus one item per
+/// running instance. With decorations:true the menu bar is drawn on Windows,
+/// and its accelerators fire regardless — Ctrl+Shift+O works everywhere.
+fn rebuild_menu(app: &AppHandle, instances: &Arc<Mutex<Vec<Instance>>>) {
+    use tauri::menu::{IsMenuItem, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+
+    let Ok(switch) = MenuItemBuilder::with_id("switch-workspace", "Switch Workspace…")
+        .accelerator("CmdOrCtrl+Shift+O")
+        .build(app)
+    else {
+        return;
+    };
+
+    let ws_items: Vec<tauri::menu::MenuItem<tauri::Wry>> = {
+        let instances = instances.lock();
+        instances
+            .iter()
+            .filter_map(|inst| {
+                let label = if inst.url.is_some() {
+                    inst.workspace.to_string_lossy().into_owned()
+                } else {
+                    format!("{} (starting…)", inst.workspace.to_string_lossy())
+                };
+                MenuItemBuilder::with_id(format!("ws:{}", inst.id), label)
+                    .build(app)
+                    .ok()
+            })
+            .collect()
+    };
+
+    let ws_refs: Vec<&dyn IsMenuItem<tauri::Wry>> = ws_items
+        .iter()
+        .map(|i| i as &dyn IsMenuItem<tauri::Wry>)
+        .collect();
+
+    let Ok(submenu) = SubmenuBuilder::new(app, "Workspaces")
+        .item(&switch)
+        .separator()
+        .items(&ws_refs)
+        .build()
+    else {
+        return;
+    };
+    let Ok(menu) = MenuBuilder::new(app).item(&submenu).build() else {
+        return;
+    };
+    if let Some(w) = app.get_webview_window("main") {
+        // The bar is only drawn on decorated windows (never on Windows here);
+        // setting it is enough for accelerators to register.
+        let _ = w.set_menu(menu);
     }
 }
 
@@ -687,7 +1154,18 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        // Exclude DECORATIONS from the persisted/restored window state: a stale
+        // `decorated:false` (saved by an older frameless build) would otherwise
+        // override tauri.conf.json's `decorations:true` and hide the native
+        // title bar. Decorations are governed solely by the config.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        & !tauri_plugin_window_state::StateFlags::DECORATIONS,
+                )
+                .build(),
+        )
         .manage(DesktopState::default())
         .invoke_handler(tauri::generate_handler![
             open_in_editor,
@@ -698,8 +1176,49 @@ fn main() {
             latest_cli_version,
             install_cli,
             install_node,
-            launch_backend
+            launch_backend,
+            pick_workspace,
+            switch_workspace,
+            list_workspaces,
+            last_workspace
         ])
+        .on_menu_event(|app, event| {
+            let id = event.id().0.as_str();
+            if id == "switch-workspace" {
+                let app2 = app.clone();
+                let initial = load_last_workspace().or_else(home_dir);
+                let mut dialog = app.dialog().file();
+                if let Some(dir) = initial {
+                    dialog = dialog.set_directory(dir);
+                }
+                dialog.pick_folder(move |folder| {
+                    let Some(folder) = folder else { return };
+                    let Ok(path) = folder.into_path() else { return };
+                    if !path.is_dir() {
+                        return;
+                    }
+                    let state = app2.state::<DesktopState>().inner().clone();
+                    if let Err(err) = spawn_instance(&app2, &state, &path) {
+                        let _ = app2.emit("cli:error", err);
+                    }
+                });
+            } else if let Some(rest) = id.strip_prefix("ws:") {
+                if let Ok(inst_id) = rest.parse::<u64>() {
+                    let state = app.state::<DesktopState>();
+                    let url = {
+                        let instances = state.instances.lock();
+                        instances
+                            .iter()
+                            .find(|i| i.id == inst_id)
+                            .and_then(|i| i.url.clone())
+                    };
+                    if let Some(url) = url {
+                        *state.current.lock() = Some(inst_id);
+                        navigate_main_window(app, &url);
+                    }
+                }
+            }
+        })
         .setup(|app| {
             // #1119: Updater pubkey is empty — auto-updates will not be
             // cryptographically verified. Generate a keypair before release:
@@ -725,11 +1244,23 @@ fn main() {
 
             let app_handle = app.handle().clone();
             app.listen("cli:url", move |event| {
-                let url = serde_json::from_str::<String>(event.payload()).unwrap_or_default();
-                if !url.is_empty() {
-                    navigate_main_window(&app_handle, &url);
+                // Payload: {"id": N, "url": "http://…/dashboard"}.
+                let v: serde_json::Value =
+                    serde_json::from_str(event.payload()).unwrap_or_default();
+                if let Some(url) = v.get("url").and_then(|u| u.as_str()) {
+                    if !url.is_empty() {
+                        navigate_main_window(&app_handle, url);
+                    }
                 }
             });
+
+            // Capture the splash URL so a dead instance can navigate back to it.
+            if let Some(w) = app.get_webview_window("main") {
+                if let Ok(url) = w.url() {
+                    *app.state::<DesktopState>().start_url.lock() = Some(url);
+                }
+            }
+            rebuild_menu(app.handle(), &app.state::<DesktopState>().instances);
 
             if let Some(w) = app.get_webview_window("main") {
                 // HiDPI fit: the JSON config asks for 1024x720 logical px.
@@ -772,13 +1303,17 @@ fn main() {
         .expect("tauri build failed")
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
+                // Kill every cmd/CLI process tree this app started.
+                // taskkill /T must run BEFORE Child::kill: once the parent is
+                // dead its children are orphaned and /T can no longer find them.
                 let state = app.state::<DesktopState>();
-                let child_opt = state.child.lock().take();
-                if let Some(mut child) = child_opt {
-                    let pid = child.id();
-                    let _ = child.kill();
+                let mut instances = state.instances.lock();
+                for inst in instances.iter_mut() {
+                    let pid = inst.child.id();
                     kill_process_tree(pid);
+                    let _ = inst.child.kill();
                 }
+                instances.clear();
             }
         });
 }

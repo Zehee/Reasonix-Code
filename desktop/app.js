@@ -50,7 +50,7 @@ listen("cli:error", (ev) => {
 });
 
 listen("cli:exit", () => {
-  setStatus("Reasonix stopped. Please restart the app.", true);
+  setStatus("Workspace stopped. Select a workspace to continue.");
 });
 
 listen("cli:url", () => {
@@ -106,14 +106,40 @@ async function fetchLatestCliVersion() {
   }
 }
 
-async function launchBackend() {
-  setStatus("Starting backend…");
+async function launchAt(path) {
+  setStatus(`Starting in ${path}…`);
   clearActions();
   try {
-    await tauri.core.invoke("launch_backend", { cwd: null });
+    await tauri.core.invoke("launch_backend", { cwd: path });
   } catch (e) {
     setStatus(String(e), true);
   }
+}
+
+async function showWorkspacePicker(note) {
+  clearActions();
+  let last = null;
+  try {
+    last = await tauri.core.invoke("last_workspace");
+  } catch {
+    // ignore — no last workspace
+  }
+  setStatus(note ?? "Select a workspace to start.\n(Switch workspaces anytime with Ctrl+Shift+O)");
+  if (last) {
+    addButton(`Use last workspace:\n${last}`, () => launchAt(last));
+  }
+  addButton(
+    "Choose folder…",
+    async () => {
+      setStatus("Pick a folder…");
+      try {
+        await tauri.core.invoke("pick_workspace");
+      } catch (e) {
+        setStatus(String(e), true);
+      }
+    },
+    last ? "secondary" : "primary"
+  );
 }
 
 async function installCli() {
@@ -138,8 +164,7 @@ async function installNode() {
 listen("install:done", (ev) => {
   const payload = parsePayload(ev);
   if (payload?.success) {
-    setStatus("Install complete, starting backend…");
-    launchBackend();
+    showWorkspacePicker("Install complete.");
   } else {
     setStatus(`Install failed: ${payload?.error ?? "unknown error"}`, true);
   }
@@ -173,12 +198,11 @@ async function checkEnvironment() {
     if (latestVersion && versionLessThan(localVersion, latestVersion)) {
       setStatus(`reasonix-code ${localVersion} is installed. A newer version (${latestVersion}) is available.`);
       addButton("Upgrade reasonix-code", installCli);
-      addButton("Continue with current version", launchBackend, "secondary");
+      addButton("Continue with current version", () => showWorkspacePicker(), "secondary");
       return;
     }
 
-    setStatus("CLI ready, starting…");
-    launchBackend();
+    showWorkspacePicker(`reasonix-code ${localVersion} ready.`);
   } catch (e) {
     setStatus(`Environment check failed: ${e}`, true);
   }
