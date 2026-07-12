@@ -2514,7 +2514,11 @@ function AppInner({
           : undefined,
         switchSession: onSwitchSession
           ? (name: string | undefined) => {
-              onSwitchSession(name);
+              // `undefined` = "mint a fresh branch" (POST /sessions/new). Resolve it
+              // to a real timestamped name — mirroring the SessionPicker's new
+              // session — so it persists on first turn instead of going ephemeral
+              // and never landing in the sidebar.
+              onSwitchSession(name ?? freshSessionName(session ?? undefined));
               return { ok: true as const };
             }
           : undefined,
