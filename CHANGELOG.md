@@ -3,6 +3,14 @@
 All notable changes to Reasonix. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9] — 2026-07-12
+
+**Desktop: multi-workspace instances.** One background CLI per workspace; the desktop now switches dashboard URLs instead of owning sessions. Multiple workspaces run side by side, and closing the window kills every spawned CLI process tree.
+
+**Desktop: native title bar and reliable dashboard startup.** The window-state plugin no longer persists decorations, so a previously saved frameless state no longer hides the title bar. The dashboard URL is now built from `~/.reasonix/config.json` (port + token) instead of parsing stdout — ink wraps piped stdout to 80 columns, which truncated the 64-hex token and caused 401s. The current session is appended to the URL so history loads on entry and after workspace switches.
+
+**Dashboard: new sessions persist as branches.** Clicking "new session" previously produced an ephemeral run that never landed in the sidebar. It now mints a real timestamped branch (`<workspace>/active-<timestamp>`) that persists on its first turn and appears in the session list.
+
 ## [0.1.6] — 2026-07-09
 
 **CLI renamed to `reasonix-code`.** The command entry point is now `reasonix-code`; the old `reasonix` and `dsnix` bin aliases have been removed. README, docs, examples, dashboard i18n, internal help strings, and the test suite have been updated to use the new name.
