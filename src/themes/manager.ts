@@ -65,8 +65,20 @@ export class ThemeManager {
     const filePath = this.themeFilePath(theme);
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     const tmpPath = `${filePath}.tmp`;
-    fs.writeFileSync(tmpPath, JSON.stringify(association, null, 2), "utf8");
-    fs.renameSync(tmpPath, filePath);
+    try {
+      fs.writeFileSync(tmpPath, JSON.stringify(association, null, 2), "utf8");
+      fs.renameSync(tmpPath, filePath);
+    } catch (err) {
+      // rename failed (e.g. EXDEV across filesystems) — clean up the tmp
+      // file so a subsequent listThemes doesn't surface a half-written
+      // artifact and the user can retry without manual cleanup.
+      try {
+        if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+      } catch {
+        /* best-effort cleanup */
+      }
+      throw err;
+    }
   }
 
   deleteTheme(theme: string): boolean {
