@@ -208,7 +208,9 @@ export class QQBot extends EventEmitter {
     this.ws.on("message", (raw: WebSocket.RawData) => {
       try {
         const payload = JSON.parse(raw.toString());
-        this.handlePayload(payload).catch(() => {});
+        this.handlePayload(payload).catch((err) => {
+          console.error("QQ bot failed to handle payload:", err);
+        });
       } catch {
         // ignore parse errors
       }
