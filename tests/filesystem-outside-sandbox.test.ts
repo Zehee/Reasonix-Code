@@ -149,4 +149,101 @@ describe("filesystem outside-sandbox gate (#684)", () => {
   it("loadProjectPathAllowed is independently exposed for the slash-permissions UI", () => {
     expect(loadProjectPathAllowed(root, configPath)).toEqual([]);
   });
+
+  // Symlinks/junctions need elevated perms on Windows; skip rather than fail
+  // the suite there. POSIX always permits them; macOS too.
+  const symlinkSupported = process.platform !== "win32";
+
+  it("read_file via in-sandbox symlink to outside file routes through the gate", async () => {
+    if (!symlinkSupported) return;
+    const link = join(root, "evil.txt");
+    try {
+      await fs.symlink(join(outside, "secret.txt"), link);
+    } catch (e) {
+      // Some sandboxes refuse symlink creation; skip silently.
+      if (
+        (e as NodeJS.ErrnoException).code === "EPERM" ||
+        (e as NodeJS.ErrnoException).code === "EACCES"
+      )
+        return;
+      throw e;
+    }
+
+    const call = tools.dispatch("read_file", { path: "evil.txt" }, { confirmationGate: gate });
+    await new Promise((r) => setTimeout(r, 5));
+    expect(gateRequests).toHaveLength(1);
+    expect(gateRequests[0]?.kind).toBe("path_access");
+    const payload = gateRequests[0]?.payload as { path: string; intent: string };
+    // The gate should see the real (post-realpath) path, not the symlink path,
+    // so the user knows what they're actually approving.
+    expect(payload.path).toBe(join(outside, "secret.txt"));
+    expect(payload.intent).toBe("read");
+    gate.resolve(gate.current!.id, { type: "deny" });
+    const result = await call;
+    expect(result).toMatch(/user denied/);
+    // Verify the outside file was not leaked.
+    const onDisk = await fs.readFile(join(outside, "secret.txt"), "utf8");
+    expect(onDisk).toBe("outside content");
+  });
+
+  it("write_file via in-sandbox symlink to outside file routes through the gate", async () => {
+    if (!symlinkSupported) return;
+    const link = join(root, "evil-w.txt");
+    try {
+      await fs.symlink(join(outside, "secret.txt"), link);
+    } catch (e) {
+      if (
+        (e as NodeJS.ErrnoException).code === "EPERM" ||
+        (e as NodeJS.ErrnoException).code === "EACCES"
+      )
+        return;
+      throw e;
+    }
+
+    const call = tools.dispatch(
+      "write_file",
+      { path: "evil-w.txt", content: "OVERWRITTEN" },
+      { confirmationGate: gate },
+    );
+    await new Promise((r) => setTimeout(r, 5));
+    expect(gateRequests).toHaveLength(1);
+    expect(gateRequests[0]?.kind).toBe("path_access");
+    const payload = gateRequests[0]?.payload as { path: string; intent: string };
+    expect(payload.path).toBe(join(outside, "secret.txt"));
+    expect(payload.intent).toBe("write");
+    gate.resolve(gate.current!.id, { type: "deny" });
+    await call;
+    // Verify the outside file was not overwritten.
+    const onDisk = await fs.readFile(join(outside, "secret.txt"), "utf8");
+    expect(onDisk).toBe("outside content");
+  });
+
+  it("write_file to a new path whose nearest ancestor is a symlink to outside routes through the gate", async () => {
+    if (!symlinkSupported) return;
+    const linkDir = join(root, "evil-dir");
+    try {
+      await fs.symlink(outside, linkDir, "dir");
+    } catch (e) {
+      if (
+        (e as NodeJS.ErrnoException).code === "EPERM" ||
+        (e as NodeJS.ErrnoException).code === "EACCES"
+      )
+        return;
+      throw e;
+    }
+
+    const call = tools.dispatch(
+      "write_file",
+      { path: "evil-dir/new-file.txt", content: "leak" },
+      { confirmationGate: gate },
+    );
+    await new Promise((r) => setTimeout(r, 5));
+    expect(gateRequests).toHaveLength(1);
+    const payload = gateRequests[0]?.payload as { intent: string };
+    expect(payload.intent).toBe("write");
+    gate.resolve(gate.current!.id, { type: "deny" });
+    await call;
+    // Verify nothing was created outside.
+    await expect(fs.stat(join(outside, "new-file.txt"))).rejects.toThrow();
+  });
 });

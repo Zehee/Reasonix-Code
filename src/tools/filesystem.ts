@@ -206,6 +206,24 @@ export function registerFilesystemTools(
     }
   }
 
+  /** Resolve a path that may not exist by walking up to the first existing
+   *  ancestor and returning its realpath. Returns null when no ancestor exists
+   *  (e.g. `C:\nope\foo` on POSIX). Used so newly-created files inherit the
+   *  real identity of an in-sandbox parent, not a symlinked one. */
+  async function realpathForNewPath(abs: string): Promise<string | null> {
+    let cur = abs;
+    for (let i = 0; i < 64; i++) {
+      try {
+        return await fs.realpath(cur);
+      } catch {
+        const parent = pathMod.dirname(cur);
+        if (parent === cur) return null;
+        cur = parent;
+      }
+    }
+    return null;
+  }
+
   /** Resolve path, route outside-sandbox access through the approval gate, return absolute. */
   const safePath = async (
     raw: unknown,
@@ -234,6 +252,24 @@ export function registerFilesystemTools(
       throw new Error(
         `path escapes sandbox root (${normRoot}): ${raw} — use an absolute system path like /Users/foo or C:\\Users\\foo to request approved outside-sandbox access`,
       );
+    }
+    // Symlink awareness: a path that lexically lives inside the sandbox may
+    // resolve to something outside it. Walk the realpath; if the resolved
+    // target (or its nearest existing ancestor, for new files) sits outside
+    // the sandbox, route it through the same approval gate the absolute-system
+    // branch uses. This closes the bypass where an in-repo symlink points at
+    // an external file.
+    const existingStat = await safeLstat(resolved);
+    let realAbs: string;
+    if (existingStat) {
+      // Use realpath so symlinks (including directory junctions) are followed.
+      realAbs = await fs.realpath(resolved);
+    } else {
+      const ancestorReal = await realpathForNewPath(resolved);
+      realAbs = ancestorReal ?? resolved;
+    }
+    if (!pathIsUnder(realAbs, normRoot)) {
+      await ensureOutsideSandboxAllowed(realAbs, intent, toolName, ctx);
     }
     return resolved;
   };
