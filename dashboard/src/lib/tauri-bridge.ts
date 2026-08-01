@@ -47,6 +47,63 @@ let sseTurnStarted = false;
 let sseReconnectAttempts = 0;
 const SSE_MAX_RECONNECT_ATTEMPTS = 10;
 const SSE_RECONNECT_BASE_DELAY = 1000;
+/** Low-frequency health probe used after SSE retries are exhausted: every
+ *  SSE_HEALTH_PROBE_INTERVAL_MS we hit /api/overview and, on the first 200,
+ *  reset the counter and reconnect. Tab focus / visibilitychange also force
+ *  a single retry so a laptop wake-up doesn't strand the dashboard. */
+const SSE_HEALTH_PROBE_INTERVAL_MS = 30_000;
+let sseHealthProbeTimer: ReturnType<typeof setInterval> | null = null;
+let sseGaveUp = false;
+
+function stopHealthProbe() {
+  if (sseHealthProbeTimer !== null) {
+    clearInterval(sseHealthProbeTimer);
+    sseHealthProbeTimer = null;
+  }
+}
+
+async function probeCliAlive(): Promise<boolean> {
+  try {
+    const token =
+      document.querySelector('meta[name="reasonix-token"]')?.getAttribute("content") ?? "";
+    const url =
+      token && token !== "__REASONIX_TOKEN__"
+        ? `/api/overview?token=${encodeURIComponent(token)}`
+        : "/api/overview";
+    const resp = await fetch(url, { method: "GET" });
+    // Use both `resp.ok` (real Response) and a status-range fallback so this
+    // also works against plain `{status: 200, text: () => ...}` test stubs
+    // that don't carry the prototype's `ok` getter.
+    const status = typeof resp.status === "number" ? resp.status : 0;
+    return Boolean(resp.ok) || (status >= 200 && status < 300);
+  } catch {
+    return false;
+  }
+}
+
+function startHealthProbe() {
+  if (sseHealthProbeTimer !== null) return;
+  sseHealthProbeTimer = setInterval(async () => {
+    if (await probeCliAlive()) {
+      stopHealthProbe();
+      sseReconnectAttempts = 0;
+      sseGaveUp = false;
+      connectSSE();
+    }
+  }, SSE_HEALTH_PROBE_INTERVAL_MS);
+}
+
+function handleVisibilityReconnect() {
+  if (!sseGaveUp) return;
+  // One best-effort retry when the tab becomes visible again.
+  void probeCliAlive().then((alive) => {
+    if (!alive || !sseGaveUp) return;
+    stopHealthProbe();
+    sseReconnectAttempts = 0;
+    sseGaveUp = false;
+    connectSSE();
+  });
+}
 
 let cliDisconnected = false;
 
@@ -270,6 +327,8 @@ function connectSSE(): void {
       for (const evt of events) emitEvent(evt);
       // 成功收到事件，重置重连计数
       sseReconnectAttempts = 0;
+      sseGaveUp = false;
+      stopHealthProbe();
       notifyCliStatus(true);
     } catch (err) {
       console.warn("[tauri-bridge] bad SSE event:", err);
@@ -283,11 +342,22 @@ function connectSSE(): void {
 
     sseReconnectAttempts++;
     if (sseReconnectAttempts > SSE_MAX_RECONNECT_ATTEMPTS) {
-      emitEvent({
-        type: "$error",
-        tabId: "tab-1",
-        message: "CLI 已停止，请重新启动",
-      });
+      // Don't give up permanently — switch to a low-frequency health probe so
+      // the dashboard self-heals once the CLI comes back (laptop wake-up,
+      // long hang, etc.) and reconnects immediately on tab focus.
+      if (!sseGaveUp) {
+        sseGaveUp = true;
+        emitEvent({
+          type: "$error",
+          tabId: "tab-1",
+          message: "CLI 已停止，请重新启动",
+        });
+        if (typeof document !== "undefined") {
+          document.addEventListener("visibilitychange", handleVisibilityReconnect);
+          window.addEventListener("focus", handleVisibilityReconnect);
+        }
+        startHealthProbe();
+      }
       return;
     }
 

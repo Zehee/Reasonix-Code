@@ -59,6 +59,8 @@ async function loadBridge(options?: {
 
   vi.stubGlobal("document", {
     documentElement: { dataset: {} },
+    addEventListener: () => {},
+    removeEventListener: () => {},
     querySelector: (selector: string) => {
       if (selector === 'meta[name="reasonix-mode"]') {
         return { getAttribute: () => "server" };
@@ -68,6 +70,10 @@ async function loadBridge(options?: {
       }
       return null;
     },
+  });
+  vi.stubGlobal("window", {
+    addEventListener: () => {},
+    removeEventListener: () => {},
   });
 
   const eventSources: EventSourceInstance[] = [];
@@ -198,5 +204,73 @@ describe("dashboard server bridge refresh", () => {
         totalCompletionTokens: 250,
       }),
     );
+  });
+});
+
+describe("dashboard SSE self-heal after retries are exhausted", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("starts a low-frequency health probe instead of giving up forever", async () => {
+    const { eventSources, fetchMock } = await loadBridge();
+
+    // The bridge has two ways to hit /api/overview:
+    //   - refreshServerSnapshots() called by the 5 s stats poll
+    //   - probeCliAlive() called by the 30 s health probe (with ?token=…)
+    // We track only the token-bearing fetch so the stats poll does not mask
+    // the dedicated probe.
+    const overviewProbeCalls = () =>
+      fetchMock.mock.calls.filter(
+        (call) =>
+          String(call[0] ?? "").includes("/api/overview") &&
+          String(call[0] ?? "").includes("token="),
+      );
+    const probeCallsBefore = overviewProbeCalls().length;
+
+    // Trip the reconnect budget: 11 forced failures cross the budget and
+    // flip the bridge into health-probe mode.
+    for (let i = 0; i < 11; i++) {
+      const last = eventSources[eventSources.length - 1]!;
+      last.onerror?.();
+      await vi.advanceTimersByTimeAsync(40_000);
+    }
+
+    // Advance past the 30 s health-probe interval. With the fix in place the
+    // probe runs every 30 s; without it no probe runs and this assertion
+    // would still pass via stats polling alone, so we filter to token-bearing
+    // overview calls above to isolate the dedicated health-probe path.
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(overviewProbeCalls().length).toBeGreaterThan(probeCallsBefore);
+  });
+
+  it("a successful reconnect after give-up resets the retry counter", async () => {
+    const { eventSources } = await loadBridge();
+
+    for (let i = 0; i < 11; i++) {
+      const last = eventSources[eventSources.length - 1]!;
+      last.onerror?.();
+      await vi.advanceTimersByTimeAsync(40_000);
+    }
+
+    // Probe alive and reconnect.
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    const fresh = eventSources[eventSources.length - 1]!;
+    // Deliver one valid message so onmessage resets the counter.
+    fresh.onmessage?.({ data: JSON.stringify({ kind: "ping" }) } as MessageEvent);
+
+    // Force failure again — counter was reset, so the bridge must schedule
+    // another exponential-backoff reconnect (not the slow health probe).
+    const beforeBackoff = eventSources.length;
+    fresh.onerror?.();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(eventSources.length).toBe(beforeBackoff + 1);
   });
 });
