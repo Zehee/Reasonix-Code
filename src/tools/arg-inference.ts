@@ -46,6 +46,38 @@ function buildParamAliasMap(): Map<string, string> {
 const paramAliasMap = buildParamAliasMap();
 
 /**
+ * Like fuzzyMatchParam but skips the substring fallback. Use this for boundary
+ * detection when splitting unstructured input (e.g. shell KV), where a single
+ * letter like "a" must not be allowed to match "command" just because it
+ * happens to appear inside the parameter name.
+ */
+function fuzzyMatchParamStrict(key: string, schemaParams: Record<string, unknown>): string | null {
+  if (key in schemaParams) return key;
+
+  const lowerKey = key.toLowerCase();
+  const lowerParams = new Map<string, string>();
+  for (const k of Object.keys(schemaParams)) {
+    lowerParams.set(k.toLowerCase(), k);
+  }
+
+  const ci = lowerParams.get(lowerKey);
+  if (ci) return ci;
+
+  const canonical = paramAliasMap.get(lowerKey);
+  if (canonical) {
+    const canonicalInSchema = lowerParams.get(canonical);
+    if (canonicalInSchema) return canonicalInSchema;
+    const allAliases = PARAM_ALIASES[canonical] ?? [];
+    for (const alias of allAliases) {
+      const aliasInSchema = lowerParams.get(alias);
+      if (aliasInSchema) return aliasInSchema;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Try to match a plausible parameter name to the schema's known parameters.
  * Returns the canonical schema key name, or null if no match.
  */
@@ -213,7 +245,20 @@ function tryParseFunctionCall(
 }
 
 /**
- * Try to parse shell-like kv pairs: `key1=value1 key2="value2"`
+ * Try to parse shell-like kv pairs: `key1=value1 key2="value2"`.
+ *
+ * Mode is decided by the first token:
+ *  - If the first token looks like `key=value` and `key` resolves to a schema
+ *    parameter (via fuzzyMatchParamStrict — no substring fallback), enter KV
+ *    accumulation. Subsequent schema-matching kv tokens open new boundaries;
+ *    other tokens are appended to the current value with a single space.
+ *  - Otherwise treat the whole input as a bare value and let
+ *    tryParseSingleParam pick the schema's first string parameter.
+ *
+ * Without this split, inputs like `command=git log --oneline timeoutSec=30`
+ * dropped the multi-word middle tokens, and inputs like
+ * `url=https://x?a=1` silently fell back to assigning the whole URL string
+ * to the wrong parameter.
  */
 function tryParseShellKv(
   trimmed: string,
@@ -222,22 +267,55 @@ function tryParseShellKv(
   // Must look like kv pairs, not JSON or function-call.
   if (trimmed.startsWith("{") || trimmed.startsWith("(")) return null;
 
-  // Split by whitespace, respecting quotes.
   const tokens = splitRespectingQuotes(trimmed);
-  const kvTokens = tokens.filter((t) => t.includes("="));
-  if (kvTokens.length === 0) return null;
+  if (tokens.length === 0) return null;
+
+  // Decide mode based on the first token.
+  const first = tokens[0]!;
+  const firstEq = first.indexOf("=");
+  let startInKvMode = false;
+  if (firstEq > 0) {
+    const firstKey = first.slice(0, firstEq).trim();
+    if (fuzzyMatchParamStrict(firstKey, schemaParams) !== null) {
+      startInKvMode = true;
+    }
+  }
+
+  if (!startInKvMode) {
+    // Bare-value mode — defer entirely to the single-param fallback.
+    return null;
+  }
 
   const args: Record<string, unknown> = {};
-  for (const token of kvTokens) {
+  // The parameter name whose value we are currently accumulating. While set,
+  // any token (whether kv-shaped or not) gets appended to its value with a
+  // space separator, until we see a token that opens a new recognised kv.
+  let currentKey: string | null = null;
+
+  for (const token of tokens) {
     const eqIdx = token.indexOf("=");
-    if (eqIdx <= 0) continue;
-    const key = token.slice(0, eqIdx).trim();
-    const rawVal = token.slice(eqIdx + 1).trim();
-    const value = parseArgValue(rawVal);
-    if (key) {
-      const matched = fuzzyMatchParam(key, schemaParams);
-      args[matched ?? key] = value;
+    if (eqIdx > 0) {
+      const key = token.slice(0, eqIdx).trim();
+      const rawVal = token.slice(eqIdx + 1).trim();
+      const matched = fuzzyMatchParamStrict(key, schemaParams);
+      if (matched) {
+        args[matched] = parseArgValue(rawVal);
+        currentKey = matched;
+      } else if (currentKey !== null) {
+        // Token contains '=' but the key isn't a schema parameter — treat
+        // the whole token as a continuation of the current kv's value.
+        args[currentKey] = `${args[currentKey]} ${token}`;
+      }
+      // else: no current kv in progress and the key isn't recognised.
+      // Drop the token rather than inject an unknown top-level parameter.
+      continue;
     }
+
+    // Non-kv token.
+    if (currentKey !== null) {
+      args[currentKey] = `${args[currentKey]} ${token}`;
+    }
+    // else: orphan token with no kv context — drop.
   }
 
   return Object.keys(args).length > 0 ? args : null;
