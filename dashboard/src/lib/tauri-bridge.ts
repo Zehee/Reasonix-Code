@@ -16,11 +16,7 @@ const isServerMode = rawMode !== "" && rawMode !== "__REASONIX_MODE__";
 const hasTauriApi = typeof window !== "undefined" && !!(window as any).__TAURI__?.invoke;
 // When the page is served by the CLI dashboard server we always use the
 // REST/SSE bridge, even if it happens to be loaded inside the Tauri webview.
-const MODE: "tauri" | "server" | "mock" = isServerMode
-  ? "server"
-  : hasTauriApi
-    ? "tauri"
-    : "mock";
+const MODE: "tauri" | "server" | "mock" = isServerMode ? "server" : hasTauriApi ? "tauri" : "mock";
 
 /** Web vs. native dispatcher hint — `true` whenever the dashboard is served by the CLI server, false in the Tauri desktop wrapper where native dialogs work. */
 export const isWebRuntime = isServerMode;
@@ -38,7 +34,16 @@ function broadcast(eventName: string, payload: any) {
 }
 
 function emitEvent(event: Record<string, any>) {
-  broadcast("rpc:event", { data: JSON.stringify(event) });
+  // Stamp the active tabId when the caller didn't supply one. Every
+  // event in the bridge used to hard-code "tab-1" on the emit side, which
+  // meant multi-tab dashboards (each tab's reducer filtered on tabId) all
+  // thought they were the same tab. The activeTabId default keeps single-
+  // tab clients behaviour-identical.
+  const stamped =
+    typeof event.tabId === "string" && event.tabId.length > 0
+      ? event
+      : { ...event, tabId: activeTabId };
+  broadcast("rpc:event", { data: JSON.stringify(stamped) });
 }
 
 // SSE 连接（Server 模式）
@@ -54,6 +59,20 @@ const SSE_RECONNECT_BASE_DELAY = 1000;
 const SSE_HEALTH_PROBE_INTERVAL_MS = 30_000;
 let sseHealthProbeTimer: ReturnType<typeof setInterval> | null = null;
 let sseGaveUp = false;
+
+// The dashboard supports multiple tabs but a single CLI backend, so every
+// event payload must carry the active tabId. The bridge historically
+// hard-coded "tab-1" on every emitEvent call, which worked because the
+// dashboard UI only ever ran one tab. To support multi-tab sessions the
+// App component now calls setActiveTabId() whenever the user switches tabs;
+// emitEvent reads the value at emit-time. Callers that pass their own
+// tabId still win (e.g. when the backend already knows the right id).
+let activeTabId = "tab-1";
+
+/** Update the tab id that emitEvent stamps onto every outgoing event. */
+export function setActiveTabIdInBridge(id: string): void {
+  activeTabId = id;
+}
 
 function stopHealthProbe() {
   if (sseHealthProbeTimer !== null) {
@@ -866,8 +885,7 @@ async function serverRpc(payload: Record<string, any>): Promise<void> {
     case "revision_response": {
       const r = payload.response;
       // Server takes "accept" / "reject"; verdict uses past-participle.
-      const choice =
-        r.type === "accepted" ? "accept" : r.type === "rejected" ? "reject" : null;
+      const choice = r.type === "accepted" ? "accept" : r.type === "rejected" ? "reject" : null;
       if (choice === null) break;
       await apiFetch("modal/resolve", {
         method: "POST",
@@ -1174,7 +1192,14 @@ export function getCurrentWindow(): any {
 // 4. @tauri-apps/plugin-dialog
 export async function open(options?: any): Promise<any> {
   const tauri = (window as any).__TAURI__;
-  console.log("[tauri-bridge] dialog open:", JSON.stringify(options), "mode:", MODE, "hasTAURI:", !!tauri?.invoke);
+  console.log(
+    "[tauri-bridge] dialog open:",
+    JSON.stringify(options),
+    "mode:",
+    MODE,
+    "hasTAURI:",
+    !!tauri?.invoke,
+  );
   if (tauri?.invoke) {
     try {
       const result = await tauri.invoke("plugin:dialog|open", { options });
