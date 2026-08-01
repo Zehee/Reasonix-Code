@@ -1040,6 +1040,10 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
             }
             let _ = app_exit.emit("cli:exit", serde_json::json!({ "id": id }));
             rebuild_menu(&app_exit, &instances_exit);
+            // Detect a crash: the process exited while it was the active
+            // workspace and never produced a ready dashboard URL. Surface a
+            // toast so the user knows what happened — previously a hung child
+            // disappeared silently after 10s.
             let was_current = {
                 let mut cur = current_exit.lock();
                 if *cur == Some(id) {
@@ -1052,6 +1056,16 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
             if was_current {
                 if let Some(url) = start_url.lock().clone() {
                     navigate_to(&app_exit, url);
+                }
+                // `found_url` is set by the stdout/stderr watcher when the
+                // dashboard URL was successfully registered. If the CLI exits
+                // before that, it's a crash.
+                let was_ready = found_url.load(Ordering::SeqCst);
+                if !was_ready {
+                    let _ = app_exit.emit(
+                        "cli:crash",
+                        serde_json::json!({ "id": id, "reason": "CLI exited before dashboard was ready" }),
+                    );
                 }
             }
         });
