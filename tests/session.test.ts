@@ -1,9 +1,11 @@
 import {
   appendFileSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
@@ -884,5 +886,94 @@ describe("normalizeWorkspace", () => {
   it("returns empty string for undefined or empty input", () => {
     expect(normalizeWorkspace(undefined)).toBe("");
     expect(normalizeWorkspace("")).toBe("");
+  });
+});
+
+describe("session persistence: append fast-path", () => {
+  let tmp: string;
+  const realHome = homedir();
+
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), "reasonix-fastpath-"));
+    vi.stubEnv("USERPROFILE", tmp);
+    vi.stubEnv("HOME", tmp);
+    vi.spyOn(require("node:os"), "homedir").mockReturnValue(tmp);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it("appends a single line on the fast path without rewriting the whole log", () => {
+    // Seed the live JSONL with a valid header + one message so the first
+    // append hits the fast path (live non-empty + parseable tail). mkdir
+    // first so writeFileSync succeeds without going through
+    // appendSessionMessage's mkdirSync.
+    const path = sessionPath("fast");
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(
+      path,
+      `${JSON.stringify({
+        type: "session.header",
+        sessionId: "00000000-0000-0000-0000-000000000000",
+        createdAt: new Date(0).toISOString(),
+      })}\n${JSON.stringify({ role: "user", content: "hi" })}\n`,
+    );
+
+    appendSessionMessage("fast", { role: "assistant", content: "hello" });
+
+    const after = readFileSync(path, "utf8");
+    expect(after.split("\n").filter((l) => l.trim().length > 0)).toHaveLength(3);
+    expect(after).toContain('"content":"hi"');
+    expect(after).toContain('"content":"hello"');
+    expect(after).toContain('"type":"session.header"');
+  });
+
+  it("still recovers from a corrupted live JSONL via the slow path (.bak fallback)", () => {
+    appendSessionMessage("recover", { role: "user", content: "old" });
+    const path = sessionPath("recover");
+    writeFileSync(`${path}.bak`, readFileSync(path, "utf8"));
+    writeFileSync(path, "not json\nalso not json\n");
+
+    appendSessionMessage("recover", { role: "user", content: "new" });
+
+    const msgs = loadSessionMessages("recover");
+    expect(msgs.map((m) => m.content)).toEqual(["old", "new"]);
+  });
+
+  it("first append (no live file yet) goes through the slow path and writes the header", () => {
+    appendSessionMessage("first", { role: "user", content: "hi" });
+    const path = sessionPath("first");
+    const raw = readFileSync(path, "utf8");
+    // First line is the session.header JSON, then the message.
+    const lines = raw.split("\n").filter((l) => l.trim().length > 0);
+    expect(lines).toHaveLength(2);
+    const header = JSON.parse(lines[0]!);
+    expect(header.type).toBe("session.header");
+    expect(typeof header.sessionId).toBe("string");
+    expect(header.sessionId.length).toBeGreaterThan(0);
+    const message = JSON.parse(lines[1]!);
+    expect(message.role).toBe("user");
+    expect(message.content).toBe("hi");
+    expect(message.turnId).toBe(1);
+  });
+
+  it("preserves turnId monotonicity across many fast-path appends", () => {
+    appendSessionMessage("mono", { role: "user", content: "1" });
+    appendSessionMessage("mono", { role: "assistant", content: "1" });
+    appendSessionMessage("mono", { role: "user", content: "2" });
+    appendSessionMessage("mono", { role: "assistant", content: "2" });
+    appendSessionMessage("mono", { role: "user", content: "3" });
+    const msgs = loadSessionMessages("mono");
+    expect(msgs).toHaveLength(5);
+    // Three user turns incrementing 1 → 2 → 3, plus two assistant turns
+    // that share the previous user turnId (assistant "1" sits inside
+    // user turn 1, assistant "2" sits inside user turn 2).
+    const userIds = msgs.filter((m) => m.role === "user").map((m) => m.turnId);
+    expect(userIds).toEqual([1, 2, 3]);
+    const assistantIds = msgs.filter((m) => m.role === "assistant").map((m) => m.turnId);
+    expect(assistantIds).toEqual([1, 2]);
   });
 });

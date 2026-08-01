@@ -19,6 +19,8 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 **Loop: actually use the healed-log cache.** `healActiveLogBeforeSend` now returns its cached `_healedCache` when `log.version` is unchanged instead of re-running `stripStalePlainReasoning` every iter; the cache fields were already maintained but never read, so each iteration previously spread every message twice (once in the strip, once in the API-ready mapper) for no reason.
 
+**Session append: switch to single-line writes.** `appendSessionMessage` now does an O(1)-byte scan via `readTailMessages(1)` and `appendFileSync`s one line when the live JSONL is non-empty and parseable; the previous behaviour atomically rewrote the whole transcript on every append, turning a long session into an O(N²) disk workload. The full-rewrite path still runs when the live file is missing / empty / .bak-recovered (slow path) so the `.bak` restore behaviour stays byte-identical. `appendSessionMessageAsync` is unchanged this round; it goes through `loadSessionMessagesAsync` which already returns the same view, so the sync-path fix is the high-leverage one.
+
 ## [0.1.9] — 2026-07-12
 
 **Desktop: multi-workspace instances.** One background CLI per workspace; the desktop now switches dashboard URLs instead of owning sessions. Multiple workspaces run side by side, and closing the window kills every spawned CLI process tree.
