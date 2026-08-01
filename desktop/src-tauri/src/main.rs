@@ -1116,55 +1116,25 @@ fn navigate_main_window(app: &AppHandle, url: &str) {
     }
 }
 
-/// Rebuild the window menu: a "Switch Workspace…" entry plus one item per
-/// running instance. With decorations:true the menu bar is drawn on Windows,
-/// and its accelerators fire regardless — Ctrl+Shift+O works everywhere.
-fn rebuild_menu(app: &AppHandle, instances: &Arc<Mutex<Vec<Instance>>>) {
-    use tauri::menu::{IsMenuItem, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+/// Rebuild the window menu. With decorations:true the menu bar is drawn
+/// on Windows, and its accelerators fire regardless — Ctrl+Shift+O works
+/// everywhere. Workspace switching is now handled by the React tabs in
+/// the dashboard title bar, so the menu only keeps a minimal Quit entry.
+fn rebuild_menu(app: &AppHandle, _instances: &Arc<Mutex<Vec<Instance>>>) {
+    use tauri::menu::{MenuBuilder, MenuItemBuilder};
 
-    let Ok(switch) = MenuItemBuilder::with_id("switch-workspace", "Switch Workspace…")
-        .accelerator("CmdOrCtrl+Shift+O")
+    // The workspace tab bar in the dashboard title bar handles workspace
+    // switching, so the native menu only needs a minimal Quit entry.
+    let Ok(quit) = MenuItemBuilder::with_id("quit", "Quit")
+        .accelerator("CmdOrCtrl+Q")
         .build(app)
     else {
         return;
     };
-
-    let ws_items: Vec<tauri::menu::MenuItem<tauri::Wry>> = {
-        let instances = instances.lock();
-        instances
-            .iter()
-            .filter_map(|inst| {
-                let label = if inst.url.is_some() {
-                    inst.workspace.to_string_lossy().into_owned()
-                } else {
-                    format!("{} (starting…)", inst.workspace.to_string_lossy())
-                };
-                MenuItemBuilder::with_id(format!("ws:{}", inst.id), label)
-                    .build(app)
-                    .ok()
-            })
-            .collect()
-    };
-
-    let ws_refs: Vec<&dyn IsMenuItem<tauri::Wry>> = ws_items
-        .iter()
-        .map(|i| i as &dyn IsMenuItem<tauri::Wry>)
-        .collect();
-
-    let Ok(submenu) = SubmenuBuilder::new(app, "Workspaces")
-        .item(&switch)
-        .separator()
-        .items(&ws_refs)
-        .build()
-    else {
-        return;
-    };
-    let Ok(menu) = MenuBuilder::new(app).item(&submenu).build() else {
+    let Ok(menu) = MenuBuilder::new(app).item(&quit).build() else {
         return;
     };
     if let Some(w) = app.get_webview_window("main") {
-        // The bar is only drawn on decorated windows (never on Windows here);
-        // setting it is enough for accelerators to register.
         let _ = w.set_menu(menu);
     }
 }
@@ -1210,40 +1180,8 @@ fn main() {
             workspace_close
         ])
         .on_menu_event(|app, event| {
-            let id = event.id().0.as_str();
-            if id == "switch-workspace" {
-                let app2 = app.clone();
-                let initial = load_last_workspace().or_else(home_dir);
-                let mut dialog = app.dialog().file();
-                if let Some(dir) = initial {
-                    dialog = dialog.set_directory(dir);
-                }
-                dialog.pick_folder(move |folder| {
-                    let Some(folder) = folder else { return };
-                    let Ok(path) = folder.into_path() else { return };
-                    if !path.is_dir() {
-                        return;
-                    }
-                    let state = app2.state::<DesktopState>().inner().clone();
-                    if let Err(err) = spawn_instance(&app2, &state, &path) {
-                        let _ = app2.emit("cli:error", err);
-                    }
-                });
-            } else if let Some(rest) = id.strip_prefix("ws:") {
-                if let Ok(inst_id) = rest.parse::<u64>() {
-                    let state = app.state::<DesktopState>();
-                    let url = {
-                        let instances = state.instances.lock();
-                        instances
-                            .iter()
-                            .find(|i| i.id == inst_id)
-                            .and_then(|i| i.url.clone())
-                    };
-                    if let Some(url) = url {
-                        *state.current.lock() = Some(inst_id);
-                        navigate_main_window(app, &url);
-                    }
-                }
+            if event.id().0 == "quit" {
+                app.exit(0);
             }
         })
         .setup(|app| {
