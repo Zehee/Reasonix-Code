@@ -6,7 +6,15 @@ export function redactEventValue<T>(value: T): T {
 }
 
 function redactUnknown(value: unknown, key: string | null): unknown {
-  if (Array.isArray(value)) return value.map((item) => redactUnknown(item, null));
+  if (Array.isArray(value)) {
+    // When the parent key itself matches the secret pattern, replace the
+    // whole array with a single placeholder rather than recursing — items
+    // inside an `apiKeys` or `tokens` list are secrets by construction, and
+    // recursing with `key=null` would drop the parent key context and
+    // silently leak every element.
+    if (key && SECRET_KEY_RE.test(key)) return "[redacted]";
+    return value.map((item) => redactUnknown(item, null));
+  }
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [childKey, childValue] of Object.entries(value)) {
