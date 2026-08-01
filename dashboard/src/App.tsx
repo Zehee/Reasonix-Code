@@ -69,6 +69,7 @@ import {
 import { elideTranscriptMessages } from "./ui/transcript-elision";
 import { useAutoScroll } from "./ui/useAutoScroll";
 import { useDisableTextAssist } from "./ui/useDisableTextAssist";
+import { useThemeSettings } from "./ui/use-theme-settings";
 import { WorkdirInputModal } from "./ui/workdir-input-modal";
 import { WorkdirPop } from "./ui/workdir-pop";
 import { WorkspaceTabs, type WorkspaceTab } from "./ui/workspace-tabs";
@@ -3084,72 +3085,21 @@ export function App() {
     tabsRef.current = tabs;
   }, [tabs]);
 
-  const [currency, setCurrency] = useState<"CNY" | "USD">(() => {
-    const v = localStorage.getItem("reasonix.currency");
-    return v === "USD" ? "USD" : "CNY";
-  });
-  const [theme, setTheme] = useState<Theme>(() => {
-    const v = localStorage.getItem("reasonix.theme");
-    const style = localStorage.getItem("reasonix.themeStyle");
-    if (isThemeStyle(style)) return themeForStyle(style);
-    return isTheme(v) ? v : THEME.DARK;
-  });
-  const [themeStyle, setThemeStyle] = useState<ThemeStyle>(() => {
-    const style = localStorage.getItem("reasonix.themeStyle");
-    if (isThemeStyle(style)) return style;
-    const storedTheme = localStorage.getItem("reasonix.theme");
-    return defaultStyleForTheme(isTheme(storedTheme) ? storedTheme : THEME.DARK);
-  });
-  const [fontScale, setFontScale] = useState<FontScale>(() => {
-    const v = localStorage.getItem("reasonix.fontScale");
-    return isFontScale(v) ? v : FONT_SCALE.MEDIUM;
-  });
-  const [fontFamily, setFontFamily] = useState<FontFamily>(() => {
-    const v = localStorage.getItem("reasonix.fontFamily");
-    return isFontFamily(v) ? v : FONT_FAMILY.SANS;
-  });
-  const [sideCollapsed, setSideCollapsed] = useState(
-    () => localStorage.getItem("reasonix.sideCollapsed") === "1",
-  );
-  const [ctxCollapsed, setCtxCollapsed] = useState(
-    () => localStorage.getItem("reasonix.ctxCollapsed") === "1",
-  );
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    document.documentElement.dataset.themeStyle = themeStyle;
-    localStorage.setItem("reasonix.theme", theme);
-    localStorage.setItem("reasonix.themeStyle", themeStyle);
-  }, [theme, themeStyle]);
-
-  useEffect(() => {
-    localStorage.setItem("reasonix.sideCollapsed", sideCollapsed ? "1" : "0");
-  }, [sideCollapsed]);
-
-  useEffect(() => {
-    localStorage.setItem("reasonix.ctxCollapsed", ctxCollapsed ? "1" : "0");
-  }, [ctxCollapsed]);
-
-  useEffect(() => {
-    // Chromium webview supports `zoom`; scales every px-based size without touching CSS rules.
-    document.documentElement.style.setProperty("zoom", String(FONT_SCALE_ZOOM[fontScale]));
-    localStorage.setItem("reasonix.fontScale", fontScale);
-  }, [fontScale]);
-
-  useEffect(() => {
-    // CSS rules use var(--font-sans); changing it here re-styles every sans surface in one shot. Mono stays put because code/transcripts hardcode "Geist Mono".
-    document.documentElement.style.setProperty("--font-sans", FONT_FAMILY_STACK[fontFamily]);
-    localStorage.setItem("reasonix.fontFamily", fontFamily);
-  }, [fontFamily]);
-
-  useEffect(() => {
-    const onCur = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail === "CNY" || detail === "USD") setCurrency(detail);
-    };
-    window.addEventListener("reasonix:currency", onCur);
-    return () => window.removeEventListener("reasonix:currency", onCur);
-  }, []);
+  const [themeSettings, themeSetters] = useThemeSettings();
+  const currency = themeSettings.currency;
+  const setCurrency = themeSetters.setCurrency;
+  const theme = themeSettings.theme;
+  const setTheme = themeSetters.setTheme;
+  const themeStyle = themeSettings.themeStyle;
+  const setThemeStyle = themeSetters.setThemeStyle;
+  const fontScale = themeSettings.fontScale;
+  const setFontScale = themeSetters.setFontScale;
+  const fontFamily = themeSettings.fontFamily;
+  const setFontFamily = themeSetters.setFontFamily;
+  const sideCollapsed = themeSettings.sideCollapsed;
+  const setSideCollapsed = themeSetters.setSideCollapsed;
+  const ctxCollapsed = themeSettings.ctxCollapsed;
+  const setCtxCollapsed = themeSetters.setCtxCollapsed;
 
   const deliverToTab = useCallback((tabId: string, action: TabAction) => {
     const dispatch = dispatchersRef.current.get(tabId);
