@@ -15,6 +15,10 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 **Filesystem sandbox: symlink-aware boundary check.** `safePath` now follows symlinks (via `fs.realpath`) and routes the resolved target through the same approval gate the absolute-system path branch already used. Previously a relative path like `evil.txt` whose lexical parent lives inside the sandbox was always accepted — even when `evil.txt` was a symlink pointing at an external file — so `read_file` and `write_file` would silently cross the sandbox boundary. The same logic applies to new files: the nearest existing ancestor's realpath is what gets gated, so writing into an in-sandbox directory that is a symlink to outside is also blocked. The gate payload carries the post-realpath path so the user can see what they are approving.
 
+**Dashboard SSE: self-heal after the retry budget.** The bridge used to emit a one-shot `$error: CLI 已停止，请重新启动` and stop calling `connectSSE` once `sseReconnectAttempts` exceeded the budget, leaving the dashboard permanently disconnected until a manual page refresh. It now arms a 30 s health probe (fetch `/api/overview?token=…`) after give-up, reconnects on the first 200 response, and also retries immediately on `document.visibilitychange` / `window.focus` so a laptop wake-up doesn't strand the dashboard. The probe stops once a successful `onmessage` clears `sseGaveUp`, restoring normal exponential-backoff retries.
+
+**Loop: actually use the healed-log cache.** `healActiveLogBeforeSend` now returns its cached `_healedCache` when `log.version` is unchanged instead of re-running `stripStalePlainReasoning` every iter; the cache fields were already maintained but never read, so each iteration previously spread every message twice (once in the strip, once in the API-ready mapper) for no reason.
+
 ## [0.1.9] — 2026-07-12
 
 **Desktop: multi-workspace instances.** One background CLI per workspace; the desktop now switches dashboard URLs instead of owning sessions. Multiple workspaces run side by side, and closing the window kills every spawned CLI process tree.

@@ -647,6 +647,9 @@ export class CacheFirstLoop {
     //   1. Constructor (healLoadedMessagesByTokens) for sessions loaded from disk.
     //   2. step() entry (fixToolCallPairing) for dangling tool_calls that survived
     //      in memory after a crash or direct append.
+    if (this._healedCache && this._healedVersion === this.log.version) {
+      return this._healedCache;
+    }
     const current = this.log.toFullHistory();
     this._healedCache = current;
     this._healedVersion = this.log.version;
