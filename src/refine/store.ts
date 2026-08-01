@@ -189,7 +189,7 @@ export class RefinedStore {
     const params: (string | number)[] = [];
 
     for (const term of terms) {
-      const escaped = term.split("%").join("\\%").split("_").join("\\_");
+      const escaped = term.split("\\").join("\\\\").split("%").join("\\%").split("_").join("\\_");
       const like = `%${escaped}%`;
       params.push(like, like, like);
     }
