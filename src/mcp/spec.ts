@@ -97,22 +97,28 @@ export function overlayMatchedSpec(
 /** Serialize a normalized spec back to the `--mcp` string format. Round-trips through `parseMcpSpec`. */
 export function specToRaw(spec: McpServerSpec): string {
   if (spec.transport === "stdio") {
-    const args = spec.args
-      .map((a) => {
-        if (a.includes(" ") || a.includes('"') || a.includes("\t")) {
-          // Double-quote and escape internal double quotes + backslashes.
-          return `"${a.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-        }
-        return a;
-      })
-      .join(" ");
-    const body = args ? `${spec.command} ${args}` : spec.command;
+    const parts = [quoteIfNeeded(spec.command), ...spec.args.map(quoteIfNeeded)];
+    const body = parts.join(" ");
     return spec.name ? `${spec.name}=${body}` : body;
   }
   if (spec.transport === "sse") {
     return spec.name ? `${spec.name}=${spec.url}` : spec.url;
   }
   return spec.name ? `${spec.name}=streamable+${spec.url}` : `streamable+${spec.url}`;
+}
+
+/**
+ * Quote a single argv token for the `--mcp` string format. Mirrors the
+ * escaping done by `parseMcpSpec` → `shellSplit`, which treats whitespace
+ * (space, tab) as the token separator and `\\` / `"` as the only escape
+ * characters inside a double-quoted span. Tokens without special chars
+ * pass through unchanged so the round-trip stays byte-stable.
+ */
+function quoteIfNeeded(token: string): string {
+  if (token.includes(" ") || token.includes('"') || token.includes("\t")) {
+    return `"${token.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  }
+  return token;
 }
 
 const NAME_PREFIX = /^([a-zA-Z_][a-zA-Z0-9_-]*)=(.*)$/;

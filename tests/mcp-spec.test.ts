@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMcpSpec } from "../src/mcp/spec.js";
+import { parseMcpSpec, specToRaw } from "../src/mcp/spec.js";
 
 describe("parseMcpSpec: stdio", () => {
   it("parses a namespaced spec", () => {
@@ -133,5 +133,61 @@ describe("parseMcpSpec: streamable-http", () => {
   it("plain https without `streamable+` still routes to SSE for back-compat", () => {
     const spec = parseMcpSpec("https://example.com/mcp");
     expect(spec.transport).toBe("sse");
+  });
+});
+
+describe("specToRaw → parseMcpSpec round-trip (stdio)", () => {
+  it("round-trips a Windows command path containing spaces", () => {
+    const original = {
+      transport: "stdio" as const,
+      name: "win-srv",
+      command: "C:\\Program Files\\server.exe",
+      args: ["--port", "8080"],
+    };
+    const parsed = parseMcpSpec(specToRaw(original));
+    expect(parsed).toEqual(original);
+  });
+
+  it("round-trips a POSIX command path containing spaces, no args", () => {
+    const original = {
+      transport: "stdio" as const,
+      name: "posix-srv",
+      command: "/opt/my tools/server",
+      args: [],
+    };
+    const parsed = parseMcpSpec(specToRaw(original));
+    expect(parsed).toEqual(original);
+  });
+
+  it("round-trips a command that contains a double quote", () => {
+    const original = {
+      transport: "stdio" as const,
+      name: "dq-srv",
+      command: '/usr/bin/echo"q"',
+      args: [],
+    };
+    const parsed = parseMcpSpec(specToRaw(original));
+    expect(parsed).toEqual(original);
+  });
+
+  it("round-trips a command that contains a tab", () => {
+    const original = {
+      transport: "stdio" as const,
+      name: "tab-srv",
+      command: "cmd\twith\ttab",
+      args: [],
+    };
+    const parsed = parseMcpSpec(specToRaw(original));
+    expect(parsed).toEqual(original);
+  });
+
+  it("leaves byte-stable for a simple command + args (no spurious quotes)", () => {
+    const original = {
+      transport: "stdio" as const,
+      name: "basic",
+      command: "node",
+      args: ["./server.js", "--debug"],
+    };
+    expect(specToRaw(original)).toBe("basic=node ./server.js --debug");
   });
 });
