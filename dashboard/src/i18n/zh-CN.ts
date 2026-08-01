@@ -1279,6 +1279,11 @@ export const zhCN = {
     writePathOutsideSandbox: "沙箱外写入路径",
     you: "你",
   },
+  workspaceTab: {
+    close: "关闭工作区标签页",
+    new: "新建工作区",
+    newTooltip: "在新标签页中打开工作区",
+  },
   workdir: {
     browse: "浏览…",
     cancel: "取消",

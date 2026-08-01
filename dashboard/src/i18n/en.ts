@@ -1304,6 +1304,11 @@ export const en = {
     writePathOutsideSandbox: "Write path outside sandbox",
     you: "You",
   },
+  workspaceTab: {
+    close: "Close workspace tab",
+    new: "New workspace",
+    newTooltip: "Open a new workspace in a tab",
+  },
   workdir: {
     browse: "Browse…",
     cancel: "Cancel",
