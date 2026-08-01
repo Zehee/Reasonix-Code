@@ -3379,6 +3379,31 @@ export function App() {
     return () => clearInterval(timer);
   }, [refreshWorkspaceTabs]);
 
+  // Surface CLI crash events from the desktop backend as a toast.
+  const [crashToast, setCrashToast] = useState<{ id: string; reason: string } | null>(null);
+  useEffect(() => {
+    if (isWebRuntime) return;
+    let closed = false;
+    let unlisten: (() => void) | undefined;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<{ id: string; reason: string }>("cli:crash", (ev) => {
+          if (closed) return;
+          setCrashToast({ id: ev.payload.id, reason: ev.payload.reason });
+        }),
+      )
+      .then((unsub) => {
+        unlisten = unsub;
+      })
+      .catch(() => {
+        /* Tauri event API unavailable — skip silently */
+      });
+    return () => {
+      closed = true;
+      unlisten?.();
+    };
+  }, []);
+
   // Tell the backend which tab is focused so a restart can reopen on it (#1244).
   useEffect(() => {
     if (!activeTabId) return;
@@ -3497,6 +3522,23 @@ export function App() {
           onCloseWorkspace={closeWorkspace}
         />
       ))}
+      {crashToast ? (
+        <div
+          className="crash-toast"
+          role="alert"
+          onClick={() => setCrashToast(null)}
+        >
+          <span className="crash-toast-text">{t("crashToast.message")}</span>
+          <button
+            type="button"
+            className="crash-toast-close"
+            onClick={() => setCrashToast(null)}
+            aria-label={t("crashToast.dismiss")}
+          >
+            <I.x size={12} />
+          </button>
+        </div>
+      ) : null}
     </>
   );
 }

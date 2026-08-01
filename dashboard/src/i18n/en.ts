@@ -1309,6 +1309,10 @@ export const en = {
     new: "New workspace",
     newTooltip: "Open a new workspace in a tab",
   },
+  crashToast: {
+    message: "A workspace crashed unexpectedly. Click to dismiss.",
+    dismiss: "Dismiss",
+  },
   workdir: {
     browse: "Browse…",
     cancel: "Cancel",
