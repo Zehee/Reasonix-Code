@@ -3181,6 +3181,12 @@ export function App() {
               // restored focused tab); otherwise keep focus, but make sure
               // *some* tab is active during a multi-tab restore.
               setActiveTabId((prev) => (ev.active || !prev ? tabId : prev));
+              // The new tab's Composer mounts after the tab is created; use
+              // requestAnimationFrame to wait for the DOM update before
+              // focusing so the textarea is available to receive focus.
+              requestAnimationFrame(() => {
+                composerRef.current?.focus();
+              });
               return;
             }
             if (ev.type === "$tab_closed" && tabId) {
