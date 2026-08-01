@@ -136,6 +136,37 @@ describe("session persistence", () => {
     expect(loadSessionMessages("empty-live")).toEqual([]);
   });
 
+  it("appendSessionMessage falls back to .bak when the live JSONL is corrupted", () => {
+    appendSessionMessage("append-corrupt", { role: "user", content: "old" });
+    const p = sessionPath("append-corrupt");
+    writeFileSync(`${p}.bak`, readFileSync(p, "utf8"));
+    // Corrupt the live file so readSessionMessages yields zero parseable lines.
+    writeFileSync(p, "not json\nalso not json\n");
+
+    appendSessionMessage("append-corrupt", { role: "user", content: "new" });
+
+    const msgs = loadSessionMessages("append-corrupt");
+    expect(msgs.map((m) => m.content)).toEqual(["old", "new"]);
+  });
+
+  it("appendSessionMessageAsync falls back to .bak when the live JSONL is corrupted", async () => {
+    await appendSessionMessageAsync("append-corrupt-async", {
+      role: "user",
+      content: "old",
+    });
+    const p = sessionPath("append-corrupt-async");
+    writeFileSync(`${p}.bak`, readFileSync(p, "utf8"));
+    writeFileSync(p, "not json\nalso not json\n");
+
+    await appendSessionMessageAsync("append-corrupt-async", {
+      role: "user",
+      content: "new",
+    });
+
+    const msgs = loadSessionMessages("append-corrupt-async");
+    expect(msgs.map((m) => m.content)).toEqual(["old", "new"]);
+  });
+
   it("listSessions ignores jsonl backup sidecars", () => {
     appendSessionMessage("visible", { role: "user", content: "x" });
     writeFileSync(`${sessionPath("visible")}.bak`, `${JSON.stringify({ role: "user" })}\n`);

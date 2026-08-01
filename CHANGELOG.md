@@ -3,6 +3,18 @@
 All notable changes to Reasonix. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+**Session recovery.** When the live session JSONL is corrupted, `appendSessionMessage` and `appendSessionMessageAsync` now fall back to the `.bak` snapshot before appending — matching `loadSessionMessages`. Previously the next append could overwrite the backup history with only the new message. Regression tests cover both the sync and async paths.
+
+**Tool argument inference.** Shell-style `key=value` parsing now keeps multi-token values intact and refuses to inject top-level parameters for unknown keys. Inputs like `command=git log --oneline timeoutSec=30` correctly produce `{command: "git log --oneline", timeoutSec: 30}` instead of dropping the middle tokens, and unknown keys such as `a` no longer piggyback on parameter names that merely contain those letters. A new `fuzzyMatchParamStrict` helper preserves the original fuzzy matcher for JSON and function-call parsing while enforcing exact/case-insensitive/alias-only matching at the shell-KV boundary.
+
+**Event redaction.** `redactEventValue` now redacts the whole array when the parent key matches the secret pattern (`apiKeys`, `tokens`, `secrets`, etc.) instead of recursing into each element with a lost parent key. Previously a payload like `{apiKeys: ["sk-live-1", "sk-live-2"]}` was emitted verbatim into the event JSONL, leaking every credential on the wire. The same protection applies to object arrays (`{tokens: [{name, value}]}` → `{tokens: "[redacted]"}`). Non-sensitive arrays and nested-key behaviour are unchanged.
+
+**MCP spec round-trip.** `specToRaw` now quotes the stdio `command` the same way it quotes each `arg`, so paths or binaries containing spaces, tabs, or embedded double quotes survive a `specToRaw → parseMcpSpec` round-trip. Previously a Windows path like `C:\Program Files\server.exe` would be split into `command: "C:\\Program"` plus `args: ["Files\\server.exe", …]` and never recover its original shape, breaking any caller that persisted and re-loaded MCP configurations.
+
+**Filesystem sandbox: symlink-aware boundary check.** `safePath` now follows symlinks (via `fs.realpath`) and routes the resolved target through the same approval gate the absolute-system path branch already used. Previously a relative path like `evil.txt` whose lexical parent lives inside the sandbox was always accepted — even when `evil.txt` was a symlink pointing at an external file — so `read_file` and `write_file` would silently cross the sandbox boundary. The same logic applies to new files: the nearest existing ancestor's realpath is what gets gated, so writing into an in-sandbox directory that is a symlink to outside is also blocked. The gate payload carries the post-realpath path so the user can see what they are approving.
+
 ## [0.1.9] — 2026-07-12
 
 **Desktop: multi-workspace instances.** One background CLI per workspace; the desktop now switches dashboard URLs instead of owning sessions. Multiple workspaces run side by side, and closing the window kills every spawned CLI process tree.

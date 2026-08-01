@@ -400,8 +400,10 @@ export function appendSessionMessage(name: string, message: ChatMessage): void {
   const path = sessionPath(name);
   mkdirSync(dirname(path), { recursive: true });
 
-  // Load existing messages to compute turnId and sessionId
-  const existing = existsSync(path) ? (readSessionMessages(path)?.messages ?? []) : [];
+  // Load existing messages: a corrupted live JSONL must fall back to .bak
+  // (matching loadSessionMessages) so the next append preserves history
+  // instead of overwriting it with just the new message.
+  const existing = loadSessionMessages(name);
 
   // Resolve / assign sessionId
   const sessionId = loadSessionId(name);
@@ -1048,14 +1050,9 @@ export async function appendSessionMessageAsync(name: string, message: ChatMessa
   const path = sessionPath(name);
   await mkdir(dirname(path), { recursive: true });
 
-  // Read existing messages (async)
-  let existing: ChatMessage[] = [];
-  try {
-    const loaded = await readSessionMessagesAsync(path);
-    if (loaded) existing = loaded.messages;
-  } catch {
-    /* file may not exist yet */
-  }
+  // Read existing messages (async): same .bak fallback as loadSessionMessagesAsync
+  // so a corrupted live JSONL doesn't silently drop history on the next append.
+  const existing = await loadSessionMessagesAsync(name);
 
   const sessionId = loadSessionId(name);
   const turnId = resolveNextTurnId(existing, message.role);
