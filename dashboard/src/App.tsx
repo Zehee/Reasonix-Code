@@ -71,6 +71,7 @@ import { useAutoScroll } from "./ui/useAutoScroll";
 import { useDisableTextAssist } from "./ui/useDisableTextAssist";
 import { WorkdirInputModal } from "./ui/workdir-input-modal";
 import { WorkdirPop } from "./ui/workdir-pop";
+import { WorkspaceTabs, type WorkspaceTab } from "./ui/workspace-tabs";
 
 export type AssistantSegment =
   | { kind: "text"; text: string }
@@ -1186,6 +1187,11 @@ interface TabRuntimeProps {
   /** 移动端专用：当前侧边栏抽屉是否展开 */
   mobileSideOpen: boolean;
   onToggleMobileSide: () => void;
+  workspaceTabs: WorkspaceTab[];
+  activeWorkspaceId: string | null;
+  onSwitchWorkspace: (id: string) => void;
+  onNewWorkspace: () => void;
+  onCloseWorkspace: (id: string) => void;
 }
 
 function TabRuntime({
@@ -1215,6 +1221,11 @@ function TabRuntime({
   setActiveTabId,
   mobileSideOpen,
   onToggleMobileSide,
+  workspaceTabs,
+  activeWorkspaceId,
+  onSwitchWorkspace,
+  onNewWorkspace,
+  onCloseWorkspace,
 }: TabRuntimeProps) {
   const [state, dispatch] = useReducer(reduce, {
     ready: false,
@@ -1930,6 +1941,11 @@ function TabRuntime({
           hasMessages={state.messages.length > 0}
           mobileSideOpen={mobileSideOpen}
           onToggleMobileSide={onToggleMobileSide}
+          workspaceTabs={workspaceTabs}
+          activeWorkspaceId={activeWorkspaceId}
+          onSwitchWorkspace={onSwitchWorkspace}
+          onNewWorkspace={onNewWorkspace}
+          onCloseWorkspace={onCloseWorkspace}
         />
 
         <TabBar
@@ -2438,6 +2454,11 @@ function TitleBar({
   hasMessages,
   mobileSideOpen,
   onToggleMobileSide,
+  workspaceTabs,
+  activeWorkspaceId,
+  onSwitchWorkspace,
+  onNewWorkspace,
+  onCloseWorkspace,
 }: {
   session: string;
   model?: string;
@@ -2454,6 +2475,11 @@ function TitleBar({
   /** 移动端：汉堡菜单状态 */
   mobileSideOpen: boolean;
   onToggleMobileSide: () => void;
+  workspaceTabs: WorkspaceTab[];
+  activeWorkspaceId: string | null;
+  onSwitchWorkspace: (id: string) => void;
+  onNewWorkspace: () => void;
+  onCloseWorkspace: (id: string) => void;
 }) {
   useLang();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -2565,6 +2591,13 @@ function TitleBar({
             </div>
           )}
         </div>
+        <WorkspaceTabs
+          tabs={workspaceTabs.map((t) => ({ ...t, active: t.id === activeWorkspaceId }))}
+          activeId={activeWorkspaceId}
+          onSelect={onSwitchWorkspace}
+          onNew={onNewWorkspace}
+          onClose={onCloseWorkspace}
+        />
       </div>
 
       {/* center: drag region */}
@@ -3031,6 +3064,9 @@ type TabMeta = { id: string; workspaceDir?: string; busy?: boolean };
 export function App() {
   const [tabs, setTabs] = useState<TabMeta[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>("");
+  // Workspace tabs: one per running desktop instance (Tauri only).
+  const [workspaceTabs, setWorkspaceTabs] = useState<WorkspaceTab[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   // Keep the tauri-bridge's activeTabId in sync with the React state so
   // events emitted by the bridge (which used to hard-code "tab-1") route
   // to the right tab's reducer. Without this, every tab's reducer saw
@@ -3177,16 +3213,7 @@ export function App() {
                   ? prev
                   : [...prev, { id: tabId, workspaceDir: ev.workspaceDir }],
               );
-              // Focus the tab the backend marked active (user-opened, or the
-              // restored focused tab); otherwise keep focus, but make sure
-              // *some* tab is active during a multi-tab restore.
               setActiveTabId((prev) => (ev.active || !prev ? tabId : prev));
-              // The new tab's Composer mounts after the tab is created; use
-              // requestAnimationFrame to wait for the DOM update before
-              // focusing so the textarea is available to receive focus.
-              requestAnimationFrame(() => {
-                composerRef.current?.focus();
-              });
               return;
             }
             if (ev.type === "$tab_closed" && tabId) {
@@ -3280,6 +3307,77 @@ export function App() {
       for (const c of cleanups) c();
     };
   }, [deliverToTab]);
+
+  // ── Workspace tabs (desktop only) ──────────────────────────────────────────
+  // Sync workspaceTabs state from the desktop backend. In web/server mode
+  // these invokes throw — we catch and degrade gracefully.
+  const refreshWorkspaceTabs = useCallback(async () => {
+    if (isWebRuntime) return;
+    try {
+      const list = await invoke("list_workspaces");
+      setWorkspaceTabs(
+        (list as { id: number; path: string; ready: boolean }[]).map((ws) => ({
+          id: String(ws.id),
+          path: ws.path,
+          name: ws.path.split(/[\\/]/).pop() || "workspace",
+          active: String(ws.id) === activeWorkspaceId,
+        })),
+      );
+    } catch {
+      // desktop command unavailable — stay silent
+    }
+  }, [activeWorkspaceId]);
+
+  const switchWorkspace = useCallback(
+    async (id: string) => {
+      if (isWebRuntime) return;
+      const ws = workspaceTabs.find((t) => t.id === id);
+      if (!ws) return;
+      setActiveWorkspaceId(id);
+      setWorkspaceTabs((prev) => prev.map((t) => ({ ...t, active: t.id === id })));
+      try {
+        await invoke("switch_workspace", { path: ws.path });
+      } catch {
+        // best-effort
+      }
+    },
+    [workspaceTabs],
+  );
+
+  const pickWorkspace = useCallback(async () => {
+    if (isWebRuntime) return;
+    try {
+      await invoke("pick_workspace");
+    } catch {
+      // best-effort
+    }
+  }, []);
+
+  const closeWorkspace = useCallback(
+    async (id: string) => {
+      if (isWebRuntime) return;
+      try {
+        await invoke("workspace_close", { id: Number(id) });
+        setWorkspaceTabs((prev) => prev.filter((t) => t.id !== id));
+        if (activeWorkspaceId === id) {
+          setActiveWorkspaceId(null);
+        }
+      } catch {
+        // best-effort
+      }
+    },
+    [activeWorkspaceId],
+  );
+
+  // Poll workspace list periodically to stay in sync with the desktop backend.
+  useEffect(() => {
+    if (isWebRuntime) return;
+    void refreshWorkspaceTabs();
+    const timer = setInterval(() => {
+      void refreshWorkspaceTabs();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [refreshWorkspaceTabs]);
 
   // Tell the backend which tab is focused so a restart can reopen on it (#1244).
   useEffect(() => {
@@ -3392,6 +3490,11 @@ export function App() {
           tabsList={tabs}
           activeTabId={activeTabId}
           setActiveTabId={setActiveTabId}
+          workspaceTabs={workspaceTabs}
+          activeWorkspaceId={activeWorkspaceId}
+          onSwitchWorkspace={switchWorkspace}
+          onNewWorkspace={pickWorkspace}
+          onCloseWorkspace={closeWorkspace}
         />
       ))}
     </>

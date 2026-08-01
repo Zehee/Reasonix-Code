@@ -894,6 +894,11 @@ fn register_dashboard_url(
     // Emit the JSON object directly — passing a serialized String would be
     // double-encoded (listeners would see Value::String, not an object).
     let _ = app.emit("cli:url", serde_json::json!({ "id": id, "url": url }));
+    // Notify the frontend that a new workspace tab is ready.
+    let _ = app.emit(
+        "workspace-opened",
+        serde_json::json!({ "id": id, "url": url }),
+    );
     rebuild_menu(app, instances);
 }
 
@@ -1055,6 +1060,27 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
     Ok(id)
 }
 
+/// Close a workspace instance by id: kill its process tree and rebuild the menu.
+#[tauri::command]
+fn workspace_close(app: AppHandle, state: State<DesktopState>, id: u64) -> Result<(), String> {
+    let pid = {
+        let mut instances = state.instances.lock();
+        let pos = instances.iter().position(|i| i.id == id);
+        match pos {
+            Some(pos) => {
+                let pid = instances[pos].child.id();
+                instances.remove(pos);
+                pid
+            }
+            None => return Err(format!("instance {id} not found")),
+        }
+    };
+    kill_process_tree(pid);
+    let _ = app.emit("workspace-closed", serde_json::json!({ "id": id }));
+    rebuild_menu(&app, &state.instances);
+    Ok(())
+}
+
 fn kill_process_tree(pid: u32) {
     #[cfg(windows)]
     {
@@ -1180,7 +1206,8 @@ fn main() {
             pick_workspace,
             switch_workspace,
             list_workspaces,
-            last_workspace
+            last_workspace,
+            workspace_close
         ])
         .on_menu_event(|app, event| {
             let id = event.id().0.as_str();
