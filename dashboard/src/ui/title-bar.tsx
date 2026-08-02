@@ -353,7 +353,8 @@ export function TabBar({
         return (
           <div
             key={tab.id}
-            className={`tab ${tab.id === activeId ? "active" : ""}`}
+            className="tab"
+            data-active={tab.id === activeId}
             onClick={() => setActive(tab.id)}
             title={ws}
           >
