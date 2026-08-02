@@ -50,7 +50,7 @@ listen("cli:error", (ev) => {
 });
 
 listen("cli:exit", () => {
-  setStatus("Workspace stopped. Select a workspace to continue.");
+  showWorkspacePicker("Workspace stopped. Select a workspace to continue.");
 });
 
 listen("cli:url", () => {
@@ -128,7 +128,7 @@ async function showWorkspacePicker(note) {
   } catch {
     // ignore — no last workspace
   }
-  setStatus(note ?? "Select a workspace to start.\n(Switch workspaces anytime with Ctrl+Shift+O)");
+  setStatus(note ?? "Select a workspace to start.");
   if (last) {
     addButton(`Use last workspace:\n${last}`, () => launchAt(last));
   }
