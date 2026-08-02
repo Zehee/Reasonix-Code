@@ -71,12 +71,28 @@ function ensureTab(f) {
   tabbarEl.insertBefore(f.tabEl, tabbarEl.querySelector(".grow"));
 }
 
-function addFrame(ws) {
-  // Hot reopen: same absolute path -> restore the hidden iframe as-is
-  // (dashboard state, SSE, scroll — everything is still alive in it).
+async function addFrame(ws) {
+  // Hot reopen: same absolute path -> restore the hidden iframe. But DOM
+  // state isn't truth — the CLI/server behind it may have been killed
+  // externally. Probe first: healthy -> show as-is (zero reload); gone ->
+  // drop the stale frame and respawn the workspace (new process, new URL
+  // injected into a fresh iframe).
   if (ws.path) {
     const hidden = [...frames.values()].find((f) => f.hidden && f.path === ws.path);
     if (hidden) {
+      let alive = true;
+      try {
+        alive = await invoke("workspace_alive", { id: hidden.id });
+      } catch {
+        /* probe failed — assume alive, next open re-checks */
+      }
+      if (!alive) {
+        const path = hidden.path;
+        removeFrame(hidden.id);
+        showError(`Workspace "${baseName(path)}" was stopped — restarting it.`);
+        spawnAt(path); // respawn; workspace-opened/cli:url will rebuild the frame
+        return;
+      }
       frames.delete(hidden.id);
       const restored = {
         ...hidden,
@@ -169,11 +185,40 @@ function activate(id) {
     if (f.tabEl) f.tabEl.classList.toggle("active", show);
   }
   emptyEl.classList.remove("show");
+  // Immediate liveness check on activation — don't wait for the poll.
+  const f = frames.get(id);
+  if (f) checkFrameAlive(f);
 }
 
 function renderEmptyState() {
   emptyEl.classList.toggle("show", frames.size === 0);
 }
+
+// ── Liveness probing ────────────────────────────────────────────
+// DOM state is not truth: the CLI process / dashboard server behind a
+// hidden iframe may have been killed externally. Probe the shell (it
+// checks the process AND does an HTTP round-trip to the server) and
+// drop dead frames; reopening the folder spawns a fresh instance.
+async function checkFrameAlive(f) {
+  if (!f.url) return; // still starting — cli:url / workspace-opened will arrive
+  try {
+    const alive = await invoke("workspace_alive", { id: f.id });
+    if (!alive) {
+      const name = baseName(f.path);
+      removeFrame(f.id);
+      showError(`Workspace "${name}" stopped — reopen it to restart.`);
+    }
+  } catch {
+    /* probe failed — leave the frame, next poll retries */
+  }
+}
+
+async function checkAllAlive() {
+  for (const f of [...frames.values()]) {
+    await checkFrameAlive(f);
+  }
+}
+setInterval(checkAllAlive, 15000);
 
 // ── Workspace creation ──────────────────────────────────────────
 async function spawnAt(path) {
@@ -211,7 +256,7 @@ async function init() {
   } catch (e) {
     showError(`list_workspaces failed: ${e}`);
   }
-  for (const ws of list) addFrame(ws);
+  for (const ws of list) await addFrame(ws);
   if (list.length) {
     const first = list.find((w) => w.url) ?? list[0];
     activate(first.id);
@@ -227,14 +272,14 @@ async function init() {
 }
 
 // ── Events from the shell ───────────────────────────────────────
-listen("cli:url", (payload) => {
+listen("cli:url", async (payload) => {
   if (!payload?.id || !payload?.url) return;
-  addFrame({ id: payload.id, url: payload.url, path: payload.path });
+  await addFrame({ id: payload.id, url: payload.url, path: payload.path });
   activate(payload.id);
 });
-listen("workspace-opened", (payload) => {
+listen("workspace-opened", async (payload) => {
   if (!payload?.id || !payload?.url) return;
-  addFrame({ id: payload.id, url: payload.url, path: payload.path });
+  await addFrame({ id: payload.id, url: payload.url, path: payload.path });
   activate(payload.id);
 });
 listen("workspace-closed", (payload) => {

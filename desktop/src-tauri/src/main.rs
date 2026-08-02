@@ -302,6 +302,48 @@ fn desktop_build() -> String {
     option_env!("DESKTOP_BUILD").unwrap_or("dev").to_string()
 }
 
+/// Robust liveness probe for a workspace: checks both the process (via
+/// try_wait, so a killed CLI is caught even if the exit watcher hasn't
+/// fired yet) and the dashboard server (HTTP GET on its URL, 2 s timeout).
+/// The container page checks this before restoring a hidden iframe, so it
+/// never shows a frame whose backend is gone.
+#[tauri::command]
+async fn workspace_alive(state: State<'_, DesktopState>, id: u64) -> Result<bool, String> {
+    let url = {
+        let instances = state.instances.lock();
+        instances.iter().find(|i| i.id == id).and_then(|i| i.url.clone())
+    };
+    let Some(url) = url else {
+        return Ok(false);
+    };
+
+    // Process layer.
+    {
+        let mut instances = state.instances.lock();
+        let Some(inst) = instances.iter_mut().find(|i| i.id == id) else {
+            return Ok(false);
+        };
+        match inst.child.try_wait() {
+            Ok(Some(_)) => return Ok(false), // exited
+            _ => {}
+        }
+    }
+
+    // Server layer.
+    match reqwest::Client::builder()
+        .timeout(Duration::from_secs(2))
+        .build()
+    {
+        Ok(client) => client
+            .get(&url)
+            .send()
+            .await
+            .map(|r| Ok(r.status().is_success()))
+            .unwrap_or(Ok(false)),
+        Err(_) => Ok(true), // can't probe — assume alive
+    }
+}
+
 /// `npm view reasonix-code version` — the latest published version.
 fn npm_view_latest_version() -> Option<String> {
     let mut cmd = if cfg!(windows) {
@@ -1023,21 +1065,38 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
     // existing iframe (no navigation, no second process). The container may
     // have hidden this tab (process kept alive for hot reopen) — tell it to
     // show the iframe again.
+    //
+    // Robustness: only reuse a *healthy* instance. A CLI killed externally
+    // (task manager, crash) may still sit in the table for up to 10 s until
+    // the exit watcher reaps it — reusing it would resurrect a dead tab. If
+    // the process has actually exited, drop it and fall through to a fresh
+    // spawn below.
     {
-        let instances = state.instances.lock();
-        if let Some(existing) = instances.iter().find(|i| i.workspace == workspace) {
-            let id = existing.id;
-            let url = existing.url.clone();
-            let path = existing.workspace.to_string_lossy().into_owned();
-            drop(instances);
-            *state.current.lock() = Some(id);
-            if let Some(url) = url {
-                let _ = app.emit(
-                    "workspace-opened",
-                    serde_json::json!({ "id": id, "url": url, "path": path }),
-                );
+        let mut instances = state.instances.lock();
+        if let Some(existing) = instances.iter_mut().find(|i| i.workspace == workspace) {
+            let dead = match existing.child.try_wait() {
+                Ok(Some(_)) => true,
+                _ => false,
+            };
+            if dead {
+                let dead_id = existing.id;
+                instances.retain(|i| i.id != dead_id);
+                eprintln!("[reasonix] workspace {} exited — respawning", dead_id);
+                // fall through to the fresh-spawn path
+            } else {
+                let id = existing.id;
+                let url = existing.url.clone();
+                let path = existing.workspace.to_string_lossy().into_owned();
+                drop(instances);
+                *state.current.lock() = Some(id);
+                if let Some(url) = url {
+                    let _ = app.emit(
+                        "workspace-opened",
+                        serde_json::json!({ "id": id, "url": url, "path": path }),
+                    );
+                }
+                return Ok(id);
             }
-            return Ok(id);
         }
     }
 
@@ -1267,6 +1326,7 @@ fn main() {
             check_environment,
             latest_cli_version,
             desktop_build,
+            workspace_alive,
             install_cli,
             install_node,
             launch_backend,
