@@ -70,28 +70,45 @@ describe("dashboard multi-tab routing via setActiveTabIdInBridge", () => {
   });
 
   it("stamps the active tabId onto events that the bridge routes through emitEvent", async () => {
-    const { setActiveTabIdInBridge } = await loadBridge();
+    const { events, setActiveTabIdInBridge } = await loadBridge();
     setActiveTabIdInBridge("tab-A");
 
     // Drive an SSE message into the bridge's onmessage handler. The
-    // sseToIncoming → emitEvent chain will stamp activeTabId.
+    // sseToIncoming → emitEvent chain must stamp the active tabId because
+    // bridge-emitted events no longer hard-code one.
     const eventSources = (globalThis as { __eventSources?: EventSourceInstance[] })?.__eventSources;
     expect(eventSources?.length).toBeGreaterThan(0);
     const source = eventSources![0]!;
-    source.onmessage?.({ data: JSON.stringify({ kind: "ping" }) } as MessageEvent);
+    source.onmessage?.({ data: JSON.stringify({ kind: "status", text: "hello" }) } as MessageEvent);
 
-    // setActiveTabIdInBridge must be idempotent and accept any id.
-    setActiveTabIdInBridge("tab-B");
-    expect(() => setActiveTabIdInBridge("tab-1")).not.toThrow();
+    await vi.waitFor(() => expect(events.some((e) => e.type === "status")).toBe(true));
+    const stamped = events.find((e) => e.type === "status");
+    expect(stamped?.tabId).toBe("tab-A");
   });
 
-  it("does not overwrite an explicit tabId on the event payload", async () => {
-    // The emitEvent defaulting rule: if the caller already supplies a
-    // non-empty tabId, leave it alone. This is exercised indirectly by
-    // the fact that any other call site that explicitly sets tabId
-    // (e.g. serverRpc for tab_open) preserves it; we don't have a unit
-    // test path for emitEvent directly because it is a module-private
-    // function. The behavioural test above confirms the defaulting path.
-    expect(true).toBe(true);
+  it("defaults to tab-1 when setActiveTabIdInBridge was never called", async () => {
+    const { events } = await loadBridge();
+
+    const eventSources = (globalThis as { __eventSources?: EventSourceInstance[] })?.__eventSources;
+    const source = eventSources![0]!;
+    source.onmessage?.({ data: JSON.stringify({ kind: "status", text: "hello" }) } as MessageEvent);
+
+    await vi.waitFor(() => expect(events.some((e) => e.type === "status")).toBe(true));
+    const stamped = events.find((e) => e.type === "status");
+    expect(stamped?.tabId).toBe("tab-1");
+  });
+
+  it("routes subsequent events to the latest active tabId", async () => {
+    const { events, setActiveTabIdInBridge } = await loadBridge();
+    setActiveTabIdInBridge("tab-A");
+    setActiveTabIdInBridge("tab-B");
+
+    const eventSources = (globalThis as { __eventSources?: EventSourceInstance[] })?.__eventSources;
+    const source = eventSources![0]!;
+    source.onmessage?.({ data: JSON.stringify({ kind: "status", text: "hello" }) } as MessageEvent);
+
+    await vi.waitFor(() => expect(events.some((e) => e.type === "status")).toBe(true));
+    const stamped = events.find((e) => e.type === "status");
+    expect(stamped?.tabId).toBe("tab-B");
   });
 });

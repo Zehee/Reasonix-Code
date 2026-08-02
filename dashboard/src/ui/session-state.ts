@@ -1,9 +1,19 @@
-import type { Action, IncomingEvent, SessionFile, SkillInfo, State, UsageStats } from "../protocol";
+import type {
+  Action,
+  AssistantSegment,
+  ChatMessage,
+  DeltaBatchItem,
+  PendingPlan,
+  PlanStep,
+  SessionFile,
+  State,
+  UsageStats,
+} from "../App";
 import { t } from "../i18n";
-import type { ChatMessage } from "../types";
+import type { IncomingEvent, SkillInfo } from "../protocol";
+import { elideTranscriptMessages } from "./transcript-elision";
 
-
-function fallbackSkillDesc(skill: SkillInfo): string {
+export function fallbackSkillDesc(skill: SkillInfo): string {
   const scope =
     skill.scope === "builtin"
       ? t("app.skill.scope.builtin")
@@ -23,7 +33,7 @@ function nextMessageTurn(messages: ChatMessage[]): number {
   return lastTurn + 1;
 }
 
-function reduce(state: State, action: Action): State {
+export function reduce(state: State, action: Action): State {
   return withElidedTranscript(reduceRaw(state, action));
 }
 
@@ -254,7 +264,7 @@ function mergeSessionFiles(existing: SessionFile[], adds: SessionFile[]): Sessio
   return changed ? next : existing;
 }
 
-function zeroUsage(): UsageStats {
+export function zeroUsage(): UsageStats {
   return {
     totalCostUsd: 0,
     totalPromptTokens: 0,
@@ -809,4 +819,46 @@ function applyIncomingRaw(state: State, ev: IncomingEvent): State {
     default:
       return state;
   }
+}
+
+export function formatConversationMarkdown(messages: ChatMessage[], userLabel: string): string {
+  return messages
+    .map((m) => {
+      if (m.kind === "user") return `### ${userLabel}\n\n${m.text}`;
+      if (m.kind === "assistant") {
+        const body = m.segments
+          .map((s) => {
+            if (s.kind === "text") return s.text;
+            if (s.kind === "reasoning")
+              return `<details>\n<summary>${t("app.exportReasoningSummary")}</summary>\n\n${s.text}\n\n</details>`;
+            if (s.kind === "tool") {
+              const arg = s.args ? `\n\n\`\`\`json\n${s.args}\n\`\`\`` : "";
+              const res = s.result ? `\n\n\`\`\`\n${s.result}\n\`\`\`` : "";
+              return `> **${t("app.exportToolLabel")} · \`${s.name}\`**${arg}${res}`;
+            }
+            return "";
+          })
+          .filter(Boolean)
+          .join("\n\n");
+        return `### Reasonix\n\n${body}`;
+      }
+      if (m.kind === "error") return `### Error\n\n${m.message}`;
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n\n---\n\n");
+}
+
+function sanitizeFilename(name: string): string {
+  return (
+    name
+      .replace(/[<>:"/\\|?*\p{Cc}]/gu, "_")
+      .replace(/^\.+/, "")
+      .slice(0, 200) || "session"
+  );
+}
+
+export function defaultExportFilename(session: string): string {
+  const safe = sanitizeFilename(session);
+  return `${safe}.md`;
 }

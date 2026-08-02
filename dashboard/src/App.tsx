@@ -1,5 +1,4 @@
 import { invoke, isWebRuntime } from "@tauri-apps/api/core";
-import { applyIncomingRaw, extractToolFiles, fallbackSkillDesc, formatConversationMarkdown, mergeSessionFiles, nextMessageTurn, reduce, reduceRaw, sanitizeFilename, zeroUsage } from "./ui/session-state";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
@@ -45,6 +44,7 @@ import {
   themeForStyle,
 } from "./theme";
 import { AboutModal } from "./ui/about";
+import { EmptyState, MainHead, NeedsSetupView } from "./ui/app-views";
 import { Composer, type SlashCmd } from "./ui/composer";
 import { ContextPanel } from "./ui/context-panel";
 import { JobsPop } from "./ui/jobs-pop";
@@ -54,6 +54,7 @@ import { Shortcut, localizeShortcutText, shortcutText } from "./ui/shortcut";
 import { Sidebar } from "./ui/sidebar";
 import { Splash, shouldShowSplash } from "./ui/splash";
 import { StatusBar } from "./ui/statusbar";
+import { TabRuntime, type TabRuntimeProps } from "./ui/tab-runtime";
 import {
   ActivePlanTaskCard,
   AssistantMsg,
@@ -67,15 +68,14 @@ import {
   TurnDivider,
   UserMsg,
 } from "./ui/thread";
+import { TabBar, TitleBar } from "./ui/title-bar";
 import { elideTranscriptMessages } from "./ui/transcript-elision";
+import { useThemeSettings } from "./ui/use-theme-settings";
 import { useAutoScroll } from "./ui/useAutoScroll";
 import { useDisableTextAssist } from "./ui/useDisableTextAssist";
-import { useThemeSettings } from "./ui/use-theme-settings";
 import { WorkdirInputModal } from "./ui/workdir-input-modal";
 import { WorkdirPop } from "./ui/workdir-pop";
-import { MainHead, EmptyState, NeedsSetupView } from "./ui/app-views";
-import { WorkspaceTab } from "./ui/workspace-tabs";
-import { TitleBar, TabBar } from "./ui/title-bar";
+import type { WorkspaceTab } from "./ui/workspace-tabs";
 
 export type AssistantSegment =
   | { kind: "text"; text: string }
@@ -240,7 +240,7 @@ type MentionPreviewState = {
   totalLines: number;
 };
 
-type State = {
+export type State = {
   ready: boolean;
   needsSetup: boolean;
   busy: boolean;
@@ -284,13 +284,13 @@ export type SessionFile = {
   status: "c" | "m";
 };
 
-type DeltaBatchItem = {
+export type DeltaBatchItem = {
   turn: number;
   channel: "content" | "reasoning";
   text: string;
 };
 
-type Action =
+export type Action =
   | { t: "send_user"; text: string; clientId: string }
   | { t: "start_skill"; skill: SkillOrigin; args?: string; clientId: string }
   | { t: "incoming"; event: IncomingEvent }
@@ -311,43 +311,7 @@ type Action =
   | { t: "shift_queued_send" };
 
 type TabAction = Action;
-type TabDispatcher = (action: TabAction) => void;
-
-interface TabRuntimeProps {
-  tabId: string;
-  active: boolean;
-  currency: "CNY" | "USD";
-  registerDispatch: (tabId: string, d: TabDispatcher | null) => void;
-  onNewTab: () => void;
-  onCloseTab: () => void;
-  canCloseTab: boolean;
-  theme: Theme;
-  themeStyle: ThemeStyle;
-  onSetTheme: (theme: Theme) => void;
-  onSetThemeStyle: (style: ThemeStyle) => void;
-  onToggleTheme: () => void;
-  fontScale: FontScale;
-  onSetFontScale: (scale: FontScale) => void;
-  fontFamily: FontFamily;
-  onSetFontFamily: (family: FontFamily) => void;
-  sideCollapsed: boolean;
-  ctxCollapsed: boolean;
-  onToggleSide: () => void;
-  onToggleCtx: () => void;
-  onToggleCurrency: () => void;
-  tabsList: { id: string; workspaceDir?: string }[];
-  activeTabId: string;
-  setActiveTabId: (id: string) => void;
-  /** 移动端专用：当前侧边栏抽屉是否展开 */
-  mobileSideOpen: boolean;
-  onToggleMobileSide: () => void;
-  workspaceTabs: WorkspaceTab[];
-  activeWorkspaceId: string | null;
-  onSwitchWorkspace: (id: string) => void;
-  onNewWorkspace: () => void;
-  onCloseWorkspace: (id: string) => void;
-}
-
+export type TabDispatcher = (action: TabAction) => void;
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -381,21 +345,22 @@ export function App() {
     tabsRef.current = tabs;
   }, [tabs]);
 
-  const [themeSettings, themeSetters] = useThemeSettings();
-  const currency = themeSettings.currency;
-  const setCurrency = themeSetters.setCurrency;
-  const theme = themeSettings.theme;
-  const setTheme = themeSetters.setTheme;
-  const themeStyle = themeSettings.themeStyle;
-  const setThemeStyle = themeSetters.setThemeStyle;
-  const fontScale = themeSettings.fontScale;
-  const setFontScale = themeSetters.setFontScale;
-  const fontFamily = themeSettings.fontFamily;
-  const setFontFamily = themeSetters.setFontFamily;
-  const sideCollapsed = themeSettings.sideCollapsed;
-  const setSideCollapsed = themeSetters.setSideCollapsed;
-  const ctxCollapsed = themeSettings.ctxCollapsed;
-  const setCtxCollapsed = themeSetters.setCtxCollapsed;
+  const {
+    currency,
+    setCurrency,
+    theme,
+    setTheme,
+    themeStyle,
+    setThemeStyle,
+    fontScale,
+    setFontScale,
+    fontFamily,
+    setFontFamily,
+    sideCollapsed,
+    setSideCollapsed,
+    ctxCollapsed,
+    setCtxCollapsed,
+  } = useThemeSettings();
 
   const deliverToTab = useCallback((tabId: string, action: TabAction) => {
     const dispatch = dispatchersRef.current.get(tabId);
@@ -704,19 +669,25 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [openTab, closeTab, activeTabId, tabs]);
 
-  const onSetTheme = useCallback((nextTheme: Theme) => {
-    setTheme(nextTheme);
-    setThemeStyle(defaultStyleForTheme(nextTheme));
-  }, []);
+  const onSetTheme = useCallback(
+    (nextTheme: Theme) => {
+      setTheme(nextTheme);
+      setThemeStyle(defaultStyleForTheme(nextTheme));
+    },
+    [setTheme, setThemeStyle],
+  );
 
-  const onSetThemeStyle = useCallback((nextStyle: ThemeStyle) => {
-    setThemeStyle(nextStyle);
-    setTheme(themeForStyle(nextStyle));
-  }, []);
+  const onSetThemeStyle = useCallback(
+    (nextStyle: ThemeStyle) => {
+      setThemeStyle(nextStyle);
+      setTheme(themeForStyle(nextStyle));
+    },
+    [setTheme, setThemeStyle],
+  );
 
   const onToggleTheme = useCallback(() => {
     onSetTheme(theme === THEME.DARK ? THEME.LIGHT : THEME.DARK);
-  }, [onSetTheme, theme]);
+  }, [onSetTheme, theme, setTheme]);
 
   const [mobileSideOpen, setMobileSideOpen] = useState(false);
   const onToggleMobileSide = useCallback(() => setMobileSideOpen((v) => !v), []);
@@ -728,7 +699,7 @@ export function App() {
       window.dispatchEvent(new CustomEvent("reasonix:currency", { detail: next }));
       return next;
     });
-  }, []);
+  }, [setCurrency]);
 
   return (
     <>
@@ -769,11 +740,7 @@ export function App() {
         />
       ))}
       {crashToast ? (
-        <div
-          className="crash-toast"
-          role="alert"
-          onClick={() => setCrashToast(null)}
-        >
+        <div className="crash-toast" role="alert" onClick={() => setCrashToast(null)}>
           <span className="crash-toast-text">{t("crashToast.message")}</span>
           <button
             type="button"

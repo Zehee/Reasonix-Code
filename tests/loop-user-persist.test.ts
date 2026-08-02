@@ -1,11 +1,11 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeepSeekClient } from "../src/client.js";
 import { CacheFirstLoop } from "../src/loop.js";
 import { ImmutablePrefix } from "../src/memory/runtime.js";
-import { loadSessionMessages } from "../src/memory/session.js";
+import { loadSessionMessages, sessionPath } from "../src/memory/session.js";
 import type { ChatMessage } from "../src/types.js";
 
 // Isolate this test file's sessions from parallel tests.
@@ -255,5 +255,66 @@ describe("loop persists user message at step entry (issue #943)", () => {
       .map((m) => m.content);
     expect(secondRequestUsers).toEqual(["请按这次要求完整重写，不要局部微调"]);
     expect(loadSessionMessages(sessionName).filter((m) => m.role === "user")).toHaveLength(1);
+  });
+
+  it("discardCurrentTurn on a header-only session removes the .bak rewrite snapshot", async () => {
+    // A live JSONL containing only the header (no messages) is non-empty on
+    // disk, so rewriteSession snapshots it to .bak before compacting. A full
+    // discard (preserved = []) must then unlink that .bak, or
+    // loadSessionMessages keeps falling back to the pre-discard transcript.
+    const sessionName = "discard-bak-cleanup";
+    const path = sessionPath(sessionName);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(
+      path,
+      `${JSON.stringify({
+        type: "session.header",
+        sessionId: "00000000-0000-0000-0000-000000000000",
+        createdAt: new Date(0).toISOString(),
+      })}\n`,
+    );
+
+    const client = new DeepSeekClient({
+      apiKey: "sk-test",
+      fetch: vi.fn(async (_url: unknown, init: { signal?: AbortSignal } | undefined) => {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("This operation was aborted", "AbortError")),
+          );
+        });
+      }) as unknown as typeof fetch,
+      retry: { maxAttempts: 1 },
+    });
+
+    const loop = new CacheFirstLoop({
+      client,
+      prefix: new ImmutablePrefix({ system: "s" }),
+      stream: false,
+      session: sessionName,
+    });
+
+    const interrupted = (async () => {
+      for await (const ev of loop.step("first turn")) {
+        if (ev.role === "done") break;
+      }
+    })();
+
+    // Let the first fetch get in flight, then discard the whole turn.
+    await new Promise((r) => setTimeout(r, 20));
+    loop.abort({ discardCurrentTurn: true });
+    await interrupted;
+
+    // The unlink runs synchronously inside discardLogFrom, but the abort
+    // handler executes inside the generator — poll briefly to be safe.
+    const backupPath = `${sessionPath(sessionName)}.bak`;
+    for (let i = 0; i < 50; i++) {
+      if (!existsSync(backupPath)) break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(existsSync(backupPath)).toBe(false);
+    // Live file still exists (header retained) — a stale .bak must not
+    // resurrect the pre-discard content.
+    expect(existsSync(path)).toBe(true);
+    expect(loadSessionMessages(sessionName)).toHaveLength(0);
   });
 });

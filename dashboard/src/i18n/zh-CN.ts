@@ -602,8 +602,7 @@ export const zhCN = {
       list_directory: "列出目录中的条目。每行一个条目，目录以斜杠标记。",
       directory_tree: "递归列出目录中的条目，以缩进树形结构显示。对大子目录自动折叠以节省预算。",
       search_files: "根据名称匹配子串或正则表达式查找文件。不区分大小写。默认跳过依赖/构建目录。",
-      grep:
-        "用正则搜索文件内容。以 path:line:text 格式返回匹配行，全局上限 200 条。用于查找引用和出现位置。",
+      grep: "用正则搜索文件内容。以 path:line:text 格式返回匹配行，全局上限 200 条。用于查找引用和出现位置。",
       glob: "按 glob 模式列出文件，按修改时间排序。默认限制 200，最大 1000。默认跳过 node_modules/.git/dist。",
       get_file_info: "获取沙箱根目录下路径的状态信息。返回类型、字节大小和修改时间。",
       write_file: "创建或覆盖文件，内容由参数指定。按需创建父目录。",
@@ -711,7 +710,8 @@ export const zhCN = {
     marketplaceInstalledBadge: "已安装",
     marketplaceUninstall: "卸载",
     marketplaceEnvTitle: "必需的环境变量",
-    marketplaceEnvHint: "下次启动 `reasonix-code code` 之前在 shell 里设好，桥接的服务器才能正常鉴权。",
+    marketplaceEnvHint:
+      "下次启动 `reasonix-code code` 之前在 shell 里设好，桥接的服务器才能正常鉴权。",
     marketplaceRestartHint:
       "已写入 ~/.reasonix/config.json。重启 `reasonix-code code` 后服务器才会真正桥接（热重载在路线图上）。",
   },
@@ -1283,6 +1283,10 @@ export const zhCN = {
     close: "关闭工作区标签页",
     new: "新建工作区",
     newTooltip: "在新标签页中打开工作区",
+  },
+  crashToast: {
+    message: "工作区意外崩溃。点击关闭提示。",
+    dismiss: "关闭",
   },
   workdir: {
     browse: "浏览…",

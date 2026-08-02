@@ -1,30 +1,25 @@
-import { WorkspaceProvider } from "../Markdown";
 import { invoke, isWebRuntime } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { CommandPalette, Toast, buildCommands, useCommandPalette } from "./CommandPalette";
+import type { Settings } from "../App";
+import type { SessionInfo, TabDispatcher } from "../App";
+import { CommandPalette, Toast, buildCommands, useCommandPalette } from "../CommandPalette";
+import { WorkspaceProvider } from "../Markdown";
 import { getLang, getLangLabel, getSupportedLangs, setLang, t, useLang } from "../i18n";
 import { I } from "../icons";
 import { readSessionFromUrl, writeSessionToUrl } from "../lib/session-url";
 import { setActiveTabIdInBridge } from "../lib/tauri-bridge";
-import {
-  ActivePlanTaskCard,
-  CheckpointPicker,
-  McpHub,
-  type ActivePlanTask,
-  type Checkpoint,
-  type Choice,
-  type McpSpecInfo,
-  type MemoryDetail,
-  type MemoryEntryInfo,
-  type OutgoingCommand,
-  type PlanVerdict,
-  type RevisionVerdict,
-  type SettingsPatch,
-  type SkillInfo,
+import type {
+  CheckpointVerdict,
+  ChoiceVerdict,
+  ConfirmationChoice,
+  OutgoingCommand,
+  PlanVerdict,
+  RevisionVerdict,
+  SettingsPatch,
 } from "../protocol";
 import type { QQDesktopSettingsState } from "../qq-settings";
 import {
@@ -45,33 +40,80 @@ import {
   themeForStyle,
 } from "../theme";
 import { AboutModal } from "./about";
+import { EmptyState, MainHead, NeedsSetupView } from "./app-views";
 import { Composer, type SlashCmd } from "./composer";
 import { ContextPanel } from "./context-panel";
 import { JobsPop } from "./jobs-pop";
 import { useElapsed } from "./live";
+import {
+  defaultExportFilename,
+  fallbackSkillDesc,
+  formatConversationMarkdown,
+  reduce,
+  zeroUsage,
+} from "./session-state";
 import { SettingsModal, type PageId as SettingsPageId } from "./settings";
 import { Shortcut, localizeShortcutText, shortcutText } from "./shortcut";
 import { Sidebar } from "./sidebar";
 import { Splash, shouldShowSplash } from "./splash";
 import { StatusBar } from "./statusbar";
 import {
-  ActivePlanTaskCard as ActivePlanTaskCard2,
-  CheckpointPicker as CheckpointPicker2,
-  McpHub as McpHub2,
-} from "../protocol";
+  ActivePlanTaskCard,
+  AssistantMsg,
+  CheckpointApprovalCard,
+  ChoiceApprovalCard,
+  ConfirmApprovalCard,
+  PathAccessApprovalCard,
+  PlanApprovalCard,
+  PlanBanner,
+  RevisionApprovalCard,
+  TurnDivider,
+  UserMsg,
+} from "./thread";
+import { TabBar, TitleBar } from "./title-bar";
 import { elideTranscriptMessages } from "./transcript-elision";
 import { useAutoScroll } from "./useAutoScroll";
 import { useDisableTextAssist } from "./useDisableTextAssist";
-import { MainHead, EmptyState, NeedsSetupView } from "./app-views";
-import type { Settings } from "../App";
-import { TabRuntime as TabRuntimeType } from "./tab-runtime";
-import { WorkspaceTab } from "./workspace-tabs";
 import { WorkdirInputModal } from "./workdir-input-modal";
 import { WorkdirPop } from "./workdir-pop";
-import type { ChatMessage } from "../types";
-import type { SessionInfo } from "../App";
+import type { WorkspaceTab } from "./workspace-tabs";
 
-function TabRuntime({
+export interface TabRuntimeProps {
+  tabId: string;
+  active: boolean;
+  currency: "CNY" | "USD";
+  registerDispatch: (tabId: string, d: TabDispatcher | null) => void;
+  onNewTab: () => void;
+  onCloseTab: () => void;
+  canCloseTab: boolean;
+  theme: Theme;
+  themeStyle: ThemeStyle;
+  onSetTheme: (theme: Theme) => void;
+  onSetThemeStyle: (style: ThemeStyle) => void;
+  onToggleTheme: () => void;
+  fontScale: FontScale;
+  onSetFontScale: (scale: FontScale) => void;
+  fontFamily: FontFamily;
+  onSetFontFamily: (family: FontFamily) => void;
+  sideCollapsed: boolean;
+  ctxCollapsed: boolean;
+  onToggleSide: () => void;
+  onToggleCtx: () => void;
+  onToggleCurrency: () => void;
+  tabsList: { id: string; workspaceDir?: string }[];
+  activeTabId: string;
+  setActiveTabId: (id: string) => void;
+  /** 移动端专用：当前侧边栏抽屉是否展开 */
+  mobileSideOpen: boolean;
+  onToggleMobileSide: () => void;
+  workspaceTabs: WorkspaceTab[];
+  activeWorkspaceId: string | null;
+  onSwitchWorkspace: (id: string) => void;
+  onNewWorkspace: () => void;
+  onCloseWorkspace: (id: string) => void;
+}
+
+export function TabRuntime({
   tabId,
   active,
   currency,

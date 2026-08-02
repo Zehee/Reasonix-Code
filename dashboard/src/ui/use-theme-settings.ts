@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { type Dispatch, type SetStateAction, useCallback, useEffect, useState } from "react";
 import {
   FONT_FAMILY,
   FONT_FAMILY_STACK,
   FONT_SCALE,
   FONT_SCALE_ZOOM,
-  THEME,
   type FontFamily,
   type FontScale,
+  THEME,
   type Theme,
   type ThemeStyle,
   defaultStyleForTheme,
@@ -33,19 +33,19 @@ export type Currency = "CNY" | "USD";
 // localStorage boilerplate that used to live inline in App.
 export interface UseThemeSettings {
   currency: Currency;
-  setCurrency: (c: Currency) => void;
+  setCurrency: Dispatch<SetStateAction<Currency>>;
   theme: Theme;
-  setTheme: (t: Theme) => void;
+  setTheme: Dispatch<SetStateAction<Theme>>;
   themeStyle: ThemeStyle;
-  setThemeStyle: (s: ThemeStyle) => void;
+  setThemeStyle: Dispatch<SetStateAction<ThemeStyle>>;
   fontScale: FontScale;
-  setFontScale: (s: FontScale) => void;
+  setFontScale: Dispatch<SetStateAction<FontScale>>;
   fontFamily: FontFamily;
-  setFontFamily: (f: FontFamily) => void;
+  setFontFamily: Dispatch<SetStateAction<FontFamily>>;
   sideCollapsed: boolean;
-  setSideCollapsed: (v: boolean) => void;
+  setSideCollapsed: Dispatch<SetStateAction<boolean>>;
   ctxCollapsed: boolean;
-  setCtxCollapsed: (v: boolean) => void;
+  setCtxCollapsed: Dispatch<SetStateAction<boolean>>;
 }
 
 function readInitialCurrency(): Currency {

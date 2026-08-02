@@ -909,11 +909,11 @@ describe("session persistence: append behavior", () => {
     if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
   });
 
-  it("appends a single line without rewriting the whole log", () => {
-    // Seed the live JSONL with a valid header + one message so the first
-    // append hits the fast path (live non-empty + parseable tail). mkdir
-    // first so writeFileSync succeeds without going through
-    // appendSessionMessage's mkdirSync.
+  it("appends a message to the live JSONL without losing prior entries", () => {
+    // Seed the live JSONL with a valid header + one message. The append
+    // path rewrites the transcript atomically (the O(1) appendFileSync
+    // fast-path was rolled back because it broke discardCurrentTurn), so
+    // this asserts the end state: header + user + assistant all present.
     const path = sessionPath("fast");
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(

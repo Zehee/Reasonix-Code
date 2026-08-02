@@ -59,12 +59,13 @@ let sseHealthProbeTimer: ReturnType<typeof setInterval> | null = null;
 let sseGaveUp = false;
 
 // The dashboard supports multiple tabs but a single CLI backend, so every
-// event payload must carry the active tabId. The bridge historically
-// hard-coded "tab-1" on every emitEvent call, which worked because the
-// dashboard UI only ever ran one tab. To support multi-tab sessions the
-// App component now calls setActiveTabId() whenever the user switches tabs;
-// emitEvent reads the value at emit-time. Callers that pass their own
-// tabId still win (e.g. when the backend already knows the right id).
+// event payload must carry the active tabId. The bridge used to hard-code
+// "tab-1" on every emitEvent call (including inside sseToIncoming), which
+// meant multi-tab sessions all routed to the same reducer. Bridge-emitted
+// events now omit tabId and emitEvent stamps the module-level activeTabId
+// at emit-time; App calls setActiveTabIdInBridge() whenever the user
+// switches tabs. Callers that pass their own tabId still win (e.g. when
+// the backend already knows the right id).
 let activeTabId = "tab-1";
 
 /** Update the tab id that emitEvent stamps onto every outgoing event. */
@@ -128,9 +129,9 @@ function notifyCliStatus(connected: boolean) {
   if (cliDisconnected !== connected) {
     cliDisconnected = !connected;
     if (!connected) {
-      emitEvent({ type: "status", text: "正在重连…", tabId: "tab-1" });
+      emitEvent({ type: "status", text: "正在重连…" });
     } else {
-      emitEvent({ type: "status", text: "连接已恢复", tabId: "tab-1" });
+      emitEvent({ type: "status", text: "连接已恢复" });
     }
   }
 }
@@ -146,7 +147,6 @@ function sseToIncoming(ev: any): Record<string, any>[] {
         currentTurn++;
         results.push({
           type: "model.turn.started",
-          tabId: "tab-1",
           id: ev.id,
           turn: currentTurn,
           model: "deepseek-reasoner",
@@ -155,7 +155,6 @@ function sseToIncoming(ev: any): Record<string, any>[] {
       if (ev.contentDelta) {
         results.push({
           type: "model.delta",
-          tabId: "tab-1",
           channel: "content",
           text: ev.contentDelta,
           turn: currentTurn,
@@ -164,7 +163,6 @@ function sseToIncoming(ev: any): Record<string, any>[] {
       if (ev.reasoningDelta) {
         results.push({
           type: "model.delta",
-          tabId: "tab-1",
           channel: "reasoning",
           text: ev.reasoningDelta,
           turn: currentTurn,
@@ -178,7 +176,6 @@ function sseToIncoming(ev: any): Record<string, any>[] {
       // `busy-change` (busy=false), handled below.
       results.push({
         type: "model.final",
-        tabId: "tab-1",
         turn: currentTurn,
         content: ev.text ?? "",
         reasoningContent: ev.reasoning ?? "",
@@ -190,14 +187,12 @@ function sseToIncoming(ev: any): Record<string, any>[] {
     case "tool_start": {
       results.push({
         type: "tool.preparing",
-        tabId: "tab-1",
         turn: currentTurn,
         callId: ev.id,
         name: ev.toolName,
       });
       results.push({
         type: "tool.intent",
-        tabId: "tab-1",
         turn: currentTurn,
         callId: ev.id,
         name: ev.toolName,
@@ -208,7 +203,6 @@ function sseToIncoming(ev: any): Record<string, any>[] {
     case "tool": {
       results.push({
         type: "tool.result",
-        tabId: "tab-1",
         turn: currentTurn,
         callId: ev.id,
         name: ev.toolName,
@@ -220,7 +214,6 @@ function sseToIncoming(ev: any): Record<string, any>[] {
     case "user": {
       results.push({
         type: "user.message",
-        tabId: "tab-1",
         id: ev.id,
         turn: currentTurn,
         text: ev.text,
@@ -229,7 +222,7 @@ function sseToIncoming(ev: any): Record<string, any>[] {
     }
     case "busy-change": {
       if (!ev.busy && sseTurnStarted) {
-        results.push({ type: "$turn_complete", tabId: "tab-1" });
+        results.push({ type: "$turn_complete" });
         sseTurnStarted = false;
       }
       break;
@@ -239,7 +232,6 @@ function sseToIncoming(ev: any): Record<string, any>[] {
       if (m?.kind === "shell") {
         results.push({
           type: "$confirm_required",
-          tabId: "tab-1",
           id: m.id ?? ++eventIdCounter,
           kind: "run_command",
           command: m.command,
@@ -247,7 +239,6 @@ function sseToIncoming(ev: any): Record<string, any>[] {
       } else if (m?.kind === "choice") {
         results.push({
           type: "$choice_required",
-          tabId: "tab-1",
           id: m.id ?? ++eventIdCounter,
           question: m.question,
           options: m.options ?? [],
@@ -256,7 +247,6 @@ function sseToIncoming(ev: any): Record<string, any>[] {
       } else if (m?.kind === "plan") {
         results.push({
           type: "$plan_required",
-          tabId: "tab-1",
           id: m.id ?? ++eventIdCounter,
           plan: m.plan ?? "",
           summary: m.summary,
@@ -265,7 +255,6 @@ function sseToIncoming(ev: any): Record<string, any>[] {
       } else if (m?.kind === "checkpoint") {
         results.push({
           type: "$checkpoint_required",
-          tabId: "tab-1",
           id: m.id ?? ++eventIdCounter,
           stepId: m.stepId,
           title: m.title,
@@ -280,7 +269,7 @@ function sseToIncoming(ev: any): Record<string, any>[] {
     case "modal-down": {
       // Sync close from another surface (TUI or sibling tab).
       if (typeof ev.modalKind === "string") {
-        results.push({ type: "$modal_dismissed", tabId: "tab-1", kind: ev.modalKind });
+        results.push({ type: "$modal_dismissed", kind: ev.modalKind });
       }
       break;
     }
@@ -288,7 +277,6 @@ function sseToIncoming(ev: any): Record<string, any>[] {
     case "error": {
       results.push({
         type: "$error",
-        tabId: "tab-1",
         message: ev.text,
       });
       break;
@@ -296,7 +284,6 @@ function sseToIncoming(ev: any): Record<string, any>[] {
     case "status": {
       results.push({
         type: "status",
-        tabId: "tab-1",
         text: ev.text,
       });
       break;
@@ -304,7 +291,6 @@ function sseToIncoming(ev: any): Record<string, any>[] {
     case "ctx_breakdown": {
       results.push({
         type: "$ctx_breakdown",
-        tabId: "tab-1",
         reservedTokens: ev.reservedTokens ?? 0,
         logTokens: ev.logTokens ?? 0,
         contextCapTokens: ev.contextCapTokens ?? 1_000_000,
@@ -335,7 +321,6 @@ function connectSSE(): void {
       if (dashboardEvent.kind === "error" && dashboardEvent.text?.includes("token")) {
         emitEvent({
           type: "$error",
-          tabId: "tab-1",
           message: "链接已过期，请重新从 CLI 打开",
         });
         return;
@@ -366,7 +351,6 @@ function connectSSE(): void {
         sseGaveUp = true;
         emitEvent({
           type: "$error",
-          tabId: "tab-1",
           message: "CLI 已停止，请重新启动",
         });
         if (typeof document !== "undefined") {
@@ -426,7 +410,6 @@ async function apiFetch(endpoint: string, options?: RequestInit): Promise<any> {
 function emitServerSettings(settings: any, overview?: any): void {
   emitEvent({
     type: "$settings",
-    tabId: "tab-1",
     reasoningEffort: settings?.reasoningEffort ?? overview?.reasoningEffort ?? "high",
     editMode: settings?.editMode ?? overview?.editMode ?? "review",
     budgetUsd: settings?.budgetUsd ?? overview?.budgetUsd ?? null,
@@ -494,7 +477,6 @@ function emitSessionsSnapshot(sessionsData: ServerSessionsResponse | null | unde
   if (!sessionsData?.sessions) return;
   emitEvent({
     type: "$sessions",
-    tabId: "tab-1",
     currentSession:
       typeof sessionsData.currentSession === "string" ? sessionsData.currentSession : null,
     items: sessionsData.sessions.map(mapSessionItem),
@@ -509,7 +491,6 @@ function emitOverviewSnapshot(overview: ServerOverviewResponse | null | undefine
   const cacheMissTokens = finiteNumber(stats.cacheMissTokens);
   emitEvent({
     type: "$session_usage",
-    tabId: "tab-1",
     totalCostUsd: finiteNumber(stats.totalCostUsd),
     totalPromptTokens: cacheHitTokens + cacheMissTokens,
     totalCompletionTokens: finiteNumber(stats.totalCompletionTokens),
@@ -523,7 +504,6 @@ function emitOverviewSnapshot(overview: ServerOverviewResponse | null | undefine
   if (firstBalance) {
     emitEvent({
       type: "$balance",
-      tabId: "tab-1",
       currency: firstBalance.currency,
       total: Number.parseFloat(firstBalance.total_balance) || 0,
       isAvailable: true,
@@ -558,7 +538,6 @@ function emitMcpSpecsFromServer(specs: any[] | undefined, bridged: any[] | undef
   });
   emitEvent({
     type: "$mcp_specs",
-    tabId: "tab-1",
     specs: out,
     bridged: out.length > 0 && out.every((s) => s.status === "connected"),
   });
@@ -582,11 +561,11 @@ function emitSkillsFromServer(data: any): void {
   tag(data?.global, "global");
   tag(data?.custom, "global");
   tag(data?.project, "project");
-  emitEvent({ type: "$skills", tabId: "tab-1", items });
+  emitEvent({ type: "$skills", items });
 }
 
 function emitMemoryEntriesFromServer(entries: any[] | undefined): void {
-  emitEvent({ type: "$memory", tabId: "tab-1", entries: entries ?? [] });
+  emitEvent({ type: "$memory", entries: entries ?? [] });
 }
 
 async function loadAndEmitMcp(): Promise<void> {
@@ -619,7 +598,7 @@ async function loadAndEmitMemory(): Promise<void> {
 async function loadAndEmitMemoryDetail(path: string): Promise<void> {
   try {
     const data = await apiFetch(`memory/read?path=${encodeURIComponent(path)}`);
-    if (data?.detail) emitEvent({ type: "$memory_detail", tabId: "tab-1", detail: data.detail });
+    if (data?.detail) emitEvent({ type: "$memory_detail", detail: data.detail });
   } catch (err) {
     console.warn("[tauri-bridge] memory read failed:", err);
   }
@@ -648,10 +627,9 @@ async function serverInit(): Promise<void> {
   // to pull them or every panel renders empty forever (#1715).
   void Promise.all([loadAndEmitMcp(), loadAndEmitSkills(), loadAndEmitMemory()]);
 
-  emitEvent({ type: "$ready", tabId: "tab-1" });
+  emitEvent({ type: "$ready" });
   emitEvent({
     type: "$tab_opened",
-    tabId: "tab-1",
     workspaceDir: wsDir,
     active: true,
   });
@@ -677,7 +655,6 @@ async function serverRpc(payload: Record<string, any>): Promise<void> {
       if (!result?.accepted) {
         emitEvent({
           type: "$error",
-          tabId: "tab-1",
           message: result?.reason ?? "提交失败，请重试",
         });
       }
@@ -761,7 +738,6 @@ async function serverRpc(payload: Record<string, any>): Promise<void> {
         }
         emitEvent({
           type: "$session_loaded",
-          tabId: "tab-1",
           name: payload.name,
           messages,
           carryover: { totalCostUsd: 0, cacheHitTokens: 0, cacheMissTokens: 0 },
@@ -792,7 +768,6 @@ async function serverRpc(payload: Record<string, any>): Promise<void> {
           // "file exists but unparseable" and would render a scary error.
           emitEvent({
             type: "$session_loaded",
-            tabId: "tab-1",
             name: newName,
             messages: [],
             carryover: { totalCostUsd: 0, cacheHitTokens: 0, cacheMissTokens: 0 },
@@ -895,7 +870,7 @@ async function serverRpc(payload: Record<string, any>): Promise<void> {
       try {
         const data = await apiFetch("usage");
         if (data?.jobs) {
-          emitEvent({ type: "$jobs", tabId: "tab-1", items: data.jobs });
+          emitEvent({ type: "$jobs", items: data.jobs });
         }
       } catch {
         /* ignore */
@@ -910,7 +885,6 @@ async function serverRpc(payload: Record<string, any>): Promise<void> {
         if (data) {
           emitEvent({
             type: "$mention_results",
-            tabId: "tab-1",
             nonce: payload.nonce,
             query: payload.query,
             results: data.results ?? [],
@@ -929,7 +903,6 @@ async function serverRpc(payload: Record<string, any>): Promise<void> {
         if (data) {
           emitEvent({
             type: "$mention_preview",
-            tabId: "tab-1",
             nonce: payload.nonce,
             path: payload.path,
             head: data.head ?? "",
@@ -1079,7 +1052,6 @@ export async function invoke(cmd: string, args?: any): Promise<any> {
     if (payload.cmd === "user_input") {
       emitEvent({
         type: "user.message",
-        tabId: "tab-1",
         id: Date.now(),
         ts: new Date().toISOString(),
         turn: 2,
@@ -1087,11 +1059,10 @@ export async function invoke(cmd: string, args?: any): Promise<any> {
       });
       mockAssistantTurn(payload.text);
     } else if (payload.cmd === "session_list") {
-      emitEvent({ type: "$sessions", tabId: "tab-1", items: mockSessions });
+      emitEvent({ type: "$sessions", items: mockSessions });
     } else if (payload.cmd === "session_load") {
       emitEvent({
         type: "$session_loaded",
-        tabId: "tab-1",
         name: payload.name,
         messages: mockMessages,
         carryover: { totalCostUsd: 0.045, cacheHitTokens: 2500, cacheMissTokens: 1400 },
@@ -1099,12 +1070,11 @@ export async function invoke(cmd: string, args?: any): Promise<any> {
     } else if (payload.cmd === "new_chat") {
       emitEvent({
         type: "$session_empty",
-        tabId: "tab-1",
         name: "desktop-new-session",
         sizeBytes: 0,
       });
     } else if (payload.cmd === "settings_get") {
-      emitEvent({ type: "$settings", tabId: "tab-1", ...mockSettings });
+      emitEvent({ type: "$settings", ...mockSettings });
     }
     return Promise.resolve();
   }
@@ -1300,11 +1270,10 @@ const mockMessages: any[] = [
 ];
 
 function mockAssistantTurn(_promptText: string) {
-  emitEvent({ type: "status", text: "DeepSeek R1 思考中...", tabId: "tab-1" });
+  emitEvent({ type: "status", text: "DeepSeek R1 思考中..." });
   setTimeout(() => {
     emitEvent({
       type: "model.turn.started",
-      tabId: "tab-1",
       id: Date.now(),
       turn: 2,
       model: "deepseek-reasoner",
@@ -1316,19 +1285,18 @@ function mockAssistantTurn(_promptText: string) {
   let delay = 1200;
   lines.forEach((line) => {
     setTimeout(() => {
-      emitEvent({ type: "model.delta", tabId: "tab-1", channel: "reasoning", text: line, turn: 2 });
+      emitEvent({ type: "model.delta", channel: "reasoning", text: line, turn: 2 });
     }, delay);
     delay += 800;
   });
   // tool call
   setTimeout(() => {
-    emitEvent({ type: "tool.preparing", tabId: "tab-1", name: "list_dir", callId: "call_12345" });
+    emitEvent({ type: "tool.preparing", name: "list_dir", callId: "call_12345" });
   }, delay);
   delay += 500;
   setTimeout(() => {
     emitEvent({
       type: "tool.intent",
-      tabId: "tab-1",
       name: "list_dir",
       args: JSON.stringify({ DirectoryPath: "d:/AI/workspace/dashboard" }),
       callId: "call_12345",
@@ -1338,7 +1306,6 @@ function mockAssistantTurn(_promptText: string) {
   setTimeout(() => {
     emitEvent({
       type: "tool.result",
-      tabId: "tab-1",
       name: "list_dir",
       ok: true,
       output: JSON.stringify([
@@ -1358,34 +1325,32 @@ function mockAssistantTurn(_promptText: string) {
   ];
   chunks.forEach((chunk) => {
     setTimeout(() => {
-      emitEvent({ type: "model.delta", tabId: "tab-1", channel: "content", text: chunk, turn: 2 });
+      emitEvent({ type: "model.delta", channel: "content", text: chunk, turn: 2 });
     }, delay);
     delay += 500;
   });
   setTimeout(() => {
     emitEvent({
       type: "model.final",
-      tabId: "tab-1",
       turn: 2,
       content: chunks.join(""),
       reasoningContent: lines.join(""),
       costUsd: 0.002,
     });
-    emitEvent({ type: "$turn_complete", tabId: "tab-1" });
+    emitEvent({ type: "$turn_complete" });
   }, delay + 400);
 }
 
 function mockSetupAndReady() {
   document.documentElement.dataset.web = "true";
-  setTimeout(() => emitEvent({ type: "$ready", tabId: "tab-1" }), 100);
+  setTimeout(() => emitEvent({ type: "$ready" }), 100);
   setTimeout(() => {
     emitEvent({
       type: "$tab_opened",
-      tabId: "tab-1",
       workspaceDir: "d:\\AI\\workspace",
       active: true,
     });
   }, 150);
-  setTimeout(() => emitEvent({ type: "$settings", tabId: "tab-1", ...mockSettings }), 200);
-  setTimeout(() => emitEvent({ type: "$sessions", tabId: "tab-1", items: mockSessions }), 350);
+  setTimeout(() => emitEvent({ type: "$settings", ...mockSettings }), 200);
+  setTimeout(() => emitEvent({ type: "$sessions", items: mockSessions }), 350);
 }

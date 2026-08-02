@@ -1,5 +1,8 @@
+import { useState } from "react";
+import { t, useLang } from "../i18n";
+import { I } from "../icons";
 
-function MainHead({
+export function MainHead({
   session,
   model,
   workspaceDir,
@@ -88,7 +91,7 @@ function MainHead({
   );
 }
 
-function EmptyState({
+export function EmptyState({
   onPick,
   workspaceDir,
 }: {
@@ -171,7 +174,7 @@ function EmptyState({
   );
 }
 
-function NeedsSetupView({
+export function NeedsSetupView({
   workspaceDir,
   onPickWorkspace,
   onSubmit,

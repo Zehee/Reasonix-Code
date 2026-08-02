@@ -21,7 +21,19 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 **Loop: actually use the healed-log cache.** `healActiveLogBeforeSend` now returns its cached `_healedCache` when `log.version` is unchanged instead of re-running `stripStalePlainReasoning` every iter; the cache fields were already maintained but never read, so each iteration previously spread every message twice (once in the strip, once in the API-ready mapper) for no reason.
 
-**Session append: switch to single-line writes.** `appendSessionMessage` now does an O(1)-byte scan via `readTailMessages(1)` and `appendFileSync`s one line when the live JSONL is non-empty and parseable; the previous behaviour atomically rewrote the whole transcript on every append, turning a long session into an O(N²) disk workload. The full-rewrite path still runs when the live file is missing / empty / .bak-recovered (slow path) so the `.bak` restore behaviour stays byte-identical. `appendSessionMessageAsync` is unchanged this round; it goes through `loadSessionMessagesAsync` which already returns the same view, so the sync-path fix is the high-leverage one.
+**Session append: .bak cleanup after discard.** `discardLogFrom` no longer leaves a stale `.bak` file behind — when the whole log is discarded, the backup is unlinked so `loadSessionMessages` can't fall back to the old transcript after an abort.
+
+**Refine SQL LIKE: escape backslash.** LIKE queries containing a literal backslash no longer error — the term is escaped (`\` → `\\`) before `%`/`_` are, so both backslashes and wildcards round-trip correctly.
+
+**Theme file rename: cleanup on failure.** `saveTheme` removes its `.tmp` file when the atomic rename throws, so a failed save no longer leaves a half-written temp file behind.
+
+**Dashboard: route events to the active tab.** `emitEvent` now defaults to a module-level `activeTabId` instead of the hard-coded `"tab-1"`, and `setActiveTabIdInBridge()` keeps it in sync — previously every tab's reducer saw `tabId: "tab-1"` and competed for the same pending-event queue.
+
+**Desktop: workspace tabs replace the native menu.** Each workspace is now a top-level tab (with a close button); the native "Switch Workspace" submenu is gone and '+' opens the folder picker.
+
+**Desktop: surface crashed instances.** `spawn_instance` now emits `cli:exit` with a `crashed` flag plus trailing stderr so the webview can show a toast instead of failing silently.
+
+**QQ bot: surface handlePayload errors.** Previously swallowed with `.catch(() => {})`; now logged to `console.error`.
 
 ## [0.1.9] — 2026-07-12
 
