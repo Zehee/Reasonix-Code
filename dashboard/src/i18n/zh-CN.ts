@@ -1288,14 +1288,6 @@ export const zhCN = {
     message: "工作区意外崩溃。点击关闭提示。",
     dismiss: "关闭",
   },
-  updatePrompt: {
-    message: "发现新版本 {latest}（当前 {local}）。",
-    update: "立即更新",
-    updating: "更新中…",
-    later: "稍后",
-    needNode: "未检测到 Node.js/npm——安装后可自动更新 reasonix-code。",
-    download: "前往下载",
-  },
   workdir: {
     browse: "浏览…",
     cancel: "取消",

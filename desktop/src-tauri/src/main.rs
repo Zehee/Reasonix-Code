@@ -291,6 +291,11 @@ fn check_environment() -> EnvStatus {
 
 #[tauri::command]
 fn latest_cli_version() -> Option<String> {
+    npm_view_latest_version()
+}
+
+/// `npm view reasonix-code version` — the latest published version.
+fn npm_view_latest_version() -> Option<String> {
     let mut cmd = if cfg!(windows) {
         let mut c = Command::new("cmd");
         c.arg("/c").arg("npm");
@@ -306,6 +311,99 @@ fn latest_cli_version() -> Option<String> {
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
     run_version_cmd(&mut cmd)
+}
+
+/// Compare two version strings ("0.2.1", possibly with a leading "v" or a
+/// dirty suffix). Only the major.minor.patch core matters for this prompt.
+fn is_newer(latest: &str, local: &str) -> bool {
+    fn nums(v: &str) -> Option<(u64, u64, u64)> {
+        let v = v.trim().trim_start_matches('v');
+        let core: String = v
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == '.')
+            .collect();
+        let mut it = core.split('.');
+        let major = it.next()?.parse().ok()?;
+        let minor = it.next().unwrap_or("0").parse().ok()?;
+        let patch = it.next().unwrap_or("0").parse().ok()?;
+        Some((major, minor, patch))
+    }
+    match (nums(latest), nums(local)) {
+        (Some(a), Some(b)) => a > b,
+        _ => false,
+    }
+}
+
+/// Synchronous `npm install -g --prefix <prefix> <spec>` — used by the
+/// startup update flow; the command-version emits progress events instead.
+fn install_cli_sync(version: Option<String>) -> Result<(), String> {
+    let mut cmd = npm_install_cmd(version)?;
+    cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let status = cmd.status().map_err(|e| format!("failed to run npm: {e}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "npm install exited with {}",
+            status.code().unwrap_or(-1)
+        ))
+    }
+}
+
+/// Startup check (desktop shell only): when the installed CLI is older than
+/// the npm latest, ask the user via a native dialog whether to update. Runs
+/// on a background thread after a short delay so the window is already up.
+fn prompt_cli_update(app: AppHandle) {
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(2));
+        let local = resolve_cli().and_then(|cli| {
+            let mut cmd = cli_command(&cli);
+            cmd.arg("--version");
+            run_version_cmd(&mut cmd)
+        });
+        let Some(local) = local else { return };
+        let Some(latest) = npm_view_latest_version() else { return };
+        if !is_newer(&latest, &local) {
+            return;
+        }
+        let msg = format!(
+            "发现新版本 {latest}（当前 {local}）。是否立即更新？\n\n将执行: npm install -g reasonix-code@latest"
+        );
+        let app2 = app.clone();
+        app.dialog()
+            .message(msg)
+            .title("Reasonix-Code 更新")
+            .kind(tauri_plugin_dialog::MessageDialogKind::Info)
+            .buttons(tauri_plugin_dialog::MessageDialogButtons::OkCancelCustom(
+                "立即更新".to_string(),
+                "稍后".to_string(),
+            ))
+            .show(move |yes| {
+                if !yes {
+                    return;
+                }
+                let app3 = app2.clone();
+                let latest2 = latest.clone();
+                std::thread::spawn(move || {
+                    let done_msg = match install_cli_sync(None) {
+                        Ok(()) => format!("reasonix-code 已更新到 {latest2}。"),
+                        Err(e) => format!("更新失败：{e}"),
+                    };
+                    let _ = app3
+                        .dialog()
+                        .message(done_msg)
+                        .title("Reasonix-Code 更新")
+                        .kind(tauri_plugin_dialog::MessageDialogKind::Info)
+                        .show(|_| {});
+                });
+            });
+    });
 }
 
 #[tauri::command]
@@ -1207,6 +1305,10 @@ fn main() {
                     *app.state::<DesktopState>().start_url.lock() = Some(url);
                 }
             }
+
+            // Startup CLI update check (native dialog, shell-owned — does
+            // not depend on the dashboard bundle).
+            prompt_cli_update(app.handle().clone());
 
             if let Some(w) = app.get_webview_window("main") {
                 // HiDPI fit: the JSON config asks for 1024x720 logical px.

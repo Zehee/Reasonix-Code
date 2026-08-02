@@ -1313,14 +1313,6 @@ export const en = {
     message: "A workspace crashed unexpectedly. Click to dismiss.",
     dismiss: "Dismiss",
   },
-  updatePrompt: {
-    message: "New version {latest} is available (current: {local}).",
-    update: "Update now",
-    updating: "Updating…",
-    later: "Later",
-    needNode: "Node.js/npm not found — install it to keep reasonix-code up to date.",
-    download: "Go to download",
-  },
   workdir: {
     browse: "Browse…",
     cancel: "Cancel",
