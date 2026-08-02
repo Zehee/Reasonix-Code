@@ -63,6 +63,7 @@ import { elideTranscriptMessages } from "./transcript-elision";
 import { useAutoScroll } from "./useAutoScroll";
 import { useDisableTextAssist } from "./useDisableTextAssist";
 import { MainHead, EmptyState, NeedsSetupView } from "./app-views";
+import type { Settings } from "../App";
 import { TabRuntime as TabRuntimeType } from "./tab-runtime";
 import { WorkspaceTab } from "./workspace-tabs";
 import { WorkdirInputModal } from "./workdir-input-modal";
