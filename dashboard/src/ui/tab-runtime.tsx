@@ -83,7 +83,6 @@ export interface TabRuntimeProps {
   active: boolean;
   currency: "CNY" | "USD";
   registerDispatch: (tabId: string, d: TabDispatcher | null) => void;
-  onNewTab: () => void;
   onCloseTab: () => void;
   canCloseTab: boolean;
   theme: Theme;
@@ -109,16 +108,15 @@ export interface TabRuntimeProps {
   workspaceTabs: WorkspaceTab[];
   activeWorkspaceId: string | null;
   onSwitchWorkspace: (id: string) => void;
-  onNewWorkspace: () => void;
   onCloseWorkspace: (id: string) => void;
 }
 
+/** All "new / switch workspace" entries (title-bar '+', tab-bar '+', the ws-crumb and the statusbar seg) open the same picker. Picking a path in the desktop shell starts/switches the workspace instance; the web build persists the preference. */
 export function TabRuntime({
   tabId,
   active,
   currency,
   registerDispatch,
-  onNewTab,
   onCloseTab,
   canCloseTab,
   theme,
@@ -143,9 +141,19 @@ export function TabRuntime({
   workspaceTabs,
   activeWorkspaceId,
   onSwitchWorkspace,
-  onNewWorkspace,
   onCloseWorkspace,
 }: TabRuntimeProps) {
+  // All "new / switch workspace" entries (title-bar '+', tab-bar '+', the
+  // ws-crumb and the statusbar seg) open the same picker. Picking a path
+  // in the desktop shell starts/switches the workspace instance; the web
+  // build just persists the preference (see the WorkdirPop onPick below).
+  const openWorkspacePicker = useCallback(
+    (anchor?: { top?: number; bottom?: number; left: number }) => {
+      setWdAnchor(anchor);
+      setWdOpen(true);
+    },
+    [],
+  );
   const [state, dispatch] = useReducer(reduce, {
     ready: false,
     needsSetup: false,
@@ -281,12 +289,17 @@ export function TabRuntime({
         defaultPath: state.settings?.workspaceDir,
       });
       if (typeof picked === "string" && picked.length > 0) {
-        saveSettings({ workspaceDir: picked });
+        // Desktop: switch to (or start) the chosen workspace instance —
+        // main.rs spawns a new CLI if it isn't running yet, and the
+        // WorkspaceTabs poll picks it up as a new active workspace tab.
+        invoke("switch_workspace", { path: picked }).catch((err) =>
+          console.error("switch_workspace failed", err),
+        );
       }
     } catch (err) {
       console.error("pickWorkspace failed", err);
     }
-  }, [saveSettings, state.settings?.workspaceDir]);
+  }, [state.settings?.workspaceDir]);
 
   const flashToast = useCallback((msg: string, opts?: { yolo?: boolean; duration?: number }) => {
     setToast({ msg, yolo: opts?.yolo });
@@ -660,7 +673,7 @@ export function TabRuntime({
       exportConversation();
     },
     pickWorkspace,
-    newTab: onNewTab,
+    newTab: openWorkspacePicker,
     closeTab: onCloseTab,
     busy: state.busy,
     canCloseTab,
@@ -863,7 +876,7 @@ export function TabRuntime({
           workspaceTabs={workspaceTabs}
           activeWorkspaceId={activeWorkspaceId}
           onSwitchWorkspace={onSwitchWorkspace}
-          onNewWorkspace={onNewWorkspace}
+          onNewWorkspace={openWorkspacePicker}
           onCloseWorkspace={onCloseWorkspace}
         />
 
@@ -877,7 +890,7 @@ export function TabRuntime({
               line: JSON.stringify({ cmd: "tab_close", tabId: id }),
             }).catch((err) => console.error("tab_close failed", err));
           }}
-          onNew={onNewTab}
+          onNew={openWorkspacePicker}
           singleTab={tabsList.length <= 1}
         />
 
@@ -934,10 +947,7 @@ export function TabRuntime({
                 onNewChat={newChat}
                 onCopy={conversationCopy}
                 onExport={exportConversation}
-                onOpenWorkdir={(anchor) => {
-                  setWdAnchor(anchor);
-                  setWdOpen(true);
-                }}
+                onOpenWorkdir={openWorkspacePicker}
               />
               <div className="thread" ref={threadRef} style={{ position: "relative" }}>
                 {loadingSession ? (
@@ -1199,10 +1209,7 @@ export function TabRuntime({
           onSetThemeStyle={onSetThemeStyle}
           onToggleCurrency={onToggleCurrency}
           onOpenSettings={() => openSettingsAt("general")}
-          onOpenWorkdir={(anchor) => {
-            setWdAnchor(anchor);
-            setWdOpen(true);
-          }}
+          onOpenWorkdir={openWorkspacePicker}
         />
 
         <CommandPalette
@@ -1217,7 +1224,21 @@ export function TabRuntime({
           recent={state.settings?.recentWorkspaces ?? []}
           current={state.settings?.workspaceDir}
           anchor={wdAnchor}
-          onPick={(path) => saveSettings({ workspaceDir: path })}
+          onPick={(path) => {
+            if (isWebRuntime) {
+              // Plain browser: the CLI server owns the workspace; just
+              // persist the preference (the next load picks it up).
+              saveSettings({ workspaceDir: path });
+              return;
+            }
+            // Desktop shell: switch to (or start) that workspace
+            // instance. main.rs spawns a new CLI if it isn't running
+            // yet, and the WorkspaceTabs poll picks the instance up
+            // as a new active workspace tab.
+            invoke("switch_workspace", { path }).catch((err) =>
+              console.error("switch_workspace failed", err),
+            );
+          }}
           onBrowse={pickWorkspace}
         />
 

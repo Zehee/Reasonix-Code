@@ -687,7 +687,7 @@ export function App() {
 
   const onToggleTheme = useCallback(() => {
     onSetTheme(theme === THEME.DARK ? THEME.LIGHT : THEME.DARK);
-  }, [onSetTheme, theme, setTheme]);
+  }, [onSetTheme, theme]);
 
   const [mobileSideOpen, setMobileSideOpen] = useState(false);
   const onToggleMobileSide = useCallback(() => setMobileSideOpen((v) => !v), []);
@@ -710,7 +710,6 @@ export function App() {
           active={t.id === activeTabId}
           currency={currency}
           registerDispatch={registerDispatch}
-          onNewTab={openTab}
           onCloseTab={() => closeTab(t.id)}
           canCloseTab={tabs.length > 1}
           theme={theme}
@@ -735,7 +734,6 @@ export function App() {
           workspaceTabs={workspaceTabs}
           activeWorkspaceId={activeWorkspaceId}
           onSwitchWorkspace={switchWorkspace}
-          onNewWorkspace={pickWorkspace}
           onCloseWorkspace={closeWorkspace}
         />
       ))}
