@@ -3,9 +3,12 @@
 ; - CLI already present -> leave it alone; the shell checks for updates
 ;   (npm latest) on every startup via a native dialog.
 ; - CLI missing + npm available -> install the CLI via npm silently.
-; - CLI missing + npm missing -> install Node.js (LTS) via winget, then
-;   install the CLI; if winget is unavailable the shell prompts on first
-;   launch. This only touches fresh machines (no existing Node to break).
+; - CLI missing + npm missing -> install Node.js (LTS) via winget, add it
+;   to the user PATH (registry + this process) so the finish page's
+;   "Run app" works, then install the CLI via npm. If winget is
+;   unavailable, or node.exe isn't at the canonical location, fall back
+;   to hiding the checkbox ($InstalledNodeByUs -> MyFinishShow in
+;   template.nsi) and letting the shell prompt on first launch.
 
 !macro NSIS_HOOK_POSTINSTALL
   DetailPrint "Checking reasonix-code CLI..."
@@ -36,7 +39,26 @@
         DetailPrint "The desktop app will prompt you to install it on first launch."
         Goto done
       node_installed:
-        StrCpy $InstalledNodeByUs 1
+        ; Best effort: put Node's canonical install location on the user
+        ; PATH (registry) AND refresh this process's environment so the
+        ; finish page's "Run app" works right away (a child process
+        ; inherits the installer's environment). If node.exe isn't at the
+        ; canonical location (winget installed it elsewhere), fall back to
+        ; hiding the checkbox — see MyFinishShow in template.nsi.
+        ${If} ${FileExists} "$LOCALAPPDATA\Programs\nodejs\node.exe"
+          ReadRegExpandStr HKCU "Environment" "Path" $2
+          ${If} $2 == ""
+            StrCpy $2 "$LOCALAPPDATA\Programs\nodejs"
+          ${Else}
+            StrCpy $2 "$2;$LOCALAPPDATA\Programs\nodejs"
+          ${EndIf}
+          WriteRegExpandStr HKCU "Environment" "Path" "$2"
+          System::Call 'KERNEL32::SetEnvironmentVariable(t "Path", t r2)'
+          SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment"
+        ${Else}
+          StrCpy $InstalledNodeByUs 1
+        ${EndIf}
+        Goto npm_ok
 
   npm_ok:
     DetailPrint "Installing reasonix-code via npm..."

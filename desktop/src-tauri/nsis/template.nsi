@@ -75,9 +75,9 @@ Var UpdateMode
 Var NoShortcutMode
 Var WixMode
 Var OldMainBinaryName
-; Set by NSIS_HOOK_POSTINSTALL when the installer itself installed
-; Node.js (winget) — the finish page hides the "Run app" checkbox then,
-; because this process's PATH is stale and launching now would fail.
+; Set by NSIS_HOOK_POSTINSTALL as a fallback when the installer itself
+; installed Node.js (winget) but couldn't put it on the PATH — the finish
+; page then hides the "Run app" checkbox, because launching now would fail.
 Var InstalledNodeByUs
 
 Name "${PRODUCTNAME}"
