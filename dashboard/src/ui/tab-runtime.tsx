@@ -1247,7 +1247,15 @@ export function TabRuntime({
           initialPath={state.settings?.workspaceDir}
           onCancel={() => setWorkdirModalOpen(false)}
           onConfirm={(path) => {
-            saveSettings({ workspaceDir: path });
+            if (isWebRuntime) {
+              // Plain browser: persist the preference (next load picks it up).
+              saveSettings({ workspaceDir: path });
+            } else {
+              // Desktop shell: switch to (or start) that workspace instance.
+              invoke("switch_workspace", { path }).catch((err) =>
+                console.error("switch_workspace failed", err),
+              );
+            }
             setWorkdirModalOpen(false);
           }}
         />

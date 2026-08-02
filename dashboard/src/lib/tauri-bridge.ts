@@ -9,16 +9,48 @@ const listeners = new Map<string, Set<EventCallback>>();
 let eventIdCounter = 0;
 let currentTurn = 1;
 
-// 模式检测: tauri (Tauri WebView, via window.__TAURI__) / server (CLI HTTP server) / mock (Vite dev)
+// 模式检测: tauri (Tauri WebView, via window.__TAURI_INTERNALS__) / server (CLI HTTP server) / mock (Vite dev)
 const modeMeta = document.querySelector('meta[name="reasonix-mode"]');
 const rawMode = modeMeta?.getAttribute("content") ?? "";
 const isServerMode = rawMode !== "" && rawMode !== "__REASONIX_MODE__";
-const hasTauriApi = typeof window !== "undefined" && !!(window as any).__TAURI__?.invoke;
+
+/**
+ * Normalized Tauri surface. Tauri 2 exposes `window.__TAURI_INTERNALS__`
+ * (invoke + event); Tauri 1 used `window.__TAURI__`. Returns undefined
+ * outside a Tauri webview (plain browser).
+ */
+function tauriApi():
+  | {
+      invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+      event?: { listen: (event: string, cb: (e: any) => void) => Promise<() => void> };
+    }
+  | undefined {
+  if (typeof window === "undefined") return undefined;
+  const internals = (window as any).__TAURI_INTERNALS__;
+  if (internals?.invoke) {
+    return {
+      invoke: (cmd: string, args?: unknown) => internals.invoke(cmd, args),
+      event: internals.event
+        ? { listen: (event: string, cb: (e: any) => void) => internals.event.listen(event, cb) }
+        : undefined,
+    };
+  }
+  const legacy = (window as any).__TAURI__;
+  if (legacy?.invoke) {
+    return {
+      invoke: (cmd: string, args?: unknown) => legacy.invoke(cmd, args),
+      event: legacy.event ?? undefined,
+    };
+  }
+  return undefined;
+}
+
+const hasTauriApi = tauriApi() !== undefined;
 // When the page is served by the CLI dashboard server we always use the
 // REST/SSE bridge, even if it happens to be loaded inside the Tauri webview.
 const MODE: "tauri" | "server" | "mock" = isServerMode ? "server" : hasTauriApi ? "tauri" : "mock";
 
-/** Web vs. native dispatcher hint — `true` only when the dashboard is served by the CLI server in a plain browser (no Tauri shell). In the desktop app the page is also server-mode, but `window.__TAURI__` is present, so native commands (pick_workspace, dialogs, …) must stay reachable. */
+/** Web vs. native dispatcher hint — `true` only when the dashboard is served by the CLI server in a plain browser (no Tauri shell). In the desktop app the page is also server-mode, but the Tauri runtime is present, so native commands (pick_workspace, dialogs, …) must stay reachable. */
 export const isWebRuntime = isServerMode && !hasTauriApi;
 
 console.log(`[tauri-bridge] mode=${MODE}`);
@@ -1000,9 +1032,9 @@ async function serverRpc(payload: Record<string, any>): Promise<void> {
 export async function invoke(cmd: string, args?: any): Promise<any> {
   console.log(`[tauri-bridge] invoke -> cmd: ${cmd}${args ? " " + JSON.stringify(args) : ""}`);
 
-  // Tauri desktop mode: delegate to real Tauri invoke via window.__TAURI__
+  // Tauri desktop mode: delegate to real Tauri invoke via the runtime bridge
   if (MODE === "tauri") {
-    const tauri = (window as any).__TAURI__;
+    const tauri = tauriApi()!;
     if (cmd === "rpc_spawn") {
       await tauri.invoke("rpc_spawn");
       return;
@@ -1031,7 +1063,7 @@ export async function invoke(cmd: string, args?: any): Promise<any> {
       serverRpc(payload).catch(console.warn);
       return Promise.resolve();
     }
-    const tauri = (window as any).__TAURI__;
+    const tauri = tauriApi();
     if (tauri?.invoke) {
       return tauri.invoke(cmd, args ?? {});
     }
@@ -1103,7 +1135,7 @@ export async function listen<T = any>(
   // system so the Rust backend's rpc:event / rpc:stderr / rpc:exit reach the app.
   let unlistenTauri: (() => void) | undefined;
   if (MODE === "tauri") {
-    const tauri = (window as any).__TAURI__;
+    const tauri = tauriApi();
     if (tauri?.event?.listen) {
       const unsub = await tauri.event.listen(eventName, (event: { payload: T }) => {
         broadcast(eventName, event.payload);
@@ -1130,14 +1162,30 @@ export function getCurrentWebview(): any {
 }
 
 // 3b. @tauri-apps/api/window
+// Tauri 2 has no window namespace on __TAURI_INTERNALS__ — window commands
+// go through the core plugin (permissions granted in capabilities/default.json).
 export function getCurrentWindow(): any {
-  const tauri = (window as any).__TAURI__;
-  if (tauri?.window?.getCurrentWindow) {
-    try {
-      return tauri.window.getCurrentWindow();
-    } catch {
-      /* fall through to no-op */
-    }
+  const tauri = tauriApi();
+  if (tauri?.invoke) {
+    const invoke = tauri.invoke;
+    return {
+      isMaximized: async () =>
+        Boolean(await invoke("plugin:window|is_maximized").catch(() => false)),
+      minimize: async () => {
+        await invoke("plugin:window|minimize").catch(() => {});
+      },
+      close: async () => {
+        await invoke("plugin:window|close").catch(() => {});
+      },
+      toggleMaximize: async () => {
+        await invoke("plugin:window|toggle_maximize").catch(() => {});
+      },
+      listen: async (event: string, callback: (e: any) => void): Promise<() => void> => {
+        if (tauri.event?.listen) return tauri.event.listen(event, callback);
+        return () => {};
+      },
+      label: "main",
+    };
   }
   return {
     isMaximized: async () => false,
@@ -1159,7 +1207,7 @@ export function getCurrentWindow(): any {
 
 // 4. @tauri-apps/plugin-dialog
 export async function open(options?: any): Promise<any> {
-  const tauri = (window as any).__TAURI__;
+  const tauri = tauriApi();
   console.log(
     "[tauri-bridge] dialog open:",
     JSON.stringify(options),
@@ -1182,7 +1230,7 @@ export async function open(options?: any): Promise<any> {
 }
 
 export async function save(options?: any): Promise<any> {
-  const tauri = (window as any).__TAURI__;
+  const tauri = tauriApi();
   console.log("[tauri-bridge] dialog save:", options);
   if (tauri?.invoke) {
     try {
@@ -1198,7 +1246,7 @@ export async function save(options?: any): Promise<any> {
 // 5. @tauri-apps/plugin-opener
 export async function openUrl(url: string, openWith?: string): Promise<void> {
   console.log(`[tauri-bridge] open url -> ${url}`);
-  const tauri = (window as any).__TAURI__;
+  const tauri = tauriApi();
   if (tauri?.invoke) {
     await tauri.invoke("plugin:opener|open_url", { url, with: openWith });
     return;
@@ -1208,7 +1256,7 @@ export async function openUrl(url: string, openWith?: string): Promise<void> {
 
 export async function openPath(path: string, openWith?: string): Promise<void> {
   console.log(`[tauri-bridge] open path -> ${path}`);
-  const tauri = (window as any).__TAURI__;
+  const tauri = tauriApi();
   if (tauri?.invoke) {
     await tauri.invoke("plugin:opener|open_path", { path, with: openWith });
     return;
