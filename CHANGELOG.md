@@ -5,6 +5,20 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-08-02
+
+**Desktop: native menu bar removed.** The Quit (Ctrl+Q) menu entry is gone; window close remains the exit path and still kills every CLI process tree. macOS keeps the system default app menu.
+
+**Desktop: '+' new workspace works again.** The dashboard is served by the CLI in the desktop shell, so `isWebRuntime` (== server mode) was always true and `pick_workspace`/`switch_workspace`/`list_workspaces` were short-circuited before reaching Tauri. `isWebRuntime` now also requires `!hasTauriApi`, restoring native commands in the shell (and the `cli:crash` toast listener).
+
+**Dashboard: token meter shows resumed context immediately.** `ctx_breakdown` was only broadcast after `assistant_final`/`tool` events, so opening a session with history (or switching sessions) left the right-rail token meter empty until the next turn. The SSE connect path now snapshots one `ctx_breakdown` from the live loop, and the TUI broadcasts one after the loop is (re)built.
+
+**Dashboard: one workspace picker for all entries.** The ws-crumb, the statusbar "switch workspace" seg and the '+' buttons (tab bar and title bar) all open the same picker; picking a path in the desktop shell calls `switch_workspace`, which starts a new CLI instance when needed and activates it as a new workspace tab. The desktop "Browse…" flow does the same.
+
+**Dashboard: tab-bar active state visible.** TabBar rendered `class="tab active"` while the stylesheet only defined `.tab[data-active="true"]` (a leftover from the pre-tabs renderer), so the selected tab had no visual state; it now renders `data-active` and the accent bar/background apply.
+
+**CI: desktop builds archive old installers.** Each manual desktop build moves the previous run's installers from `desktop-latest` into a `desktop-archive` release, so "latest" always holds exactly the current build's three installers.
+
 ## [0.2.0] — 2026-08-02
 
 **Session recovery.** When the live session JSONL is corrupted, `appendSessionMessage` and `appendSessionMessageAsync` now fall back to the `.bak` snapshot before appending — matching `loadSessionMessages`. Previously the next append could overwrite the backup history with only the new message. Regression tests cover both the sync and async paths.
