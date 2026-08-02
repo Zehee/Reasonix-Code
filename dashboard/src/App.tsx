@@ -601,17 +601,28 @@ export function App() {
   // an older installer or updated npm on the side still get a nudge.
   const [updatePrompt, setUpdatePrompt] = useState<{ latest: string; local: string } | null>(null);
   const [updatingCli, setUpdatingCli] = useState(false);
+  // CLI exists but node/npm is missing — can't check or update; guide the user.
+  const [installPrompt, setInstallPrompt] = useState(false);
 
   useEffect(() => {
     if (isWebRuntime) return;
     let closed = false;
     void (async () => {
       try {
-        const env = (await invoke("check_environment")) as { cli_version?: string } | undefined;
+        const env = (await invoke("check_environment")) as
+          | { cli_version?: string; npm_ok?: boolean }
+          | undefined;
         const latest = await invoke("latest_cli_version");
-        if (closed || typeof latest !== "string" || !latest) return;
+        if (closed) return;
         const local = env?.cli_version;
-        if (!local) return;
+        if (local && !env?.npm_ok) {
+          // A working CLI needs Node to run, but the upgrade path (npm)
+          // is gone — point the user at nodejs.org instead of failing
+          // silently.
+          setInstallPrompt(true);
+          return;
+        }
+        if (typeof latest !== "string" || !latest || !local) return;
         const a = coerce(latest.replace(/^v/, ""));
         const b = coerce(local.replace(/^v/, ""));
         if (a && b && semverGt(a, b)) setUpdatePrompt({ latest, local });
@@ -824,6 +835,32 @@ export function App() {
             className="update-prompt-btn"
             disabled={updatingCli}
             onClick={() => setUpdatePrompt(null)}
+          >
+            {t("updatePrompt.later")}
+          </button>
+        </div>
+      ) : null}
+      {installPrompt ? (
+        <div className="update-prompt" role="alert">
+          <span className="update-prompt-text">{t("updatePrompt.needNode")}</span>
+          <button
+            type="button"
+            className="update-prompt-btn primary"
+            onClick={async () => {
+              try {
+                await invoke("install_node");
+              } catch {
+                /* browser opener failed — keep quiet */
+              }
+              setInstallPrompt(false);
+            }}
+          >
+            {t("updatePrompt.download")}
+          </button>
+          <button
+            type="button"
+            className="update-prompt-btn"
+            onClick={() => setInstallPrompt(false)}
           >
             {t("updatePrompt.later")}
           </button>

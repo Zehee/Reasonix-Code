@@ -1293,6 +1293,8 @@ export const zhCN = {
     update: "立即更新",
     updating: "更新中…",
     later: "稍后",
+    needNode: "未检测到 Node.js/npm——安装后可自动更新 reasonix-code。",
+    download: "前往下载",
   },
   workdir: {
     browse: "浏览…",
