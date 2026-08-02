@@ -31,10 +31,12 @@
       nsExec::ExecToStack 'cmd /c winget install -e --id OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements'
       Pop $0
       Pop $1
-      IntCmp $0 0 npm_ok
+      IntCmp $0 0 node_installed
         DetailPrint "Warning: automatic Node.js install failed (exit code $0)."
         DetailPrint "The desktop app will prompt you to install it on first launch."
         Goto done
+      node_installed:
+        StrCpy $InstalledNodeByUs 1
 
   npm_ok:
     DetailPrint "Installing reasonix-code via npm..."
