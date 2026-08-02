@@ -1,4 +1,73 @@
 import { WorkspaceProvider } from "../Markdown";
+import { invoke, isWebRuntime } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { CommandPalette, Toast, buildCommands, useCommandPalette } from "./CommandPalette";
+import { getLang, getLangLabel, getSupportedLangs, setLang, t, useLang } from "../i18n";
+import { I } from "../icons";
+import { readSessionFromUrl, writeSessionToUrl } from "../lib/session-url";
+import { setActiveTabIdInBridge } from "../lib/tauri-bridge";
+import {
+  ActivePlanTaskCard,
+  CheckpointPicker,
+  McpHub,
+  type ActivePlanTask,
+  type Checkpoint,
+  type Choice,
+  type McpSpecInfo,
+  type MemoryDetail,
+  type MemoryEntryInfo,
+  type OutgoingCommand,
+  type PlanVerdict,
+  type RevisionVerdict,
+  type SettingsPatch,
+  type SkillInfo,
+} from "../protocol";
+import type { QQDesktopSettingsState } from "../qq-settings";
+import {
+  FONT_FAMILY,
+  FONT_FAMILY_STACK,
+  FONT_SCALE,
+  FONT_SCALE_ZOOM,
+  type FontFamily,
+  type FontScale,
+  THEME,
+  type Theme,
+  type ThemeStyle,
+  defaultStyleForTheme,
+  isFontFamily,
+  isFontScale,
+  isTheme,
+  isThemeStyle,
+  themeForStyle,
+} from "../theme";
+import { AboutModal } from "./about";
+import { Composer, type SlashCmd } from "./composer";
+import { ContextPanel } from "./context-panel";
+import { JobsPop } from "./jobs-pop";
+import { useElapsed } from "./live";
+import { SettingsModal, type PageId as SettingsPageId } from "./settings";
+import { Shortcut, localizeShortcutText, shortcutText } from "./shortcut";
+import { Sidebar } from "./sidebar";
+import { Splash, shouldShowSplash } from "./splash";
+import { StatusBar } from "./statusbar";
+import {
+  ActivePlanTaskCard as ActivePlanTaskCard2,
+  CheckpointPicker as CheckpointPicker2,
+  McpHub as McpHub2,
+} from "../protocol";
+import { elideTranscriptMessages } from "./transcript-elision";
+import { useAutoScroll } from "./useAutoScroll";
+import { useDisableTextAssist } from "./useDisableTextAssist";
+import { MainHead, EmptyState, NeedsSetupView } from "./app-views";
+import { TabRuntime as TabRuntimeType } from "./tab-runtime";
+import { WorkspaceTab } from "./workspace-tabs";
+import type { ChatMessage } from "../types";
+import type { SessionInfo } from "../App";
+
 function TabRuntime({
   tabId,
   active,

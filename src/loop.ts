@@ -5,6 +5,7 @@ import { pauseGate as defaultPauseGate } from "./core/pause-gate.js";
 import { type HookPayload, type ResolvedHook, runHooks } from "./hooks.js";
 import { DEFAULT_MAX_RESULT_TOKENS } from "./mcp/registry.js";
 
+import { existsSync, unlinkSync } from "node:fs";
 import { ContextManager, TURN_START_FOLD_THRESHOLD } from "./context-manager.js";
 import { InflightSet } from "./core/inflight.js";
 import { t } from "./i18n/index.js";
@@ -675,6 +676,17 @@ export class CacheFirstLoop {
     if (this.sessionName) {
       try {
         rewriteSession(this.sessionName, preserved);
+        // When discarding everything, also clean up the .bak file
+        // created by rewriteSession so loadSessionMessages doesn't
+        // fall back to the pre-discard backup.
+        if (preserved.length === 0) {
+          try {
+            const backup = `${sessionPath(this.sessionName)}.bak`;
+            if (existsSync(backup)) unlinkSync(backup);
+          } catch {
+            /* best-effort */
+          }
+        }
       } catch {
         /* disk-full / perms — in-memory compaction still applies */
       }

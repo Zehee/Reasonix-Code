@@ -889,24 +889,27 @@ describe("normalizeWorkspace", () => {
   });
 });
 
-describe("session persistence: append fast-path", () => {
+describe("session persistence: append behavior", () => {
   let tmp: string;
   const realHome = homedir();
 
   beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), "reasonix-fastpath-"));
-    vi.stubEnv("USERPROFILE", tmp);
-    vi.stubEnv("HOME", tmp);
+    process.env.USERPROFILE = tmp;
+    process.env.HOME = tmp;
+    process.env.REASONIX_SESSIONS_DIR = tmp;
     vi.spyOn(require("node:os"), "homedir").mockReturnValue(tmp);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    vi.unstubAllEnvs();
+    process.env.USERPROFILE = undefined;
+    process.env.HOME = undefined;
+    process.env.REASONIX_SESSIONS_DIR = undefined;
     if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
   });
 
-  it("appends a single line on the fast path without rewriting the whole log", () => {
+  it("appends a single line without rewriting the whole log", () => {
     // Seed the live JSONL with a valid header + one message so the first
     // append hits the fast path (live non-empty + parseable tail). mkdir
     // first so writeFileSync succeeds without going through
@@ -960,7 +963,7 @@ describe("session persistence: append fast-path", () => {
     expect(message.turnId).toBe(1);
   });
 
-  it("preserves turnId monotonicity across many fast-path appends", () => {
+  it("preserves turnId monotonicity across many appends", () => {
     appendSessionMessage("mono", { role: "user", content: "1" });
     appendSessionMessage("mono", { role: "assistant", content: "1" });
     appendSessionMessage("mono", { role: "user", content: "2" });

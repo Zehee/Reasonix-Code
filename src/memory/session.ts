@@ -413,77 +413,37 @@ function loadSessionMessagesFromPath(path: string): ChatMessage[] {
  * full reload (loadSessionMessages) before trusting nextTurnId. We avoid
  * that second read here by computing it inline in appendSessionMessage.
  */
-function readSessionTailForAppend(name: string): ChatMessage[] | null {
-  const path = sessionPath(name);
-  let stat: import("node:fs").Stats | null = null;
-  try {
-    stat = statSync(path);
-  } catch {
-    stat = null;
-  }
-  if (!stat || !stat.isFile() || stat.size === 0) return null;
-  const tail = readTailMessages(path, 1);
-  return tail.length > 0 ? tail : null;
-}
-
 export function appendSessionMessage(name: string, message: ChatMessage): void {
   const path = sessionPath(name);
   mkdirSync(dirname(path), { recursive: true });
 
+  // Load existing messages: a corrupted live JSONL must fall back to .bak
+  // (matching loadSessionMessages) so the next append preserves history
+  // instead of overwriting it with just the new message.
+  const existing = loadSessionMessages(name);
+
   // Resolve / assign sessionId
   const sessionId = loadSessionId(name);
 
-  // Try the fast-path: tail-only read (O(1) byte scan) signals a healthy
-  // live file. If the tail parseable, the on-disk log is in monotonic
-  // turnId order and a single appendFileSync preserves the whole history.
-  // Slow-path (no tail / parse fail): fall back to a full reload that
-  // also handles the .bak recovery case, and do a full rewrite.
-  const tail = readSessionTailForAppend(name);
-  let existing: ChatMessage[];
-  let useFastPath: boolean;
-
-  if (tail && tail.length > 0) {
-    // Tail parseable: we already know the log is healthy enough to use
-    // the fast-path. For nextTurnId we only need the max turnId; on a
-    // monotonic log it equals the tail's turnId. resolveNextTurnId over a
-    // 1-element array returns the same number, so we avoid the O(N) full
-    // reload here.
-    existing = tail;
-    useFastPath = true;
-  } else {
-    // No tail: load the full transcript (with .bak fallback). This is
-    // also the only code path that produces the file from scratch on the
-    // very first append.
-    existing = loadSessionMessages(name);
-    useFastPath = false;
-  }
-
+  // Assign turnId for new messages; preserve existing turnId if already stamped.
   const turnId = message.turnId ?? resolveNextTurnId(existing, message.role);
+
   const stamped: ChatMessage = { ...message, turnId, sessionId: message.sessionId ?? sessionId };
 
-  if (useFastPath) {
-    try {
-      appendFileSync(path, `${JSON.stringify(stamped)}\n`);
-      chmodPrivate(path);
-    } catch {
-      /* disk full or permission denied shouldn't kill the chat */
-    }
-  } else {
-    // Build output: header + all messages
-    const header = JSON.stringify({
-      type: "session.header",
-      sessionId,
-      createdAt: new Date().toISOString(),
-    });
-    const body = [...existing, stamped].map((m) => JSON.stringify(m)).join("\n");
-    const tmp = `${path}.${randomBytes(4).toString("hex")}.tmp`;
+  // Build output: header + all messages
+  const header = JSON.stringify({
+    type: "session.header",
+    sessionId,
+    createdAt: new Date().toISOString(),
+  });
+  const body = [...existing, stamped].map((m) => JSON.stringify(m)).join("\n");
+  const tmp = `${path}.${randomBytes(4).toString("hex")}.tmp`;
 
-    try {
-      atomicWriteSync(path, `${header}\n${body}\n`, tmp);
-      chmodPrivate(path);
-    } catch {
-      /* disk full or permission denied shouldn't kill the chat */
-    }
+  try {
+    atomicWriteSync(path, `${header}\n${body}\n`, tmp);
+    chmodPrivate(path);
+  } catch {
+    /* disk full or permission denied shouldn't kill the chat */
   }
   invalidatePromptHistoryCache();
 }

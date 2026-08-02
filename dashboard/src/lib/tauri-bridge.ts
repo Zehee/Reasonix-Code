@@ -52,10 +52,8 @@ let sseTurnStarted = false;
 let sseReconnectAttempts = 0;
 const SSE_MAX_RECONNECT_ATTEMPTS = 10;
 const SSE_RECONNECT_BASE_DELAY = 1000;
-/** Low-frequency health probe used after SSE retries are exhausted: every
- *  SSE_HEALTH_PROBE_INTERVAL_MS we hit /api/overview and, on the first 200,
- *  reset the counter and reconnect. Tab focus / visibilitychange also force
- *  a single retry so a laptop wake-up doesn't strand the dashboard. */
+// 30s health probe hits /api/overview; reconnects on 200.
+// Tab focus / visibilitychange also force a retry.
 const SSE_HEALTH_PROBE_INTERVAL_MS = 30_000;
 let sseHealthProbeTimer: ReturnType<typeof setInterval> | null = null;
 let sseGaveUp = false;

@@ -29,18 +29,8 @@ const STORAGE_KEYS = {
 
 export type Currency = "CNY" | "USD";
 
-/**
- * Centralised user preferences hook. Replaces ~60 lines of duplicated
- * localStorage read / write / DOM-mutation effect boilerplate that used
- * to live inline in `App`. Each state value is initialised from
- * `localStorage` on mount and synced back on change, while the DOM
- * (`<html>` dataset / inline style) is kept consistent via a small
- * effect.
- *
- * Note: `onCurrencyEvent` exposes a `CustomEvent` channel used by
- * `WorkdirPop` and other side surfaces to request a currency change
- * without prop-drilling.
- */
+// Centralised user preferences hook. Replaces ~60 lines of duplicated
+// localStorage boilerplate that used to live inline in App.
 export interface UseThemeSettings {
   currency: Currency;
   setCurrency: (c: Currency) => void;

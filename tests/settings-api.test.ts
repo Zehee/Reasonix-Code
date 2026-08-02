@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   addSkillPath,
   loadResolvedSkillPaths,
@@ -10,6 +10,15 @@ import {
 } from "../src/config.js";
 import { handleSettings } from "../src/server/api/settings.js";
 import type { DashboardContext } from "../src/server/context.js";
+
+// Isolate this test file's config from other parallel tests.
+const __reasonixConfigPath = join(tmpdir(), `reasonix-test-${process.pid}.json`);
+beforeEach(() => {
+  process.env.REASONIX_CONFIG_PATH = __reasonixConfigPath;
+});
+afterEach(() => {
+  process.env.REASONIX_CONFIG_PATH = undefined;
+});
 
 function makeCtx(configPath: string): DashboardContext {
   return {

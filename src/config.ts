@@ -455,7 +455,10 @@ const DEFAULT_TIMEOUT_MS = 180_000;
 const DEFAULT_BATCH_SIZE = 10;
 
 export function defaultConfigPath(): string {
-  return join(homedir(), ".reasonix", "config.json");
+  // Allow tests to isolate their config via an env var. Without this,
+  // parallel fork-pool tests all write ~/.reasonix/config.json and
+  // clobber each other.
+  return process.env.REASONIX_CONFIG_PATH ?? join(homedir(), ".reasonix", "config.json");
 }
 
 const STRING_ARRAY_FIELDS: Array<readonly string[]> = [

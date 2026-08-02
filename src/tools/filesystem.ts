@@ -206,10 +206,9 @@ export function registerFilesystemTools(
     }
   }
 
-  /** Resolve a path that may not exist by walking up to the first existing
-   *  ancestor and returning its realpath. Returns null when no ancestor exists
-   *  (e.g. `C:\nope\foo` on POSIX). Used so newly-created files inherit the
-   *  real identity of an in-sandbox parent, not a symlinked one. */
+  // Resolve a non-existing path by walking up to the first existing
+  // ancestor and realpath-ing it. Used so new files inherit the
+  // identity of an in-sandbox parent, not a symlinked one.
   async function realpathForNewPath(abs: string): Promise<string | null> {
     let cur = abs;
     for (let i = 0; i < 64; i++) {

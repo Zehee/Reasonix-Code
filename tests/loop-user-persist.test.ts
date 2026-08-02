@@ -8,19 +8,28 @@ import { ImmutablePrefix } from "../src/memory/runtime.js";
 import { loadSessionMessages } from "../src/memory/session.js";
 import type { ChatMessage } from "../src/types.js";
 
+// Isolate this test file's sessions from parallel tests.
+beforeEach(() => {
+  process.env.REASONIX_SESSIONS_DIR = join(tmpdir(), `reasonix-sessions-${process.pid}`);
+});
+afterEach(() => {
+  process.env.REASONIX_SESSIONS_DIR = undefined;
+});
+
 describe("loop persists user message at step entry (issue #943)", () => {
   let tmp: string;
 
   beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), "reasonix-loop943-"));
-    vi.stubEnv("USERPROFILE", tmp);
-    vi.stubEnv("HOME", tmp);
+    process.env.USERPROFILE = tmp;
+    process.env.HOME = tmp;
     vi.spyOn(require("node:os"), "homedir").mockReturnValue(tmp);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    vi.unstubAllEnvs();
+    process.env.USERPROFILE = undefined;
+    process.env.HOME = undefined;
     if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
   });
 
@@ -28,10 +37,12 @@ describe("loop persists user message at step entry (issue #943)", () => {
     // Fake fetch that never resolves on its own — only the abort signal
     // terminates it. Simulates the desktop user clicking a different
     // session while the AI is still streaming.
+    let fetchStarted = false;
     const client = new DeepSeekClient({
       apiKey: "sk-test",
       fetch: vi.fn(async (_url: unknown, init: { signal?: AbortSignal } | undefined) => {
         const signal = init?.signal;
+        fetchStarted = true;
         return new Promise<Response>((_resolve, reject) => {
           signal?.addEventListener("abort", () =>
             reject(new DOMException("This operation was aborted", "AbortError")),
@@ -55,9 +66,11 @@ describe("loop persists user message at step entry (issue #943)", () => {
       }
     })();
 
-    // Yield a tick so step() reaches the awaited fetch, then abort to
-    // simulate the session-switch tear-down.
-    await new Promise((r) => setTimeout(r, 10));
+    // Wait until the fetch actually starts before aborting, so the abort
+    // signal is caught by the listener.
+    while (!fetchStarted) {
+      await new Promise((r) => setTimeout(r, 1));
+    }
     loop.abort();
     await consumed;
 
@@ -169,6 +182,10 @@ describe("loop persists user message at step entry (issue #943)", () => {
   it("can discard an explicitly aborted prompt before the next request (#1593)", async () => {
     const requestMessages: ChatMessage[][] = [];
     let callCount = 0;
+    const fetchResolvers: Array<{
+      resolve: (r: Response) => void;
+      reject: (e: Error) => void;
+    }> = [];
     const client = new DeepSeekClient({
       apiKey: "sk-test",
       fetch: vi.fn(
@@ -176,7 +193,8 @@ describe("loop persists user message at step entry (issue #943)", () => {
           const body = init?.body ? JSON.parse(init.body) : {};
           requestMessages.push(body.messages as ChatMessage[]);
           if (callCount++ === 0) {
-            return new Promise<Response>((_resolve, reject) => {
+            return new Promise<Response>((resolve, reject) => {
+              fetchResolvers.push({ resolve, reject });
               init?.signal?.addEventListener("abort", () =>
                 reject(new DOMException("This operation was aborted", "AbortError")),
               );
@@ -214,9 +232,21 @@ describe("loop persists user message at step entry (issue #943)", () => {
       }
     })();
 
-    await new Promise((r) => setTimeout(r, 10));
+    // Wait until the first fetch actually starts before aborting.
+    while (fetchResolvers.length === 0) {
+      await new Promise((r) => setTimeout(r, 1));
+    }
     loop.abort({ discardCurrentTurn: true });
     await interrupted;
+
+    // Wait until the log rewrite settles. discardLogFrom rewrites the
+    // session file to remove the aborted turn's messages; this is async
+    // and may not have completed by the time `interrupted` resolves.
+    for (let i = 0; i < 50; i++) {
+      const userCount = loadSessionMessages(sessionName).filter((m) => m.role === "user").length;
+      if (userCount <= 1) break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
 
     await loop.run("请按这次要求完整重写，不要局部微调");
 

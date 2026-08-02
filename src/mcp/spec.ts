@@ -107,13 +107,7 @@ export function specToRaw(spec: McpServerSpec): string {
   return spec.name ? `${spec.name}=streamable+${spec.url}` : `streamable+${spec.url}`;
 }
 
-/**
- * Quote a single argv token for the `--mcp` string format. Mirrors the
- * escaping done by `parseMcpSpec` → `shellSplit`, which treats whitespace
- * (space, tab) as the token separator and `\\` / `"` as the only escape
- * characters inside a double-quoted span. Tokens without special chars
- * pass through unchanged so the round-trip stays byte-stable.
- */
+// Quote a token for --mcp format. Mirrors parseMcpSpec → shellSplit.
 function quoteIfNeeded(token: string): string {
   if (token.includes(" ") || token.includes('"') || token.includes("\t")) {
     return `"${token.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
