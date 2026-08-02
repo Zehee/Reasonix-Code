@@ -45,9 +45,14 @@ function baseName(path) {
 // ── Frame/tab registry ──────────────────────────────────────────
 // Map<id, { id, path, url, iframe, tabEl }>
 const frames = new Map();
+// Tabs the user closed. The underlying CLI process stays alive (hot
+// reopen: picking the same folder reuses it instantly); everything is
+// killed together when the shell exits.
+const hiddenIds = new Set();
 let activeId = null;
 
 function addFrame(ws) {
+  if (hiddenIds.has(ws.id)) hiddenIds.delete(ws.id);
   if (frames.has(ws.id)) {
     updateFrame(ws);
     return;
@@ -63,12 +68,12 @@ function addFrame(ws) {
   const tabEl = document.createElement("button");
   tabEl.type = "button";
   tabEl.className = "ws-tab";
-  tabEl.innerHTML = `<span class="name"></span><span class="x" title="Close workspace">×</span>`;
+  tabEl.innerHTML = `<span class="name"></span><span class="x" title="Close tab (workspace keeps running)">×</span>`;
   tabEl.querySelector(".name").textContent = baseName(ws.path);
   tabEl.addEventListener("click", () => activate(ws.id));
   tabEl.querySelector(".x").addEventListener("click", (e) => {
     e.stopPropagation();
-    closeFrame(ws.id);
+    hideFrame(ws.id);
   });
   tabbarEl.insertBefore(tabEl, tabbarEl.querySelector(".grow"));
 
@@ -94,9 +99,27 @@ function updateFrame(ws) {
 function removeFrame(id) {
   const f = frames.get(id);
   if (!f) return;
+  hiddenIds.delete(id);
   f.iframe.remove();
   f.tabEl.remove();
   frames.delete(id);
+  if (activeId === id) {
+    const ids = [...frames.keys()];
+    activeId = ids.length ? ids[ids.length - 1] : null;
+    if (activeId) activate(activeId);
+    else renderEmptyState();
+  }
+}
+
+/** Close a tab without killing its workspace: remove the iframe, keep the
+ *  CLI process in the background so reopening the same folder hot-resumes. */
+function hideFrame(id) {
+  const f = frames.get(id);
+  if (!f) return;
+  f.iframe.remove();
+  f.tabEl.remove();
+  frames.delete(id);
+  hiddenIds.add(id);
   if (activeId === id) {
     const ids = [...frames.keys()];
     activeId = ids.length ? ids[ids.length - 1] : null;
@@ -113,15 +136,6 @@ function activate(id) {
     f.tabEl.classList.toggle("active", on);
   }
   emptyEl.classList.remove("show");
-}
-
-async function closeFrame(id) {
-  removeFrame(id); // instant UI; workspace-closed event will also arrive
-  try {
-    await invoke("workspace_close", { id });
-  } catch (e) {
-    showError(`Failed to close workspace: ${e}`);
-  }
 }
 
 function renderEmptyState() {

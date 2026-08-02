@@ -1020,13 +1020,23 @@ fn register_dashboard_url(
 /// instance and switches by show/hide — the webview itself never navigates.
 fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Result<u64, String> {
     // Already running? Reuse the instance; the container just activates the
-    // existing iframe (no navigation, no second process).
+    // existing iframe (no navigation, no second process). The container may
+    // have hidden this tab (process kept alive for hot reopen) — tell it to
+    // show the iframe again.
     {
         let instances = state.instances.lock();
         if let Some(existing) = instances.iter().find(|i| i.workspace == workspace) {
             let id = existing.id;
+            let url = existing.url.clone();
+            let path = existing.workspace.to_string_lossy().into_owned();
             drop(instances);
             *state.current.lock() = Some(id);
+            if let Some(url) = url {
+                let _ = app.emit(
+                    "workspace-opened",
+                    serde_json::json!({ "id": id, "url": url, "path": path }),
+                );
+            }
             return Ok(id);
         }
     }
