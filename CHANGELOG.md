@@ -5,6 +5,8 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-02
+
 **Session recovery.** When the live session JSONL is corrupted, `appendSessionMessage` and `appendSessionMessageAsync` now fall back to the `.bak` snapshot before appending — matching `loadSessionMessages`. Previously the next append could overwrite the backup history with only the new message. Regression tests cover both the sync and async paths.
 
 **Tool argument inference.** Shell-style `key=value` parsing now keeps multi-token values intact and refuses to inject top-level parameters for unknown keys. Inputs like `command=git log --oneline timeoutSec=30` correctly produce `{command: "git log --oneline", timeoutSec: 30}` instead of dropping the middle tokens, and unknown keys such as `a` no longer piggyback on parameter names that merely contain those letters. A new `fuzzyMatchParamStrict` helper preserves the original fuzzy matcher for JSON and function-call parsing while enforcing exact/case-insensitive/alias-only matching at the shell-KV boundary.
