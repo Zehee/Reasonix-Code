@@ -562,7 +562,8 @@ export const en = {
     newHint: "Archive the current conversation and start a fresh one",
     switchBtn: "Switch to this session",
     deleteBtn: "Delete",
-    deleteConfirm: "Delete session \"{name}\"? This removes the transcript file and cannot be undone.",
+    deleteConfirm:
+      'Delete session "{name}"? This removes the transcript file and cannot be undone.',
     cantDeleteActive: "Switch to a different session before deleting this one.",
     attachRequired:
       "Live session operations need an attached CLI session. Launch via reasonix-code chat or open the dashboard from inside a TUI session.",
@@ -611,8 +612,7 @@ export const en = {
         "Recursively list entries in a directory as an indented tree. Budget-aware with auto-collapse for large subtrees.",
       search_files:
         "Find files whose NAME matches a substring or regex. Case-insensitive. Skips dependency/build directories by default.",
-      grep:
-        "Search file contents for a regex. Returns matching lines as path:line:text, capped at 200 matches total. Use for finding references and occurrences.",
+      grep: "Search file contents for a regex. Returns matching lines as path:line:text, capped at 200 matches total. Use for finding references and occurrences.",
       glob: "List files matching a glob pattern, sorted by mtime. Default limit 200, max 1000. Skips node_modules/.git/dist by default.",
       get_file_info: "Stat a path under the sandbox root. Returns type, size in bytes, and mtime.",
       write_file:
@@ -1312,6 +1312,12 @@ export const en = {
   crashToast: {
     message: "A workspace crashed unexpectedly. Click to dismiss.",
     dismiss: "Dismiss",
+  },
+  updatePrompt: {
+    message: "New version {latest} is available (current: {local}).",
+    update: "Update now",
+    updating: "Updating…",
+    later: "Later",
   },
   workdir: {
     browse: "Browse…",

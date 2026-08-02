@@ -15,8 +15,8 @@
 
   cli_exists:
     DetailPrint "reasonix-code already installed: $1"
-    DetailPrint "The desktop app will prompt you to upgrade if needed."
-    Goto done
+    DetailPrint "Upgrading reasonix-code to latest via npm..."
+    Goto check_npm
 
   check_npm:
     nsExec::ExecToStack 'cmd /c node --version && npm --version'

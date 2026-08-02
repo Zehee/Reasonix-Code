@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { coerce, gt as semverGt } from "semver";
 import { CommandPalette, Toast, buildCommands, useCommandPalette } from "./CommandPalette";
 import { WorkspaceProvider } from "./Markdown";
 import { getLang, getLangLabel, getSupportedLangs, setLang, t, useLang } from "./i18n";
@@ -592,6 +593,58 @@ export function App() {
 
   // Surface CLI crash events from the desktop backend as a toast.
   const [crashToast, setCrashToast] = useState<{ id: string; reason: string } | null>(null);
+
+  // ── CLI update prompt (desktop only) ─────────────────────────────────
+  // On startup, compare the installed CLI version against npm's latest and
+  // offer an in-app update when a newer release exists. The installer also
+  // upgrades the CLI on every (re)install, but users who got the shell from
+  // an older installer or updated npm on the side still get a nudge.
+  const [updatePrompt, setUpdatePrompt] = useState<{ latest: string; local: string } | null>(null);
+  const [updatingCli, setUpdatingCli] = useState(false);
+
+  useEffect(() => {
+    if (isWebRuntime) return;
+    let closed = false;
+    void (async () => {
+      try {
+        const env = (await invoke("check_environment")) as { cli_version?: string } | undefined;
+        const latest = await invoke("latest_cli_version");
+        if (closed || typeof latest !== "string" || !latest) return;
+        const local = env?.cli_version;
+        if (!local) return;
+        const a = coerce(latest.replace(/^v/, ""));
+        const b = coerce(local.replace(/^v/, ""));
+        if (a && b && semverGt(a, b)) setUpdatePrompt({ latest, local });
+      } catch {
+        // npm view offline, CLI missing, or non-Tauri shell — stay quiet.
+      }
+    })();
+    return () => {
+      closed = true;
+    };
+  }, []);
+
+  const doUpdateCli = useCallback(async () => {
+    if (!updatePrompt) return;
+    setUpdatingCli(true);
+    try {
+      await invoke("install_cli");
+      // Poll until the local CLI version catches up (npm install is
+      // async inside Rust; check_environment reads the real binary).
+      const target = coerce(updatePrompt.latest.replace(/^v/, ""))?.version;
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const env = (await invoke("check_environment")) as { cli_version?: string } | undefined;
+        if (coerce(env?.cli_version?.replace(/^v/, ""))?.version === target) break;
+      }
+      setUpdatePrompt(null);
+    } catch (err) {
+      console.error("install_cli failed", err);
+      // Leave the prompt up so the user can retry.
+    } finally {
+      setUpdatingCli(false);
+    }
+  }, [updatePrompt]);
   useEffect(() => {
     if (isWebRuntime) return;
     let closed = false;
@@ -747,6 +800,32 @@ export function App() {
             aria-label={t("crashToast.dismiss")}
           >
             <I.x size={12} />
+          </button>
+        </div>
+      ) : null}
+      {updatePrompt ? (
+        <div className="update-prompt" role="alert">
+          <span className="update-prompt-text">
+            {t("updatePrompt.message", {
+              latest: updatePrompt.latest,
+              local: updatePrompt.local,
+            })}
+          </span>
+          <button
+            type="button"
+            className="update-prompt-btn primary"
+            disabled={updatingCli}
+            onClick={doUpdateCli}
+          >
+            {updatingCli ? t("updatePrompt.updating") : t("updatePrompt.update")}
+          </button>
+          <button
+            type="button"
+            className="update-prompt-btn"
+            disabled={updatingCli}
+            onClick={() => setUpdatePrompt(null)}
+          >
+            {t("updatePrompt.later")}
           </button>
         </div>
       ) : null}
