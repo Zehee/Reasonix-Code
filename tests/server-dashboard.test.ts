@@ -798,6 +798,33 @@ describe("dashboard server: chat bridge", () => {
     expect(r.status).toBe(503);
     await r.body?.cancel();
   });
+
+  it("GET /api/events snapshots ctx_breakdown on connect so a reopened dashboard shows the resumed context meter", async () => {
+    const base = await boot({
+      isBusy: () => false,
+      subscribeEvents: () => () => undefined,
+      loop: {
+        prefix: { system: "sys-prompt", toolSpecs: [{ type: "function", name: "t" }] },
+        getCurrentLogTokens: () => 1234,
+        model: "deepseek-v4-flash",
+      } as unknown as DashboardContext["loop"],
+    });
+    const ac = new AbortController();
+    const res = await fetch(`${base}api/events?token=${TOKEN}`, { signal: ac.signal });
+    expect(res.status).toBe(200);
+    const reader = res.body!.getReader();
+    let combined = "";
+    for (let i = 0; i < 4 && !combined.includes("ctx_breakdown"); i++) {
+      const { value } = await reader.read();
+      if (value) combined += new TextDecoder().decode(value);
+    }
+    expect(combined).toContain("ctx_breakdown");
+    expect(combined).toContain('"logTokens":1234');
+    expect(combined).toContain('"reservedTokens"');
+    expect(combined).toContain('"contextCapTokens"');
+    reader.cancel().catch(() => undefined);
+    ac.abort();
+  });
 });
 
 describe("dashboard server: v0.13 panels", () => {

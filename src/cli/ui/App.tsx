@@ -1346,6 +1346,27 @@ function AppInner({
     }),
     [broadcastDashboardEvent],
   );
+  // Broadcast one ctx_breakdown right after the loop is (re)built so a
+  // dashboard that is already open reflects the resumed session's context
+  // usage immediately — the event stream only emits breakdowns after
+  // assistant_final / tool events, so a session switch would otherwise
+  // leave the meter empty until the next user turn. The SSE connect path
+  // (src/server/api/events.ts) covers dashboards opened after startup.
+  useEffect(() => {
+    if (eventSubscribersRef.current.size === 0) return;
+    try {
+      const sysTokens = countTokensBounded(loop.prefix.system);
+      const toolsTokens = countTokensBounded(JSON.stringify(loop.prefix.toolSpecs));
+      broadcastDashboardEvent({
+        kind: "ctx_breakdown",
+        reservedTokens: sysTokens + toolsTokens,
+        logTokens: loop.getCurrentLogTokens(),
+        contextCapTokens: resolveContextTokens(loop.model),
+      });
+    } catch {
+      // Tokenizer may not be ready yet — the next turn covers it.
+    }
+  }, [loop, broadcastDashboardEvent]);
   const viewerPorts = useMemo(
     () => ({
       broadcast: broadcastDashboardEvent,

@@ -1,6 +1,8 @@
 /** SSE stream of DashboardEvents; 25s ping keeps proxies from dropping idle connections. */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { resolveContextTokens } from "../../telemetry/stats.js";
+import { countTokensBounded } from "../../tokenizer.js";
 import type { DashboardContext, DashboardEvent } from "../context.js";
 
 const PING_INTERVAL_MS = 25_000;
@@ -41,6 +43,25 @@ export function handleEvents(
   // misses the gate and the tool appears to hang forever (#1770).
   const activeModal = ctx.getActiveModal?.();
   if (activeModal) writeEvent({ kind: "modal-up", modal: activeModal });
+  // Snapshot the context breakdown on connect so a freshly opened
+  // dashboard shows the resumed session's real context usage without
+  // waiting for the next user turn (ctx_breakdown is otherwise only
+  // broadcast after assistant_final / tool events).
+  if (ctx.loop) {
+    try {
+      const sysTokens = countTokensBounded(ctx.loop.prefix.system);
+      const toolsTokens = countTokensBounded(JSON.stringify(ctx.loop.prefix.toolSpecs));
+      writeEvent({
+        kind: "ctx_breakdown",
+        reservedTokens: sysTokens + toolsTokens,
+        logTokens: ctx.loop.getCurrentLogTokens(),
+        contextCapTokens: resolveContextTokens(ctx.loop.model),
+      });
+    } catch {
+      // Tokenizer may not be ready yet; the next assistant_final/tool
+      // event will broadcast the breakdown as usual.
+    }
+  }
 
   const unsubscribe = ctx.subscribeEvents(writeEvent);
 
