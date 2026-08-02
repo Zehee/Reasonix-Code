@@ -277,7 +277,7 @@ export function TabRuntime({
     // hands back relative + File handles), so the web runtime opens a custom
     // server-backed directory browser instead of the native dialog. Desktop
     // (Tauri) still gets the OS picker for free.
-    if (isWebRuntime) {
+    if (isWebRuntime()) {
       setWorkdirModalOpen(true);
       return;
     }
@@ -292,9 +292,10 @@ export function TabRuntime({
         // Desktop: switch to (or start) the chosen workspace instance —
         // main.rs spawns a new CLI if it isn't running yet, and the
         // WorkspaceTabs poll picks it up as a new active workspace tab.
-        invoke("switch_workspace", { path: picked }).catch((err) =>
-          console.error("switch_workspace failed", err),
-        );
+        invoke("switch_workspace", { path: picked }).catch((err) => {
+          console.error("switch_workspace failed", err);
+          flashToast(t("app.toast.switchFailed", { error: String(err) }));
+        });
       }
     } catch (err) {
       console.error("pickWorkspace failed", err);
@@ -1225,7 +1226,7 @@ export function TabRuntime({
           current={state.settings?.workspaceDir}
           anchor={wdAnchor}
           onPick={(path) => {
-            if (isWebRuntime) {
+            if (isWebRuntime()) {
               // Plain browser: the CLI server owns the workspace; just
               // persist the preference (the next load picks it up).
               saveSettings({ workspaceDir: path });
@@ -1235,9 +1236,10 @@ export function TabRuntime({
             // instance. main.rs spawns a new CLI if it isn't running
             // yet, and the WorkspaceTabs poll picks the instance up
             // as a new active workspace tab.
-            invoke("switch_workspace", { path }).catch((err) =>
-              console.error("switch_workspace failed", err),
-            );
+            invoke("switch_workspace", { path }).catch((err) => {
+              console.error("switch_workspace failed", err);
+              flashToast(t("app.toast.switchFailed", { error: String(err) }));
+            });
           }}
           onBrowse={pickWorkspace}
         />
@@ -1247,7 +1249,7 @@ export function TabRuntime({
           initialPath={state.settings?.workspaceDir}
           onCancel={() => setWorkdirModalOpen(false)}
           onConfirm={(path) => {
-            if (isWebRuntime) {
+            if (isWebRuntime()) {
               // Plain browser: persist the preference (next load picks it up).
               saveSettings({ workspaceDir: path });
             } else {

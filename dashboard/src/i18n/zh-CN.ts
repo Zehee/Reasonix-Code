@@ -93,6 +93,7 @@ export const zhCN = {
       effortSwitched: "强度 → {effort}",
       modeSwitched: "模式已切换",
       newSession: "新会话已创建",
+      switchFailed: "工作区切换失败：{error}",
     },
     yolo: {
       toast: "YOLO 模式已启用",

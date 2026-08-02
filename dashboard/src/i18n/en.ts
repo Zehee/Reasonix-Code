@@ -93,6 +93,7 @@ export const en = {
       effortSwitched: "Effort → {effort}",
       modeSwitched: "Mode switched",
       newSession: "New session created",
+      switchFailed: "Workspace switch failed: {error}",
     },
     yolo: {
       toast: "YOLO mode enabled",

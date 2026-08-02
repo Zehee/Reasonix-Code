@@ -523,7 +523,7 @@ export function App() {
   // Sync workspaceTabs state from the desktop backend. In web/server mode
   // these invokes throw — we catch and degrade gracefully.
   const refreshWorkspaceTabs = useCallback(async () => {
-    if (isWebRuntime) return;
+    if (isWebRuntime()) return;
     try {
       const list = await invoke("list_workspaces");
       setWorkspaceTabs(
@@ -541,7 +541,7 @@ export function App() {
 
   const switchWorkspace = useCallback(
     async (id: string) => {
-      if (isWebRuntime) return;
+      if (isWebRuntime()) return;
       const ws = workspaceTabs.find((t) => t.id === id);
       if (!ws) return;
       setActiveWorkspaceId(id);
@@ -556,7 +556,7 @@ export function App() {
   );
 
   const pickWorkspace = useCallback(async () => {
-    if (isWebRuntime) return;
+    if (isWebRuntime()) return;
     try {
       await invoke("pick_workspace");
     } catch {
@@ -566,7 +566,7 @@ export function App() {
 
   const closeWorkspace = useCallback(
     async (id: string) => {
-      if (isWebRuntime) return;
+      if (isWebRuntime()) return;
       try {
         await invoke("workspace_close", { id: Number(id) });
         setWorkspaceTabs((prev) => prev.filter((t) => t.id !== id));
@@ -582,7 +582,7 @@ export function App() {
 
   // Poll workspace list periodically to stay in sync with the desktop backend.
   useEffect(() => {
-    if (isWebRuntime) return;
+    if (isWebRuntime()) return;
     void refreshWorkspaceTabs();
     const timer = setInterval(() => {
       void refreshWorkspaceTabs();
@@ -592,8 +592,11 @@ export function App() {
 
   // Surface CLI crash events from the desktop backend as a toast.
   const [crashToast, setCrashToast] = useState<{ id: string; reason: string } | null>(null);
+  // Surface CLI spawn/switch errors (main.rs emits cli:error) so a failed
+  // workspace switch is visible instead of silent.
+  const [cliError, setCliError] = useState<string | null>(null);
   useEffect(() => {
-    if (isWebRuntime) return;
+    if (isWebRuntime()) return;
     let closed = false;
     let unlisten: (() => void) | undefined;
     import("@tauri-apps/api/event")
@@ -601,6 +604,30 @@ export function App() {
         listen<{ id: string; reason: string }>("cli:crash", (ev) => {
           if (closed) return;
           setCrashToast({ id: ev.payload.id, reason: ev.payload.reason });
+        }),
+      )
+      .then((unsub) => {
+        unlisten = unsub;
+      })
+      .catch(() => {
+        /* Tauri event API unavailable — skip silently */
+      });
+    return () => {
+      closed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  // Surface CLI spawn/switch failures (main.rs emits cli:error) globally.
+  useEffect(() => {
+    if (isWebRuntime()) return;
+    let closed = false;
+    let unlisten: (() => void) | undefined;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<string>("cli:error", (ev) => {
+          if (closed) return;
+          setCliError(String(ev.payload ?? "Unknown error"));
         }),
       )
       .then((unsub) => {
@@ -744,6 +771,19 @@ export function App() {
             type="button"
             className="crash-toast-close"
             onClick={() => setCrashToast(null)}
+            aria-label={t("crashToast.dismiss")}
+          >
+            <I.x size={12} />
+          </button>
+        </div>
+      ) : null}
+      {cliError ? (
+        <div className="crash-toast" role="alert" onClick={() => setCliError(null)}>
+          <span className="crash-toast-text">{cliError}</span>
+          <button
+            type="button"
+            className="crash-toast-close"
+            onClick={() => setCliError(null)}
             aria-label={t("crashToast.dismiss")}
           >
             <I.x size={12} />
