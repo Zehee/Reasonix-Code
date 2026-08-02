@@ -63,8 +63,12 @@ desktop/src-tauri/binaries/
 
 .probe-snapshots/
 
-# MiMo Code plans and local state
-.mimocode/
+# AutoResearch state — per-task, never committed.
+.reasonix/autoresearch/
+# Desktop dev shell logs — local only.
+desktop-*.log
+# Local PowerShell scratch scripts — personal workflow only.
+check-titlebar.ps1
 
 # Desktop app build artifacts
 desktop/node_modules/

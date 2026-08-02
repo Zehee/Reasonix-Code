@@ -1,3 +1,4 @@
+import { WorkspaceProvider } from "../Markdown";
 function TabRuntime({
   tabId,
   active,

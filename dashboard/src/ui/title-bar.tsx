@@ -343,8 +343,8 @@ export function TabBar({
   useLang();
   return (
     <div className="tabbar">
-      {tabs.map((t) => {
-        const ws = t.workspaceDir ?? "";
+      {tabs.map((tab) => {
+        const ws = tab.workspaceDir ?? "";
         const label =
           ws
             .replace(/[\\/]$/, "")
@@ -352,9 +352,9 @@ export function TabBar({
             .pop() || "workspace";
         return (
           <div
-            key={t.id}
-            className={`tab ${t.id === activeId ? "active" : ""}`}
-            onClick={() => setActive(t.id)}
+            key={tab.id}
+            className={`tab ${tab.id === activeId ? "active" : ""}`}
+            onClick={() => setActive(tab.id)}
             title={ws}
           >
             <span className="tab-name">{label}</span>
@@ -362,10 +362,10 @@ export function TabBar({
               <button
                 type="button"
                 className="tab-close"
-                aria-label={t("tabBar.close")}
+                aria-label={t("workspaceTab.close")}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onClose(t.id);
+                  onClose(tab.id);
                 }}
               >
                 <I.x size={10} />
@@ -378,7 +378,7 @@ export function TabBar({
         type="button"
         className="tab-new"
         onClick={onNew}
-        title={t("tabBar.new")}
+        title={t("workspaceTab.new")}
       >
         <I.plus size={12} />
       </button>
