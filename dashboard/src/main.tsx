@@ -13,12 +13,7 @@ import "./styles.css";
 import "katex/dist/katex.min.css";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import {
-  defaultStyleForTheme,
-  isTheme,
-  isThemeStyle,
-  themeForStyle,
-} from "./theme";
+import { defaultStyleForTheme, isTheme, isThemeStyle, themeForStyle } from "./theme";
 
 const stored = localStorage.getItem("reasonix.theme");
 const storedStyle = localStorage.getItem("reasonix.themeStyle");
@@ -37,6 +32,14 @@ const platform = /Mac|macOS/i.test(navigator.userAgent)
     : "default";
 document.documentElement.dataset.platform = platform;
 document.body.dataset.platform = platform;
+
+// Embed mode: the desktop container page loads each workspace dashboard
+// into an iframe (?embed=1). Workspace switching lives in the container's
+// own tab bar, so hide the dashboard's workspace chrome (title bar,
+// ws-crumb) to avoid duplicated/nested controls.
+if (new URLSearchParams(window.location.search).has("embed")) {
+  document.documentElement.dataset.embed = "1";
+}
 
 const host = document.getElementById("root");
 if (!host) throw new Error("#root missing");

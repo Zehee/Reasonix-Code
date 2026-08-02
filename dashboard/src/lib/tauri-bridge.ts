@@ -36,11 +36,14 @@ function tauriApi():
     };
   }
   const legacy = (window as any).__TAURI__;
-  if (legacy?.invoke) {
-    return {
-      invoke: (cmd: string, args?: unknown) => legacy.invoke(cmd, args),
-      event: legacy.event ?? undefined,
-    };
+  if (legacy) {
+    const invokeFn = legacy.core?.invoke ?? legacy.invoke;
+    if (invokeFn) {
+      return {
+        invoke: (cmd: string, args?: unknown) => invokeFn.call(legacy.core ?? legacy, cmd, args),
+        event: legacy.event ?? undefined,
+      };
+    }
   }
   return undefined;
 }
@@ -50,8 +53,17 @@ const hasTauriApi = tauriApi() !== undefined;
 // REST/SSE bridge, even if it happens to be loaded inside the Tauri webview.
 const MODE: "tauri" | "server" | "mock" = isServerMode ? "server" : hasTauriApi ? "tauri" : "mock";
 
-/** Web vs. native dispatcher hint — `true` only when the dashboard is served by the CLI server in a plain browser (no Tauri shell). In the desktop app the page is also server-mode, but the Tauri runtime is present, so native commands (pick_workspace, dialogs, …) must stay reachable. */
-export const isWebRuntime = isServerMode && !hasTauriApi;
+/**
+ * Web vs. native dispatcher hint — `true` only when the dashboard is served
+ * by the CLI server in a plain browser (no Tauri shell). Evaluated lazily:
+ * `window.__TAURI_INTERNALS__` is created by the real @tauri-apps/api modules
+ * when they load (plugin-dialog etc.), which can happen after this bridge
+ * module initializes — a module-load-time check would wrongly classify the
+ * desktop shell as web.
+ */
+export function isWebRuntime(): boolean {
+  return isServerMode && tauriApi() === undefined;
+}
 
 console.log(`[tauri-bridge] mode=${MODE}`);
 

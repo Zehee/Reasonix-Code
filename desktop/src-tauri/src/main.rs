@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter, Listener, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 /// #892: bundled libwayland in AppImage can ABI-mismatch the host Wayland
@@ -591,6 +591,9 @@ struct WorkspaceInfo {
     id: u64,
     path: String,
     ready: bool,
+    /// Dashboard URL once the instance is ready (container.html loads this
+    /// into its per-workspace iframe).
+    url: Option<String>,
 }
 
 #[tauri::command]
@@ -603,6 +606,7 @@ fn list_workspaces(state: State<DesktopState>) -> Vec<WorkspaceInfo> {
             id: i.id,
             path: i.workspace.to_string_lossy().into_owned(),
             ready: i.url.is_some(),
+            url: i.url.clone(),
         })
         .collect()
 }
@@ -628,9 +632,6 @@ struct DesktopState {
     instances: Arc<Mutex<Vec<Instance>>>,
     /// Instance currently shown in the webview.
     current: Arc<Mutex<Option<u64>>>,
-    /// Splash URL captured at startup, used to navigate back when the current
-    /// instance exits.
-    start_url: Arc<Mutex<Option<tauri::Url>>>,
 }
 
 static NEXT_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
@@ -982,7 +983,7 @@ mod tests {
 }
 
 /// Record the dashboard URL for an instance, make it current, and notify the
-/// UI (which navigates the webview via the `cli:url` listener).
+/// container page (which hosts one iframe per workspace).
 fn register_dashboard_url(
     app: &AppHandle,
     instances: &Arc<Mutex<Vec<Instance>>>,
@@ -990,38 +991,42 @@ fn register_dashboard_url(
     id: u64,
     url: String,
 ) {
-    {
+    let path = {
         let mut guard = instances.lock();
         if let Some(inst) = guard.iter_mut().find(|i| i.id == id) {
             inst.url = Some(url.clone());
+            inst.workspace.to_string_lossy().into_owned()
+        } else {
+            String::new()
         }
-    }
+    };
     *current.lock() = Some(id);
     // Emit the JSON object directly — passing a serialized String would be
     // double-encoded (listeners would see Value::String, not an object).
-    let _ = app.emit("cli:url", serde_json::json!({ "id": id, "url": url }));
+    let _ = app.emit(
+        "cli:url",
+        serde_json::json!({ "id": id, "url": url, "path": path }),
+    );
     // Notify the frontend that a new workspace tab is ready.
     let _ = app.emit(
         "workspace-opened",
-        serde_json::json!({ "id": id, "url": url }),
+        serde_json::json!({ "id": id, "url": url, "path": path }),
     );
 }
 
 /// Start a new workspace instance, or just navigate to it if already running.
 /// One workspace = one background `cmd /c reasonix-code code <cwd>` process =
-/// one dashboard URL. Switching between running instances is pure navigation.
+/// one dashboard URL. The container page (container.html) hosts one iframe per
+/// instance and switches by show/hide — the webview itself never navigates.
 fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Result<u64, String> {
-    // Already running? Switch = navigate only, never a second process.
+    // Already running? Reuse the instance; the container just activates the
+    // existing iframe (no navigation, no second process).
     {
         let instances = state.instances.lock();
         if let Some(existing) = instances.iter().find(|i| i.workspace == workspace) {
             let id = existing.id;
-            let url = existing.url.clone();
             drop(instances);
-            if let Some(url) = url {
-                *state.current.lock() = Some(id);
-                navigate_main_window(app, &url);
-            }
+            *state.current.lock() = Some(id);
             return Ok(id);
         }
     }
@@ -1091,7 +1096,6 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
     let app_stderr = app.clone();
     let instances_ref = state.instances.clone();
     let current_ref = state.current.clone();
-    let start_url_ref = state.start_url.clone();
     thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines().map_while(Result::ok) {
@@ -1116,7 +1120,6 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
         let app_exit = app_stderr.clone();
         let instances_exit = instances_ref.clone();
         let current_exit = current_ref.clone();
-        let start_url = start_url_ref.clone();
         thread::spawn(move || {
             let deadline = Instant::now() + Duration::from_secs(10);
             loop {
@@ -1143,6 +1146,8 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
                 thread::sleep(Duration::from_millis(250));
             }
             let _ = app_exit.emit("cli:exit", serde_json::json!({ "id": id }));
+            // The container page removes the iframe when the workspace dies.
+            let _ = app_exit.emit("workspace-closed", serde_json::json!({ "id": id }));
             // Detect a crash: the process exited while it was the active
             // workspace and never produced a ready dashboard URL. Surface a
             // toast so the user knows what happened — previously a hung child
@@ -1157,9 +1162,9 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
                 }
             };
             if was_current {
-                if let Some(url) = start_url.lock().clone() {
-                    navigate_to(&app_exit, url);
-                }
+                // The container page owns the workspace UI now — it watches
+                // cli:exit / workspace-closed and removes the iframe. The
+                // webview itself never navigates back to the splash.
                 // `found_url` is set by the stdout/stderr watcher when the
                 // dashboard URL was successfully registered. If the CLI exits
                 // before that, it's a crash.
@@ -1217,18 +1222,6 @@ fn kill_process_tree(pid: u32) {
         let _ = Command::new("pkill")
             .args(["-KILL", "-P", &pid.to_string()])
             .status();
-    }
-}
-
-fn navigate_to(app: &AppHandle, url: tauri::Url) {
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.navigate(url);
-    }
-}
-
-fn navigate_main_window(app: &AppHandle, url: &str) {
-    if let Ok(parsed) = url.parse::<tauri::Url>() {
-        navigate_to(app, parsed);
     }
 }
 
@@ -1296,24 +1289,10 @@ fn main() {
                 }
             }
 
-            let app_handle = app.handle().clone();
-            app.listen("cli:url", move |event| {
-                // Payload: {"id": N, "url": "http://…/dashboard"}.
-                let v: serde_json::Value =
-                    serde_json::from_str(event.payload()).unwrap_or_default();
-                if let Some(url) = v.get("url").and_then(|u| u.as_str()) {
-                    if !url.is_empty() {
-                        navigate_main_window(&app_handle, url);
-                    }
-                }
-            });
-
-            // Capture the splash URL so a dead instance can navigate back to it.
-            if let Some(w) = app.get_webview_window("main") {
-                if let Ok(url) = w.url() {
-                    *app.state::<DesktopState>().start_url.lock() = Some(url);
-                }
-            }
+            // Note: no cli:url navigation anymore — container.html hosts one
+            // iframe per workspace and switches by show/hide. The cli:url
+            // event itself is emitted by register_dashboard_url and consumed
+            // by the container page.
 
             // Startup CLI update check (native dialog, shell-owned — does
             // not depend on the dashboard bundle).
