@@ -46,7 +46,7 @@
         ; canonical location (winget installed it elsewhere), fall back to
         ; hiding the checkbox — see MyFinishShow in template.nsi.
         ${If} ${FileExists} "$LOCALAPPDATA\Programs\nodejs\node.exe"
-          ReadRegExpandStr HKCU "Environment" "Path" $2
+          ReadRegStr $2 HKCU "Environment" "Path"
           ${If} $2 == ""
             StrCpy $2 "$LOCALAPPDATA\Programs\nodejs"
           ${Else}
