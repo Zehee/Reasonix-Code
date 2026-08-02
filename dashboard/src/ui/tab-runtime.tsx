@@ -65,6 +65,8 @@ import { useDisableTextAssist } from "./useDisableTextAssist";
 import { MainHead, EmptyState, NeedsSetupView } from "./app-views";
 import { TabRuntime as TabRuntimeType } from "./tab-runtime";
 import { WorkspaceTab } from "./workspace-tabs";
+import { WorkdirInputModal } from "./workdir-input-modal";
+import { WorkdirPop } from "./workdir-pop";
 import type { ChatMessage } from "../types";
 import type { SessionInfo } from "../App";
 
