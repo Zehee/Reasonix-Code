@@ -12,6 +12,15 @@
   "app": {
     "withGlobalTauri": true,
     "macOSPrivateApi": true,
+    "security": {
+      "dangerousRemoteDomainIpcAccess": [
+        {
+          "scheme": "http",
+          "domain": "127.0.0.1",
+          "windows": ["main"]
+        }
+      ]
+    },
     "windows": [
       {
         "title": "Reasonix Code",
