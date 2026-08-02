@@ -899,7 +899,6 @@ fn register_dashboard_url(
         "workspace-opened",
         serde_json::json!({ "id": id, "url": url }),
     );
-    rebuild_menu(app);
 }
 
 /// Start a new workspace instance, or just navigate to it if already running.
@@ -952,7 +951,6 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
     });
     *state.current.lock() = Some(id);
     save_last_workspace(workspace);
-    rebuild_menu(app);
 
     // The ink TUI prints a `/dashboard  →  URL` line to STDOUT once the server
     // is up — but piped output wraps to 80 columns and truncates the token, so
@@ -1039,7 +1037,6 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
                 thread::sleep(Duration::from_millis(250));
             }
             let _ = app_exit.emit("cli:exit", serde_json::json!({ "id": id }));
-            rebuild_menu(&app_exit);
             // Detect a crash: the process exited while it was the active
             // workspace and never produced a ready dashboard URL. Surface a
             // toast so the user knows what happened — previously a hung child
@@ -1074,7 +1071,7 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
     Ok(id)
 }
 
-/// Close a workspace instance by id: kill its process tree and rebuild the menu.
+/// Close a workspace instance by id: kill its process tree.
 #[tauri::command]
 fn workspace_close(app: AppHandle, state: State<DesktopState>, id: u64) -> Result<(), String> {
     let pid = {
@@ -1091,7 +1088,6 @@ fn workspace_close(app: AppHandle, state: State<DesktopState>, id: u64) -> Resul
     };
     kill_process_tree(pid);
     let _ = app.emit("workspace-closed", serde_json::json!({ "id": id }));
-    rebuild_menu(&app);
     Ok(())
 }
 
@@ -1127,27 +1123,6 @@ fn navigate_to(app: &AppHandle, url: tauri::Url) {
 fn navigate_main_window(app: &AppHandle, url: &str) {
     if let Ok(parsed) = url.parse::<tauri::Url>() {
         navigate_to(app, parsed);
-    }
-}
-
-/// Rebuild the window menu. With decorations:true the menu bar is drawn
-/// on Windows, and its accelerators fire regardless — Ctrl+Shift+O works
-/// everywhere. Workspace switching is now handled by the React tabs in
-/// the dashboard title bar, so the menu only keeps a minimal Quit entry.
-fn rebuild_menu(app: &AppHandle) {
-    use tauri::menu::{MenuBuilder, MenuItemBuilder};
-
-    let Ok(quit) = MenuItemBuilder::with_id("quit", "Quit")
-        .accelerator("CmdOrCtrl+Q")
-        .build(app)
-    else {
-        return;
-    };
-    let Ok(menu) = MenuBuilder::new(app).item(&quit).build() else {
-        return;
-    };
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.set_menu(menu);
     }
 }
 
@@ -1191,11 +1166,6 @@ fn main() {
             last_workspace,
             workspace_close
         ])
-        .on_menu_event(|app, event| {
-            if event.id().0 == "quit" {
-                app.exit(0);
-            }
-        })
         .setup(|app| {
             // #1119: Updater pubkey is empty — auto-updates will not be
             // cryptographically verified. Generate a keypair before release:
@@ -1237,7 +1207,6 @@ fn main() {
                     *app.state::<DesktopState>().start_url.lock() = Some(url);
                 }
             }
-            rebuild_menu(app.handle());
 
             if let Some(w) = app.get_webview_window("main") {
                 // HiDPI fit: the JSON config asks for 1024x720 logical px.

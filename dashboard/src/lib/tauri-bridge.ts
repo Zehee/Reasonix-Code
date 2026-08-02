@@ -18,8 +18,8 @@ const hasTauriApi = typeof window !== "undefined" && !!(window as any).__TAURI__
 // REST/SSE bridge, even if it happens to be loaded inside the Tauri webview.
 const MODE: "tauri" | "server" | "mock" = isServerMode ? "server" : hasTauriApi ? "tauri" : "mock";
 
-/** Web vs. native dispatcher hint — `true` whenever the dashboard is served by the CLI server, false in the Tauri desktop wrapper where native dialogs work. */
-export const isWebRuntime = isServerMode;
+/** Web vs. native dispatcher hint — `true` only when the dashboard is served by the CLI server in a plain browser (no Tauri shell). In the desktop app the page is also server-mode, but `window.__TAURI__` is present, so native commands (pick_workspace, dialogs, …) must stay reachable. */
+export const isWebRuntime = isServerMode && !hasTauriApi;
 
 console.log(`[tauri-bridge] mode=${MODE}`);
 
