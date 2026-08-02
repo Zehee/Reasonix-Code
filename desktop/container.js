@@ -1,7 +1,10 @@
 // Container page: iframes = workspace tabs. The main webview never
 // navigates; each workspace runs as one background CLI process and its
-// dashboard is loaded into a dedicated iframe. Switching tabs is pure
-// show/hide, so every workspace keeps its session/SSE state alive.
+// dashboard lives in a dedicated iframe. Switching tabs is show/hide.
+//
+// Closing a tab hides its iframe (DOM kept, dashboard/SSE state intact)
+// and the CLI process stays alive — reopening the same folder matches by
+// the absolute path hook on the iframe (data-path) and just un-hides it.
 
 const tauri = typeof window !== "undefined" ? window.__TAURI__ : undefined;
 
@@ -43,43 +46,72 @@ function baseName(path) {
 }
 
 // ── Frame/tab registry ──────────────────────────────────────────
-// Map<id, { id, path, url, iframe, tabEl }>
+// Map<id, { id, path, url, iframe, tabEl, hidden }>
 const frames = new Map();
-// Tabs the user closed. The underlying CLI process stays alive (hot
-// reopen: picking the same folder reuses it instantly); everything is
-// killed together when the shell exits.
-const hiddenIds = new Set();
 let activeId = null;
 
+function makeTabEl(f) {
+  const tabEl = document.createElement("button");
+  tabEl.type = "button";
+  tabEl.className = "ws-tab";
+  tabEl.dataset.path = f.path || "";
+  tabEl.innerHTML = `<span class="name"></span><span class="x" title="Close tab (workspace keeps running)">×</span>`;
+  tabEl.querySelector(".name").textContent = baseName(f.path);
+  tabEl.addEventListener("click", () => activate(f.id));
+  tabEl.querySelector(".x").addEventListener("click", (e) => {
+    e.stopPropagation();
+    hideFrame(f.id);
+  });
+  return tabEl;
+}
+
+function ensureTab(f) {
+  if (f.tabEl && f.tabEl.isConnected) return;
+  f.tabEl = makeTabEl(f);
+  tabbarEl.insertBefore(f.tabEl, tabbarEl.querySelector(".grow"));
+}
+
 function addFrame(ws) {
-  if (hiddenIds.has(ws.id)) hiddenIds.delete(ws.id);
+  // Hot reopen: same absolute path -> restore the hidden iframe as-is
+  // (dashboard state, SSE, scroll — everything is still alive in it).
+  if (ws.path) {
+    const hidden = [...frames.values()].find((f) => f.hidden && f.path === ws.path);
+    if (hidden) {
+      frames.delete(hidden.id);
+      const restored = {
+        ...hidden,
+        id: ws.id,
+        url: ws.url ?? hidden.url,
+        hidden: false,
+      };
+      restored.iframe.dataset.wsId = String(ws.id);
+      restored.iframe.dataset.path = ws.path;
+      if (ws.url && ws.url !== restored.url) restored.iframe.src = frameSrc(ws.url);
+      frames.set(ws.id, restored);
+      ensureTab(restored);
+      activate(ws.id);
+      return;
+    }
+  }
   if (frames.has(ws.id)) {
     updateFrame(ws);
+    ensureTab(frames.get(ws.id));
     return;
   }
   const iframe = document.createElement("iframe");
   iframe.className = "ws-frame";
-  iframe.setAttribute("data-ws-id", String(ws.id));
+  iframe.dataset.wsId = String(ws.id);
+  iframe.dataset.path = ws.path || ""; // absolute path hook for pairing
   if (ws.url) iframe.src = frameSrc(ws.url);
-  else iframe.srcdoc =
-    '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:system-ui;font-size:13px;color:#8a9198">Starting…</div>';
+  else
+    iframe.srcdoc =
+      '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:system-ui;font-size:13px;color:#8a9198">Starting…</div>';
   framesEl.appendChild(iframe);
 
-  const tabEl = document.createElement("button");
-  tabEl.type = "button";
-  tabEl.className = "ws-tab";
-  tabEl.innerHTML = `<span class="name"></span><span class="x" title="Close tab (workspace keeps running)">×</span>`;
-  tabEl.querySelector(".name").textContent = baseName(ws.path);
-  tabEl.addEventListener("click", () => activate(ws.id));
-  tabEl.querySelector(".x").addEventListener("click", (e) => {
-    e.stopPropagation();
-    hideFrame(ws.id);
-  });
-  tabbarEl.insertBefore(tabEl, tabbarEl.querySelector(".grow"));
-
-  frames.set(ws.id, { id: ws.id, path: ws.path, url: ws.url, iframe, tabEl });
+  const f = { id: ws.id, path: ws.path, url: ws.url, iframe, tabEl: null, hidden: false };
+  frames.set(ws.id, f);
+  ensureTab(f);
   renderEmptyState();
-  return frames.get(ws.id);
 }
 
 function updateFrame(ws) {
@@ -87,42 +119,43 @@ function updateFrame(ws) {
   if (!f) return;
   if (ws.path && ws.path !== f.path) {
     f.path = ws.path;
-    f.tabEl.querySelector(".name").textContent = baseName(ws.path);
+    f.iframe.dataset.path = ws.path;
+    if (f.tabEl) {
+      f.tabEl.dataset.path = ws.path;
+      f.tabEl.querySelector(".name").textContent = baseName(ws.path);
+    }
   }
-  // Instance became ready after being added as "Starting…"
   if (ws.url && ws.url !== f.url) {
     f.url = ws.url;
     f.iframe.src = frameSrc(ws.url);
   }
 }
 
+/** Remove a frame entirely (workspace really died). */
 function removeFrame(id) {
   const f = frames.get(id);
   if (!f) return;
-  hiddenIds.delete(id);
   f.iframe.remove();
-  f.tabEl.remove();
+  f.tabEl?.remove();
   frames.delete(id);
   if (activeId === id) {
-    const ids = [...frames.keys()];
-    activeId = ids.length ? ids[ids.length - 1] : null;
+    const visible = [...frames.values()].filter((x) => !x.hidden);
+    activeId = visible.length ? visible[visible.length - 1].id : null;
     if (activeId) activate(activeId);
     else renderEmptyState();
   }
 }
 
-/** Close a tab without killing its workspace: remove the iframe, keep the
- *  CLI process in the background so reopening the same folder hot-resumes. */
+/** Close a tab: hide the iframe, keep the CLI process + dashboard alive. */
 function hideFrame(id) {
   const f = frames.get(id);
   if (!f) return;
-  f.iframe.remove();
-  f.tabEl.remove();
-  frames.delete(id);
-  hiddenIds.add(id);
+  f.hidden = true;
+  f.iframe.style.display = "none";
+  f.tabEl?.remove();
   if (activeId === id) {
-    const ids = [...frames.keys()];
-    activeId = ids.length ? ids[ids.length - 1] : null;
+    const visible = [...frames.values()].filter((x) => !x.hidden);
+    activeId = visible.length ? visible[visible.length - 1].id : null;
     if (activeId) activate(activeId);
     else renderEmptyState();
   }
@@ -131,19 +164,15 @@ function hideFrame(id) {
 function activate(id) {
   activeId = id;
   for (const [fid, f] of frames) {
-    const on = fid === id;
-    f.iframe.style.display = on ? "" : "none";
-    f.tabEl.classList.toggle("active", on);
+    const show = fid === id;
+    f.iframe.style.display = show ? "" : "none";
+    if (f.tabEl) f.tabEl.classList.toggle("active", show);
   }
   emptyEl.classList.remove("show");
 }
 
 function renderEmptyState() {
-  if (frames.size === 0) {
-    emptyEl.classList.add("show");
-  } else {
-    emptyEl.classList.remove("show");
-  }
+  emptyEl.classList.toggle("show", frames.size === 0);
 }
 
 // ── Workspace creation ──────────────────────────────────────────
@@ -165,7 +194,6 @@ async function pickWorkspace() {
 
 // ── Boot ────────────────────────────────────────────────────────
 async function init() {
-  // Show the shell versions in the tab bar (desktop build + CLI).
   try {
     const build = await invoke("desktop_build");
     const env = await invoke("check_environment");
@@ -177,7 +205,6 @@ async function init() {
     /* non-Tauri shell — skip badge */
   }
 
-  // Restore running instances.
   let list = [];
   try {
     list = await invoke("list_workspaces");
@@ -189,7 +216,6 @@ async function init() {
     const first = list.find((w) => w.url) ?? list[0];
     activate(first.id);
   } else {
-    // No instance yet — auto-resume the last workspace, else show the picker.
     try {
       const last = await invoke("last_workspace");
       if (last) spawnAt(last);
@@ -215,10 +241,9 @@ listen("workspace-closed", (payload) => {
   if (payload?.id != null) removeFrame(payload.id);
 });
 listen("cli:exit", (payload) => {
-  // The iframe's server is gone; if it's the active one, show the picker.
   if (payload?.id != null && activeId === payload.id) {
-    const ids = [...frames.keys()];
-    if (ids.length) activate(ids[ids.length - 1]);
+    const visible = [...frames.values()].filter((x) => !x.hidden && x.id !== payload.id);
+    if (visible.length) activate(visible[visible.length - 1].id);
     else renderEmptyState();
   }
 });
