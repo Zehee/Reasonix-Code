@@ -42,6 +42,27 @@ jobs:
           name: reasonix-code-desktop-windows
           path: reasonix-code-desktop-windows-build${{ github.run_number }}.exe
 
+      - name: Archive previous desktop assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          repo="${{ github.repository }}"
+          # Create the archive release on first run.
+          gh release view desktop-archive -R "$repo" >/dev/null 2>&1 || \
+            gh release create desktop-archive -R "$repo" --title "Desktop build archive" >/dev/null 2>&1 || true
+          # Move every non-current asset on desktop-latest into desktop-archive.
+          for a in $(gh api "repos/$repo/releases/tags/desktop-latest" --jq '.assets[].name' 2>/dev/null || true); do
+            case "$a" in
+              *build${{ github.run_number }}.*) continue ;; # this run's own files
+            esac
+            rm -rf /tmp/arch && mkdir -p /tmp/arch
+            gh release download desktop-latest -R "$repo" -p "$a" --dir /tmp/arch --clobber >/dev/null 2>&1 || true
+            gh release upload desktop-archive -R "$repo" "/tmp/arch/$a" --clobber >/dev/null 2>&1 || true
+            gh release delete-asset desktop-latest -R "$repo" "$a" --yes >/dev/null 2>&1 || true
+          done
+
       - name: Publish Windows installer to desktop release
         uses: softprops/action-gh-release@v2
         with:
@@ -79,6 +100,27 @@ jobs:
         with:
           name: reasonix-code-desktop-macos
           path: reasonix-code-desktop-macos-build${{ github.run_number }}.dmg
+
+      - name: Archive previous desktop assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          repo="${{ github.repository }}"
+          # Create the archive release on first run.
+          gh release view desktop-archive -R "$repo" >/dev/null 2>&1 || \
+            gh release create desktop-archive -R "$repo" --title "Desktop build archive" >/dev/null 2>&1 || true
+          # Move every non-current asset on desktop-latest into desktop-archive.
+          for a in $(gh api "repos/$repo/releases/tags/desktop-latest" --jq '.assets[].name' 2>/dev/null || true); do
+            case "$a" in
+              *build${{ github.run_number }}.*) continue ;; # this run's own files
+            esac
+            rm -rf /tmp/arch && mkdir -p /tmp/arch
+            gh release download desktop-latest -R "$repo" -p "$a" --dir /tmp/arch --clobber >/dev/null 2>&1 || true
+            gh release upload desktop-archive -R "$repo" "/tmp/arch/$a" --clobber >/dev/null 2>&1 || true
+            gh release delete-asset desktop-latest -R "$repo" "$a" --yes >/dev/null 2>&1 || true
+          done
 
       - name: Publish macOS installer to desktop release
         uses: softprops/action-gh-release@v2
@@ -127,6 +169,27 @@ jobs:
         with:
           name: reasonix-code-desktop-linux
           path: reasonix-code-desktop-linux-build${{ github.run_number }}.deb
+
+      - name: Archive previous desktop assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          repo="${{ github.repository }}"
+          # Create the archive release on first run.
+          gh release view desktop-archive -R "$repo" >/dev/null 2>&1 || \
+            gh release create desktop-archive -R "$repo" --title "Desktop build archive" >/dev/null 2>&1 || true
+          # Move every non-current asset on desktop-latest into desktop-archive.
+          for a in $(gh api "repos/$repo/releases/tags/desktop-latest" --jq '.assets[].name' 2>/dev/null || true); do
+            case "$a" in
+              *build${{ github.run_number }}.*) continue ;; # this run's own files
+            esac
+            rm -rf /tmp/arch && mkdir -p /tmp/arch
+            gh release download desktop-latest -R "$repo" -p "$a" --dir /tmp/arch --clobber >/dev/null 2>&1 || true
+            gh release upload desktop-archive -R "$repo" "/tmp/arch/$a" --clobber >/dev/null 2>&1 || true
+            gh release delete-asset desktop-latest -R "$repo" "$a" --yes >/dev/null 2>&1 || true
+          done
 
       - name: Publish Linux installer to desktop release
         uses: softprops/action-gh-release@v2
