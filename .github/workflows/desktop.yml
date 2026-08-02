@@ -28,6 +28,8 @@ jobs:
 
       - name: Build Tauri app
         working-directory: desktop
+        env:
+          DESKTOP_BUILD: ${{ github.run_number }}
         run: npm run tauri build
 
       - name: Rename installer with build number
@@ -88,6 +90,8 @@ jobs:
 
       - name: Build Tauri app
         working-directory: desktop
+        env:
+          DESKTOP_BUILD: ${{ github.run_number }}
         run: npm run tauri build
 
       - name: Rename installer with build number
@@ -157,6 +161,8 @@ jobs:
 
       - name: Build Tauri app
         working-directory: desktop
+        env:
+          DESKTOP_BUILD: ${{ github.run_number }}
         run: npm run tauri build
 
       - name: Rename installer with build number

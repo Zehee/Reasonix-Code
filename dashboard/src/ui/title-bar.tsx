@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { t, useLang } from "../i18n";
 import { I } from "../icons";
@@ -52,6 +53,25 @@ export function TitleBar({
   useLang();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
+  // Desktop shell build number + installed CLI version, shown as a small
+  // badge on the right side of the title bar.
+  const [ver, setVer] = useState<{ build: string; cli: string } | null>(null);
+  useEffect(() => {
+    let closed = false;
+    void (async () => {
+      try {
+        const build = await invoke("desktop_build");
+        const env = (await invoke("check_environment")) as { cli_version?: string } | undefined;
+        if (closed) return;
+        setVer({ build: String(build ?? "dev"), cli: String(env?.cli_version ?? "") });
+      } catch {
+        /* non-Tauri shell — no badge */
+      }
+    })();
+    return () => {
+      closed = true;
+    };
+  }, []);
   const moreWrapRef = useRef<HTMLDivElement>(null);
   const isMac = document.documentElement.dataset.platform === "macos";
   const isWeb = document.documentElement.dataset.web === "true";
@@ -167,6 +187,12 @@ export function TitleBar({
       <span className="grow" data-tauri-drag-region />
 
       <div className="tb-right">
+        {ver ? (
+          <span className="tb-version" title="Desktop build · CLI version">
+            {ver.build === "dev" ? "dev" : `build ${ver.build}`}
+            {ver.cli ? ` · cli ${ver.cli}` : ""}
+          </span>
+        ) : null}
         <button
           type="button"
           className="iconbtn"

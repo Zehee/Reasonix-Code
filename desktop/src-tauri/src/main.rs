@@ -294,6 +294,14 @@ fn latest_cli_version() -> Option<String> {
     npm_view_latest_version()
 }
 
+/// Desktop shell build number — injected by CI (desktop.yml sets
+/// DESKTOP_BUILD), "dev" for local builds. Displayed in the dashboard
+/// title bar next to the CLI version.
+#[tauri::command]
+fn desktop_build() -> String {
+    option_env!("DESKTOP_BUILD").unwrap_or("dev").to_string()
+}
+
 /// `npm view reasonix-code version` — the latest published version.
 fn npm_view_latest_version() -> Option<String> {
     let mut cmd = if cfg!(windows) {
@@ -1255,6 +1263,7 @@ fn main() {
             write_text_file,
             check_environment,
             latest_cli_version,
+            desktop_build,
             install_cli,
             install_node,
             launch_backend,

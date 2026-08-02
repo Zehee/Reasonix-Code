@@ -99,7 +99,11 @@ function versionLessThan(a, b) {
 
 async function fetchLatestCliVersion() {
   try {
-    const v = await tauri.core.invoke("latest_cli_version");
+    // npm view is a network round-trip; never let it block the splash.
+    const v = await Promise.race([
+      tauri.core.invoke("latest_cli_version"),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
+    ]);
     return typeof v === "string" ? v.replace(/^v/, "") : null;
   } catch {
     return null;
