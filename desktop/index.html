@@ -12,12 +12,12 @@
     <style>
       :root {
         --brand: #339933;
-        --brand-soft: #e8f3e8;
-        --ink: #16181a;
-        --ink-2: #5c636a;
-        --ink-3: #8a9198;
-        --danger: #e5484d;
-        --line: #e3e6e8;
+        --brand-bright: #5ec86e;
+        --ink: #e5e5e5;
+        --ink-2: #9fb3a6;
+        --ink-3: #6d7a72;
+        --danger: #ff6b6b;
+        --line: #2a2f2c;
       }
 
       * {
@@ -30,10 +30,10 @@
         padding: 0;
         width: 100%;
         height: 100%;
-        background: #ffffff;
+        background: radial-gradient(1200px 800px at 50% -10%, #12281a 0%, #0b0b0b 55%);
         color: var(--ink);
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          "Helvetica Neue", Arial, sans-serif;
+          "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -153,22 +153,22 @@
         transform: translateY(1px);
       }
       button.primary {
-        background: var(--brand);
+        background: linear-gradient(135deg, #3aa544, #2d8a38);
         color: #ffffff;
-        box-shadow: 0 6px 18px -6px rgba(51, 153, 51, 0.45);
+        box-shadow: 0 8px 24px -8px rgba(51, 153, 51, 0.55);
       }
       button.primary:hover {
-        background: #2c8630;
-        box-shadow: 0 8px 22px -6px rgba(51, 153, 51, 0.5);
+        background: linear-gradient(135deg, #43b54e, #32963d);
+        box-shadow: 0 10px 28px -8px rgba(51, 153, 51, 0.65);
       }
       button.secondary {
-        background: #ffffff;
-        color: var(--brand);
+        background: transparent;
+        color: #8fa396;
         border-color: var(--line);
       }
       button.secondary:hover {
-        background: var(--brand-soft);
-        border-color: rgba(51, 153, 51, 0.35);
+        background: rgba(255, 255, 255, 0.04);
+        color: #c8d4cc;
       }
 
       @keyframes rise {
@@ -190,7 +190,7 @@
         <svg id="_图层_1" data-name="图层 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254">
           <defs>
             <style>
-              .cls-1 { fill: #ffffff; }
+              .cls-1 { fill: #0b0b0b; }
               .cls-2 { fill: #339933; }
             </style>
           </defs>

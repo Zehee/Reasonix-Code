@@ -226,14 +226,14 @@ function initParticles() {
   }
   resize();
   window.addEventListener("resize", resize);
-  const COUNT = 42;
+  const COUNT = 36;
   for (let i = 0; i < COUNT; i++) {
     parts.push({
       x: Math.random() * W,
       y: Math.random() * H,
-      r: Math.random() * 1.8 + 0.6,
-      v: Math.random() * 0.28 + 0.08,
-      o: Math.random() * 0.45 + 0.12,
+      r: Math.random() * 2.2 + 1.2,
+      v: Math.random() * 0.35 + 0.12,
+      o: Math.random() * 0.35 + 0.35,
       p: Math.random() * Math.PI * 2,
     });
   }
@@ -242,14 +242,14 @@ function initParticles() {
     for (const p of parts) {
       p.y -= p.v;
       p.p += 0.01;
-      if (p.y < -4) {
-        p.y = H + 4;
+      if (p.y < -6) {
+        p.y = H + 6;
         p.x = Math.random() * W;
       }
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
       ctx.fillStyle =
-        "rgba(76, 175, 80, " + p.o * (0.55 + 0.45 * Math.sin(p.p)) + ")";
+        "rgba(94, 200, 110, " + p.o * (0.6 + 0.4 * Math.sin(p.p)) + ")";
       ctx.fill();
     }
     requestAnimationFrame(tick);
