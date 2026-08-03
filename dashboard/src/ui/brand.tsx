@@ -1,26 +1,27 @@
+import { useId } from "react";
+
 // Two brand logo variants:
 //
-// BrandLogo — the frosted-glass in-app version: no white square, just the
-// Rx glyph cropped to its bounding box, filled near-white and sitting on a
-// translucent blurred chip. Used inside the dashboard (empty state, title
-// bar, about dialog) where the theme is dark.
+// BrandLogo — the frosted-glass in-app mark: just the hollow Rx glyph,
+// filled with a translucent white vertical gradient (glass) plus a hairline
+// highlight stroke, so the background shows through. Used inside the
+// dashboard (empty state, title bar, about dialog).
 //
 // BrandLogoGreen — the full app-icon version (white rounded square + green
 // Rx glyph, matching desktop/icons/source.svg). Used on the white splash
 // screen, where the frosted variant would be invisible.
 
-const RX_PATHS = (
-  <g fill="currentColor">
-    <path d="M657.07,556.02c4.59,3.86,10.93,5.3,17.45,2.32,2.59-1.18,4.3-4.19,3.22-7.14-8.6-23.51-32.86-40.71-42.55-27.41-1.18,1.63-1.14,3.74-.24,5.03.71,1.02,2.14,1.26,3.99.88,5.89-1.22,13.21,2.87,12.52,9.44-.72,6.85.66,12.72,5.61,16.89Z" />
-    <path d="M798.75,598.8c22.21-24.86,36.14-54.9,40.99-87.98,11.07-72.3-24.83-138.35-92.45-166.33-23.77-9.56-48.19-13.62-74.13-13.37l-251.41.07.02,481.78,123.58-.1v-169.44c-4.09-1.52-6.91-2.78-6.91-2.78-26.86-12.28-47.42-33.58-58.71-60.25-14.41-34.05-9.96-72.23,12.69-101.26,22.56-28.2,53.39-37.16,88.72-32.2,13.05,1.83,27-13.49,53.57-10.57,1.79.2,3.58,1.54,3.76,2.6.62,3.63-9.65,5.57-9.66,15.48,0,4.17,1.87,9,5.81,11.76,13.54,9.5,25.27,20.18,37.54,31.22,5.96,5.36,26.19,20.45,31.34,8.16,3-7.17,4.99-14.67,6.98-22.28.98-3.77-1.1-6.02-4.14-7.82-20.87-12.35-28.73-38.11-20.57-60.92.79-2.2,2.82-3.27,4.56-3.34,7.01-.3,3.28,12.7,20.59,18.03,16.44,5.06,16.94,18.73,24.93,13.29,18.63-12.7,25.34-2.3,42.61-18.58,1.78-1.67,4.83-1.79,6.68-.51,1.14.79,2.12,2.84,2.03,5.22-.51,13.75-5.87,26.88-15.26,36.97-17.76,19.08-32.69,9.95-33.65,23.31-2.83,39.22-15.66,78.37-43.49,106.85-.89.91-1.43,2.22-1.28,3.1.16.92,1.26,1.82,2.46,2.23l23.45,7.97c3.32,1.13,5.72,4.1,5.3,7.27-.37,2.76-2.57,5.2-5.74,6.25-17.21,5.7-35.7,4.7-53.23-.6-23.19,19.53-51.68,29.59-82.74,28.38l45.08,62.23,73.54,100.4,146.79-.2-124.45-168.04c28.97-8.55,54.42-23.87,74.8-45.98Z" />
-    <circle cx="640.36" cy="538.21" r="3.47" />
-    <path d="M504.6,517.71c-7.75.94-12.41,6.5-11.66,14.8,5.25,57.86,58.62,105.22,118.44,93.8,12.73-2.43,24.33-7.49,33.74-16.99-20.35-17.53-30.27-35.39-47.01-52.99-23.95-25.18-58.04-42.91-93.5-38.62Z" />
-  </g>
-);
+const RX_PATH_1 =
+  "M657.07,556.02c4.59,3.86,10.93,5.3,17.45,2.32,2.59-1.18,4.3-4.19,3.22-7.14-8.6-23.51-32.86-40.71-42.55-27.41-1.18,1.63-1.14,3.74-.24,5.03.71,1.02,2.14,1.26,3.99.88,5.89-1.22,13.21,2.87,12.52,9.44-.72,6.85.66,12.72,5.61,16.89Z";
+const RX_PATH_2 =
+  "M798.75,598.8c22.21-24.86,36.14-54.9,40.99-87.98,11.07-72.3-24.83-138.35-92.45-166.33-23.77-9.56-48.19-13.62-74.13-13.37l-251.41.07.02,481.78,123.58-.1v-169.44c-4.09-1.52-6.91-2.78-6.91-2.78-26.86-12.28-47.42-33.58-58.71-60.25-14.41-34.05-9.96-72.23,12.69-101.26,22.56-28.2,53.39-37.16,88.72-32.2,13.05,1.83,27-13.49,53.57-10.57,1.79.2,3.58,1.54,3.76,2.6.62,3.63-9.65,5.57-9.66,15.48,0,4.17,1.87,9,5.81,11.76,13.54,9.5,25.27,20.18,37.54,31.22,5.96,5.36,26.19,20.45,31.34,8.16,3-7.17,4.99-14.67,6.98-22.28.98-3.77-1.1-6.02-4.14-7.82-20.87-12.35-28.73-38.11-20.57-60.92.79-2.2,2.82-3.27,4.56-3.34,7.01-.3,3.28,12.7,20.59,18.03,16.44,5.06,16.94,18.73,24.93,13.29,18.63-12.7,25.34-2.3,42.61-18.58,1.78-1.67,4.83-1.79,6.68-.51,1.14.79,2.12,2.84,2.03,5.22-.51,13.75-5.87,26.88-15.26,36.97-17.76,19.08-32.69,9.95-33.65,23.31-2.83,39.22-15.66,78.37-43.49,106.85-.89.91-1.43,2.22-1.28,3.1.16.92,1.26,1.82,2.46,2.23l23.45,7.97c3.32,1.13,5.72,4.1,5.3,7.27-.37,2.76-2.57,5.2-5.74,6.25-17.21,5.7-35.7,4.7-53.23-.6-23.19,19.53-51.68,29.59-82.74,28.38l45.08,62.23,73.54,100.4,146.79-.2-124.45-168.04c28.97-8.55,54.42-23.87,74.8-45.98Z";
+const RX_CIRCLE = "640.36,538.21";
+const RX_PATH_3 =
+  "M504.6,517.71c-7.75.94-12.41,6.5-11.66,14.8,5.25,57.86,58.62,105.22,118.44,93.8,12.73-2.43,24.33-7.49,33.74-16.99-20.35-17.53-30.27-35.39-47.01-52.99-23.95-25.18-58.04-42.91-93.5-38.62Z";
 
-// In-app frosted-glass mark: Rx glyph alone (no white square), cropped to
-// its bounding box. Color follows the current text color; the glass chip
-// styling lives in .brand-glass (styles.css).
+// In-app frosted-glass mark: the hollow Rx glyph alone, cropped to its
+// bounding box. Fill is a translucent white gradient (glass) with a
+// hairline highlight stroke — the background shows through the glyph.
 export function BrandLogo({
   size = 56,
   className,
@@ -28,16 +29,35 @@ export function BrandLogo({
   size?: number;
   className?: string;
 }) {
+  const gid = useId();
   return (
-    <span
-      className={`brand-glass ${className ?? ""}`}
-      style={{ width: size, height: size, borderRadius: Math.round(size * 0.26) }}
+    <svg
+      width={size}
+      height={size}
+      viewBox="452 282 366 366"
+      className={className}
       aria-hidden="true"
+      style={{ display: "block" }}
     >
-      <svg width={size * 0.72} height={size * 0.72} viewBox="452 282 366 366">
-        {RX_PATHS}
-      </svg>
-    </span>
+      <defs>
+        <linearGradient id={`${gid}-glass`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="rgba(255,255,255,0.55)" />
+          <stop offset="0.55" stopColor="rgba(255,255,255,0.28)" />
+          <stop offset="1" stopColor="rgba(255,255,255,0.14)" />
+        </linearGradient>
+      </defs>
+      <g
+        fill={`url(#${gid}-glass)`}
+        stroke="rgba(255,255,255,0.65)"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      >
+        <path d={RX_PATH_1} />
+        <path d={RX_PATH_2} />
+        <circle cx="640.36" cy="538.21" r="3.47" />
+        <path d={RX_PATH_3} />
+      </g>
+    </svg>
   );
 }
 
@@ -67,7 +87,12 @@ export function BrandLogoGreen({
         ry="212.47"
         fill="#fff"
       />
-      <g fill="#339933">{RX_PATHS}</g>
+      <g fill="#339933">
+        <path d={RX_PATH_1} />
+        <path d={RX_PATH_2} />
+        <circle cx={RX_CIRCLE} r="3.47" />
+        <path d={RX_PATH_3} />
+      </g>
     </svg>
   );
 }
