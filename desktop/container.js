@@ -333,15 +333,21 @@ window.addEventListener("message", (ev) => {
   window.__lastMsg = msg.type;
 
   switch (msg.type) {
-    case "reasonix:tab-activate":
-      if (msg.id != null && frames.has(msg.id)) activate(msg.id);
+    case "reasonix:tab-activate": {
+      // The dashboard stringifies ids (String(t.id)); our frames map is
+      // keyed by numeric instance ids — normalize before lookup.
+      const tid = Number(msg.id);
+      if (Number.isFinite(tid) && frames.has(tid)) activate(tid);
       break;
+    }
     case "reasonix:tab-new":
       pickWorkspace();
       break;
-    case "reasonix:tab-close":
-      if (msg.id != null && frames.has(msg.id)) hideFrame(msg.id);
+    case "reasonix:tab-close": {
+      const tid = Number(msg.id);
+      if (Number.isFinite(tid) && frames.has(tid)) hideFrame(tid);
       break;
+    }
     case "reasonix:open-workspace":
       if (typeof msg.path === "string" && msg.path) spawnAt(msg.path);
       break;

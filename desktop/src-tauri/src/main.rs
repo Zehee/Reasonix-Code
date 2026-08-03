@@ -1114,6 +1114,7 @@ fn register_dashboard_url(
     id: u64,
     url: String,
 ) {
+    log_line(&format!("register_dashboard_url id={id} url={url}"));
     let path = {
         let mut guard = instances.lock();
         if let Some(inst) = guard.iter_mut().find(|i| i.id == id) {
@@ -1306,6 +1307,7 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
             let _ = app_exit.emit("cli:exit", serde_json::json!({ "id": id }));
             // The container page removes the iframe when the workspace dies.
             let _ = app_exit.emit("workspace-closed", serde_json::json!({ "id": id }));
+            log_line(&format!("workspace exited id={id}"));
             // Detect a crash: the process exited while it was the active
             // workspace and never produced a ready dashboard URL. Surface a
             // toast so the user knows what happened — previously a hung child
