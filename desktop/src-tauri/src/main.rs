@@ -311,8 +311,77 @@ fn set_window_title(app: AppHandle, title: String) {
 }
 
 /// Append a line to ~/.reasonix-code/desktop.log (created on demand).
-fn log_line(msg: &str) {
-    let Some(home) = std::env::var_os("USERPROFILE")
+/// ~/.reasonix/config.json — the CLI's config (REASONIX_CONFIG_PATH wins).
+fn cli_config_path() -> Option<std::path::PathBuf> {
+    if let Ok(p) = std::env::var("REASONIX_CONFIG_PATH") {
+        if !p.trim().is_empty() {
+            return Some(std::path::PathBuf::from(p));
+        }
+    }
+    let home = std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))?;
+    Some(std::path::PathBuf::from(home).join(".reasonix").join("config.json"))
+}
+
+fn config_has_api_key() -> bool {
+    if let Ok(p) = std::env::var("DEEPSEEK_API_KEY") {
+        if !p.trim().is_empty() {
+            return true;
+        }
+    }
+    let Some(path) = cli_config_path() else {
+        return false;
+    };
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return false;
+    };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return false;
+    };
+    matches!(v.get("apiKey"), Some(serde_json::Value::String(s)) if !s.trim().is_empty())
+}
+
+/// Whether the CLI has a usable API key (config.json `apiKey` or env).
+/// The shell shows an inline key setup panel when this is false.
+#[tauri::command]
+fn has_api_key() -> bool {
+    config_has_api_key()
+}
+
+/// Persist the DeepSeek API key into ~/.reasonix/config.json (preserving
+/// all other fields) and export it for child processes.
+#[tauri::command]
+fn save_api_key(key: String) -> Result<(), String> {
+    let trimmed = key.trim().to_string();
+    if trimmed.is_empty() {
+        return Err("API key 不能为空".into());
+    }
+    let Some(path) = cli_config_path() else {
+        return Err("无法定位用户目录".into());
+    };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut v: serde_json::Value = if path.exists() {
+        std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_else(|| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+    if let Some(obj) = v.as_object_mut() {
+        obj.insert("apiKey".into(), serde_json::Value::String(trimmed.clone()));
+    }
+    let text = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
+    std::fs::write(&path, text).map_err(|e| e.to_string())?;
+    // Make it available to CLIs spawned after this point.
+    std::env::set_var("DEEPSEEK_API_KEY", &trimmed);
+    log_line(&format!("saved api key to {}", path.display()));
+    Ok(())
+}
+
+fn log_line(msg: &str) {    let Some(home) = std::env::var_os("USERPROFILE")
         .or_else(|| std::env::var_os("HOME"))
         .map(std::path::PathBuf::from)
     else {
@@ -1519,6 +1588,8 @@ fn main() {
             workspace_alive,
             install_cli,
             install_node,
+            has_api_key,
+            save_api_key,
             launch_backend,
             pick_workspace,
             switch_workspace,

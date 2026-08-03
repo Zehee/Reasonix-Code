@@ -10,6 +10,10 @@ const errbarEl = document.getElementById("errbar");
 const particlesEl = document.getElementById("particles");
 const btnLast = document.getElementById("btn-last");
 const btnChoose = document.getElementById("btn-choose");
+const recentWrap = document.getElementById("recent-wrap");
+const keyPanel = document.getElementById("key-panel");
+const keyInput = document.getElementById("key-input");
+const keySave = document.getElementById("key-save");
 
 function invoke(cmd, args) {
   return tauri.core.invoke(cmd, args);
@@ -28,6 +32,43 @@ function showError(text) {
     errbarEl.style.display = "none";
   }, 6000);
 }
+
+// First-run API key setup. The CLI cannot boot without a key, so the
+// picker is replaced by an inline form; saving writes config.json via
+// the shell and re-runs the boot sequence.
+function showKeyPanel() {
+  recentWrap.style.display = "none";
+  btnChoose.style.display = "none";
+  keyPanel.hidden = false;
+  keyInput.focus();
+}
+
+async function saveApiKey() {
+  const key = keyInput.value.trim();
+  if (!key) {
+    showError("请输入 API Key");
+    keyInput.focus();
+    return;
+  }
+  keySave.disabled = true;
+  try {
+    await invoke("save_api_key", { key });
+    keyPanel.hidden = true;
+    recentWrap.style.display = "";
+    btnChoose.style.display = "";
+    keyInput.value = "";
+    await init(); // full boot with the key now in place
+  } catch (e) {
+    showError(`保存 API Key 失败：${e}`);
+  } finally {
+    keySave.disabled = false;
+  }
+}
+
+keySave.addEventListener("click", saveApiKey);
+keyInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") saveApiKey();
+});
 
 /** iframe src = dashboard URL + embed=1 (dashboard hides its own chrome). */
 function frameSrc(url) {
@@ -190,8 +231,7 @@ function activate(id) {
 
 function renderEmptyState() {
   const show = frames.size === 0;
-  emptyEl.classList.toggle("show", show);
-  // Ambient particles only make sense behind the picker; hide them once
+  emptyEl.classList.toggle("show", show);  // Ambient particles only make sense behind the picker; hide them once
   // a dashboard iframe is up.
   if (particlesEl) particlesEl.style.visibility = show ? "visible" : "hidden";
 }
@@ -277,6 +317,18 @@ initParticles();
 
 // ── Boot ────────────────────────────────────────────────────────
 async function init() {
+  // First run without an API key: the CLI can't boot (DeepSeekClient
+  // throws at construction), so show the inline key setup instead of
+  // failing workspace spawns in a loop.
+  try {
+    const hasKey = await invoke("has_api_key");
+    if (!hasKey) {
+      showKeyPanel();
+      return;
+    }
+  } catch {
+    /* probe failed — proceed; spawns will surface real errors */
+  }
   // Shell versions go in the native window title.
   try {
     const build = await invoke("desktop_build");
