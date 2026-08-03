@@ -16,7 +16,7 @@
   桌面版下载：<a href="https://github.com/Zehee/Reasonix-Code/releases/tag/desktop-latest">Windows / macOS / Linux</a>
 </p>
 
-> **说明：** 桌面版只是一个启动壳，底层调用的是命令行版 `reasonix-code code` 的同一个 TUI / Dashboard loop。因此系统里已有命令行版时，桌面版会直接复用它、只负责弹出界面；没有时会检测 Node.js / npm 环境，缺失则提示安装，然后通过 `npm install -g reasonix-code` 自动安装命令行版。桌面安装包本身只有约 2 MB。
+> **说明：** 桌面版只是一个启动壳，底层调用的是命令行版 `reasonix-code code` 的同一个 TUI / Dashboard loop。系统里已有命令行版时会直接复用它、只负责弹出界面；没有时安装器会自动安装命令行版（Node.js 缺失时先用 winget 安装 Node.js），并把 npm 全局目录写入用户 PATH，让终端直接可用 `reasonix-code`。桌面版原生支持**多工作区**：每个工作区一个 tab，进程常驻、切换即时、会话保留，关闭窗口时统一清理所有后台进程。桌面安装包只有约 3 MB。
 
 **Reasonix-Code** 是一个轻量、透明、可控的编程 agent，专为需要 AI 记住跨 session 决策的开发者设计——不需要向量数据库、知识图谱、黑盒式的"AI 记忆"，也不需要安装任何 MCP 服务器。
 
