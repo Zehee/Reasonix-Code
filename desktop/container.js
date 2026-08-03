@@ -165,10 +165,28 @@ function hideFrame(id) {
 function activate(id) {
   activeId = id;
   for (const [fid, f] of frames) {
-    f.iframe.style.display = fid === id ? "" : "none";
+    const on = fid === id;
+    // Keep open tabs alive with z-index layering instead of display:none:
+    // a display:none iframe is throttled by the browser and its SSE stream
+    // goes stale. Only closed (hidden) tabs are display:none — reopening
+    // forces a reconnect via reasonix:activate.
+    f.iframe.style.zIndex = on ? "10" : "1";
+    f.iframe.style.display = f.hidden ? "none" : "";
   }
   emptyEl.classList.remove("show");
   broadcastTabs();
+  // The activated iframe may have been display:none (closed tab reopened)
+  // or throttled — ask its dashboard to force a reconnect so it comes
+  // back online immediately.
+  const f = frames.get(id);
+  if (f && f.iframe.contentWindow) {
+    try {
+      f.iframe.contentWindow.postMessage({ type: "reasonix:activate" }, "*");
+    } catch {
+      /* frame not ready */
+    }
+  }
+  if (f) checkFrameAlive(f);
 }
 
 function renderEmptyState() {

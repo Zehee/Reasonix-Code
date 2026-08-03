@@ -10,7 +10,7 @@ import { getLang, getLangLabel, getSupportedLangs, setLang, t, useLang } from ".
 import { I } from "./icons";
 import { announceEmbedReady, isEmbed, onEmbedMessage, postToParent } from "./lib/embed-bridge";
 import { readSessionFromUrl, writeSessionToUrl } from "./lib/session-url";
-import { setActiveTabIdInBridge } from "./lib/tauri-bridge";
+import { setActiveTabIdInBridge, forceDashboardReconnect } from "./lib/tauri-bridge";
 import type {
   CheckpointVerdict,
   ChoiceVerdict,
@@ -347,6 +347,13 @@ export function App() {
     // mounted (iframe-load races the module graph); ask for a fresh copy.
     announceEmbedReady();
     return onEmbedMessage((msg) => {
+      if (msg.type === "reasonix:activate") {
+        // The container just showed this tab; the browser throttled the
+        // hidden iframe's SSE stream, so force a reconnect to come back
+        // online immediately.
+        forceDashboardReconnect();
+        return;
+      }
       if (msg.type === "reasonix:tabs" && Array.isArray(msg.tabs)) {
         const next: TabMeta[] = msg.tabs.map((t: any) => ({
           id: String(t.id),

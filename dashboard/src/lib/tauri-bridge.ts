@@ -359,6 +359,24 @@ function sseToIncoming(ev: any): Record<string, any>[] {
   return results;
 }
 
+/**
+ * The container activates a tab whose iframe was display:none — the browser
+ * throttles hidden frames, so its SSE stream may be stale or dead. Force a
+ * clean reopen (also resets the give-up flag).
+ */
+export function forceDashboardReconnect(): void {
+  if (sse) {
+    try {
+      sse.close();
+    } catch {
+      /* ignore */
+    }
+    sse = null;
+  }
+  sseGaveUp = false;
+  connectSSE();
+}
+
 function connectSSE(): void {
   if (sse) sse.close();
   const token =
