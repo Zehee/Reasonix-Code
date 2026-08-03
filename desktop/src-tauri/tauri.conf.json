@@ -52,7 +52,9 @@
           "SimpChinese": "nsis/SimpChinese.nsh"
         },
         "installerHooks": "nsis/installer.nsh",
-        "template": "nsis/template.nsi"
+        "template": "nsis/template.nsi",
+        "installerIcon": "icons/icon.ico",
+        "installerHeaderIcon": "icons/icon.ico"
       }
     }
   },
