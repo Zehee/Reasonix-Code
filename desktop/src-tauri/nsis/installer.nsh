@@ -68,9 +68,22 @@
     nsExec::ExecToStack 'cmd /c if exist "$LOCALAPPDATA\Programs\nodejs\npm.cmd" ("$LOCALAPPDATA\Programs\nodejs\npm.cmd" install -g --prefix "$PROFILE\.reasonix-code\npm-global" reasonix-code) else (npm install -g --prefix "$PROFILE\.reasonix-code\npm-global" reasonix-code)'
     Pop $0
     Pop $1
-    IntCmp $0 0 done
+    IntCmp $0 0 path_setup
       DetailPrint "Warning: npm install failed (exit code $0)."
       DetailPrint "The desktop app will prompt you to install it on first launch."
-
+      Goto done
+  path_setup:
+    ; Make reasonix-code available in the user's terminals too: append the
+    ; npm-global bin dir to the user PATH (registry + this process + notify).
+    ReadRegStr $3 HKCU "Environment" "Path"
+    ${If} $3 == ""
+      StrCpy $3 "$PROFILE\.reasonix-code\npm-global"
+    ${Else}
+      StrCpy $3 "$3;$PROFILE\.reasonix-code\npm-global"
+    ${EndIf}
+    WriteRegExpandStr HKCU "Environment" "Path" "$3"
+    System::Call 'KERNEL32::SetEnvironmentVariable(t "Path", t r3)'
+    SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment"
+    Goto done
   done:
 !macroend

@@ -1222,31 +1222,6 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
     *state.current.lock() = Some(id);
     save_last_workspace(workspace);
 
-    // Watchdog: if the dashboard URL never registers (CLI stalls before the
-    // ready line), log the stdout trace and surface a toast instead of
-    // leaving a silent dead tab.
-    {
-        let app_tmo = app.clone();
-        let found_tmo = found_url.clone();
-        let tmo_id = id;
-        let tmo_path = workspace.to_string_lossy().into_owned();
-        thread::spawn(move || {
-            for _ in 0..120 {
-                if found_tmo.load(Ordering::SeqCst) {
-                    return;
-                }
-                thread::sleep(Duration::from_millis(500));
-            }
-            if !found_tmo.load(Ordering::SeqCst) {
-                log_line(&format!("dashboard url timeout id={tmo_id} path={tmo_path}"));
-                let _ = app_tmo.emit(
-                    "cli:error",
-                    format!("工作区启动超时（dashboard 未就绪）：{tmo_path}"),
-                );
-            }
-        });
-    }
-
     // The ink TUI prints a `/dashboard  →  URL` line to STDOUT once the server
     // is up — but piped output wraps to 80 columns and truncates the token, so
     // we treat that line only as a readiness signal and read the authoritative
@@ -1293,14 +1268,15 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
     let app_stderr = app.clone();
     let instances_ref = state.instances.clone();
     let current_ref = state.current.clone();
+    let found_stderr = found_url.clone();
     thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines().map_while(Result::ok) {
             let _ = app_stderr.emit("cli:stderr", line.clone());
-            if !found_url.load(Ordering::SeqCst) {
+            if !found_stderr.load(Ordering::SeqCst) {
                 if is_dashboard_ready_line(&line) {
                     if let Some(url) = dashboard_url_from_config() {
-                        if found_url
+                        if found_stderr
                             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
                             .is_ok()
                         {
@@ -1315,6 +1291,7 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
         // instance from the table, and fall back to the splash if it was the
         // one on screen.
         let app_exit = app_stderr.clone();
+        let found_exit = found_stderr.clone();
         let instances_exit = instances_ref.clone();
         let current_exit = current_ref.clone();
         thread::spawn(move || {
@@ -1366,7 +1343,7 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
                 // `found_url` is set by the stdout/stderr watcher when the
                 // dashboard URL was successfully registered. If the CLI exits
                 // before that, it's a crash.
-                let was_ready = found_url.load(Ordering::SeqCst);
+                let was_ready = found_exit.load(Ordering::SeqCst);
                 if !was_ready {
                     let _ = app_exit.emit(
                         "cli:crash",
@@ -1376,6 +1353,31 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
             }
         });
     });
+
+    // Watchdog: if the dashboard URL never registers (CLI stalls before the
+    // ready line), log the stdout trace and surface a toast instead of
+    // leaving a silent dead tab.
+    {
+        let app_tmo = app.clone();
+        let found_tmo = found_url.clone();
+        let tmo_id = id;
+        let tmo_path = workspace.to_string_lossy().into_owned();
+        thread::spawn(move || {
+            for _ in 0..120 {
+                if found_tmo.load(Ordering::SeqCst) {
+                    return;
+                }
+                thread::sleep(Duration::from_millis(500));
+            }
+            if !found_tmo.load(Ordering::SeqCst) {
+                log_line(&format!("dashboard url timeout id={tmo_id} path={tmo_path}"));
+                let _ = app_tmo.emit(
+                    "cli:error",
+                    format!("工作区启动超时（dashboard 未就绪）：{tmo_path}"),
+                );
+            }
+        });
+    }
 
     Ok(id)
 }
