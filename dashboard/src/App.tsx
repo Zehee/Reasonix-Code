@@ -8,6 +8,7 @@ import { CommandPalette, Toast, buildCommands, useCommandPalette } from "./Comma
 import { WorkspaceProvider } from "./Markdown";
 import { getLang, getLangLabel, getSupportedLangs, setLang, t, useLang } from "./i18n";
 import { I } from "./icons";
+import { isEmbed, onEmbedMessage, postToParent } from "./lib/embed-bridge";
 import { readSessionFromUrl, writeSessionToUrl } from "./lib/session-url";
 import { setActiveTabIdInBridge } from "./lib/tauri-bridge";
 import type {
@@ -335,7 +336,24 @@ export function App() {
   // queue. The bridge is a singleton; the dependency is intentional.
   useEffect(() => {
     if (activeTabId) setActiveTabIdInBridge(activeTabId);
+    if (isEmbed && activeTabId) postToParent({ type: "reasonix:tab-activate", id: activeTabId });
   }, [activeTabId]);
+  // Embed mode: the container page owns the workspace list (one iframe per
+  // workspace) and broadcasts it here, so this dashboard's TabBar renders
+  // and activates the container's tabs.
+  useEffect(() => {
+    return onEmbedMessage((msg) => {
+      if (msg.type === "reasonix:tabs" && Array.isArray(msg.tabs)) {
+        const next: TabMeta[] = msg.tabs.map((t: any) => ({
+          id: String(t.id),
+          workspaceDir: t.path ?? "",
+        }));
+        setTabs(next);
+        const active = msg.tabs.find((t: any) => t.active);
+        setActiveTabId(active ? String(active.id) : (next[0]?.id ?? ""));
+      }
+    });
+  }, []);
   const dispatchersRef = useRef<Map<string, TabDispatcher>>(new Map());
   const pendingEventsRef = useRef<Map<string, TabAction[]>>(new Map());
   const pendingDeltasRef = useRef<Map<string, DeltaBatchItem[]>>(new Map());
@@ -419,6 +437,7 @@ export function App() {
             const tabId = ev.tabId;
 
             if (ev.type === "$tab_opened" && tabId) {
+              if (isEmbed) return; // container drives tabs in embed mode
               setTabs((prev) =>
                 prev.some((t) => t.id === tabId)
                   ? prev
@@ -428,6 +447,7 @@ export function App() {
               return;
             }
             if (ev.type === "$tab_closed" && tabId) {
+              if (isEmbed) return; // container drives tabs in embed mode
               setTabs((prev) => prev.filter((t) => t.id !== tabId));
               setActiveTabId((prev) => {
                 if (prev !== tabId) return prev;
@@ -651,6 +671,10 @@ export function App() {
   }, [activeTabId]);
 
   const openTab = useCallback(() => {
+    if (isEmbed) {
+      postToParent({ type: "reasonix:tab-new" });
+      return;
+    }
     invoke("rpc_send", { line: JSON.stringify({ cmd: "tab_open" }) }).catch((err) =>
       console.error("tab_open failed", err),
     );
@@ -659,6 +683,10 @@ export function App() {
   const closeTab = useCallback(
     (id: string) => {
       if (tabs.length <= 1) return;
+      if (isEmbed) {
+        postToParent({ type: "reasonix:tab-close", id });
+        return;
+      }
       invoke("rpc_send", { line: JSON.stringify({ cmd: "tab_close", tabId: id }) }).catch((err) =>
         console.error("tab_close failed", err),
       );

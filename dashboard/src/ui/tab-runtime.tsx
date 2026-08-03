@@ -11,6 +11,7 @@ import { WorkspaceProvider } from "../Markdown";
 import { getLang, getLangLabel, getSupportedLangs, setLang, t, useLang } from "../i18n";
 import { I } from "../icons";
 import { readSessionFromUrl, writeSessionToUrl } from "../lib/session-url";
+import { isEmbed, postToParent } from "../lib/embed-bridge";
 import { setActiveTabIdInBridge } from "../lib/tauri-bridge";
 import type {
   CheckpointVerdict,
@@ -887,11 +888,21 @@ export function TabRuntime({
           setActive={setActiveTabId}
           onClose={(id) => {
             if (tabsList.length <= 1) return;
+            if (isEmbed) {
+              postToParent({ type: "reasonix:tab-close", id });
+              return;
+            }
             invoke("rpc_send", {
               line: JSON.stringify({ cmd: "tab_close", tabId: id }),
             }).catch((err) => console.error("tab_close failed", err));
           }}
-          onNew={openWorkspacePicker}
+          onNew={() => {
+            if (isEmbed) {
+              postToParent({ type: "reasonix:tab-new" });
+              return;
+            }
+            openWorkspacePicker();
+          }}
           singleTab={tabsList.length <= 1}
         />
 
@@ -1249,14 +1260,17 @@ export function TabRuntime({
           initialPath={state.settings?.workspaceDir}
           onCancel={() => setWorkdirModalOpen(false)}
           onConfirm={(path) => {
-            if (isWebRuntime()) {
+            if (isEmbed) {
+              postToParent({ type: "reasonix:open-workspace", path });
+            } else if (isWebRuntime()) {
               // Plain browser: persist the preference (next load picks it up).
               saveSettings({ workspaceDir: path });
             } else {
               // Desktop shell: switch to (or start) that workspace instance.
-              invoke("switch_workspace", { path }).catch((err) =>
-                console.error("switch_workspace failed", err),
-              );
+              invoke("switch_workspace", { path }).catch((err) => {
+                console.error("switch_workspace failed", err);
+                flashToast(t("app.toast.switchFailed", { error: String(err) }));
+              });
             }
             setWorkdirModalOpen(false);
           }}

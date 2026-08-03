@@ -1,19 +1,12 @@
-// Container page: iframes = workspace tabs. The main webview never
-// navigates; each workspace runs as one background CLI process and its
-// dashboard lives in a dedicated iframe. Switching tabs is show/hide.
-//
-// Closing a tab hides its iframe (DOM kept, dashboard/SSE state intact)
-// and the CLI process stays alive — reopening the same folder matches by
-// the absolute path hook on the iframe (data-path) and just un-hides it.
+// Container page: hosts one iframe per workspace. The dashboards render
+// their own TabBar (driven via postMessage); this page only manages the
+// iframe registry, visibility and the bridge to the shell.
 
 const tauri = typeof window !== "undefined" ? window.__TAURI__ : undefined;
 
-const tabbarEl = document.getElementById("tabbar");
 const framesEl = document.getElementById("frames");
 const emptyEl = document.getElementById("empty");
 const errbarEl = document.getElementById("errbar");
-const versionsEl = document.getElementById("versions");
-const btnNew = document.getElementById("btn-new");
 const btnLast = document.getElementById("btn-last");
 const btnChoose = document.getElementById("btn-choose");
 
@@ -45,73 +38,37 @@ function baseName(path) {
   return path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || path;
 }
 
-// ── Frame/tab registry ──────────────────────────────────────────
-// Map<id, { id, path, url, iframe, tabEl, hidden }>
+// ── Frame registry ──────────────────────────────────────────────
+// Map<id, { id, path, url, iframe, hidden }>
 const frames = new Map();
 let activeId = null;
 
-function makeTabEl(f) {
-  const tabEl = document.createElement("button");
-  tabEl.type = "button";
-  tabEl.className = "ws-tab";
-  tabEl.dataset.path = f.path || "";
-  tabEl.innerHTML = `<span class="name"></span><span class="x" title="Close tab (workspace keeps running)">×</span>`;
-  tabEl.querySelector(".name").textContent = baseName(f.path);
-  tabEl.addEventListener("click", () => activate(f.id));
-  tabEl.querySelector(".x").addEventListener("click", (e) => {
-    e.stopPropagation();
-    hideFrame(f.id);
-  });
-  return tabEl;
+/** Tell every iframe's dashboard to render/activate the tab list. */
+function broadcastTabs() {
+  const tabs = [...frames.values()]
+    .filter((f) => !f.hidden)
+    .map((f) => ({ id: f.id, path: f.path, active: f.id === activeId }));
+  for (const f of frames.values()) {
+    try {
+      f.iframe.contentWindow.postMessage({ type: "reasonix:tabs", tabs }, "*");
+    } catch {
+      /* frame not ready */
+    }
+  }
 }
 
-function ensureTab(f) {
-  if (f.tabEl && f.tabEl.isConnected) return;
-  f.tabEl = makeTabEl(f);
-  tabbarEl.insertBefore(f.tabEl, tabbarEl.querySelector(".grow"));
-}
-
-async function addFrame(ws) {
-  // Hot reopen: same absolute path -> restore the hidden iframe. But DOM
-  // state isn't truth — the CLI/server behind it may have been killed
-  // externally. Probe first: healthy -> show as-is (zero reload); gone ->
-  // drop the stale frame and respawn the workspace (new process, new URL
-  // injected into a fresh iframe).
+function addFrame(ws) {
+  // Hot reopen: same absolute path -> restore the hidden iframe as-is.
+  // But DOM state isn't truth — the backend may have died externally.
+  // Probe first; if gone, drop the stale frame and respawn.
   if (ws.path) {
     const hidden = [...frames.values()].find((f) => f.hidden && f.path === ws.path);
     if (hidden) {
-      let alive = true;
-      try {
-        alive = await invoke("workspace_alive", { id: hidden.id });
-      } catch {
-        /* probe failed — assume alive, next open re-checks */
-      }
-      if (!alive) {
-        const path = hidden.path;
-        removeFrame(hidden.id);
-        showError(`Workspace "${baseName(path)}" was stopped — restarting it.`);
-        spawnAt(path); // respawn; workspace-opened/cli:url will rebuild the frame
-        return;
-      }
-      frames.delete(hidden.id);
-      const restored = {
-        ...hidden,
-        id: ws.id,
-        url: ws.url ?? hidden.url,
-        hidden: false,
-      };
-      restored.iframe.dataset.wsId = String(ws.id);
-      restored.iframe.dataset.path = ws.path;
-      if (ws.url && ws.url !== restored.url) restored.iframe.src = frameSrc(ws.url);
-      frames.set(ws.id, restored);
-      ensureTab(restored);
-      activate(ws.id);
-      return;
+      return restoreHiddenFrame(hidden, ws);
     }
   }
   if (frames.has(ws.id)) {
     updateFrame(ws);
-    ensureTab(frames.get(ws.id));
     return;
   }
   const iframe = document.createElement("iframe");
@@ -124,10 +81,40 @@ async function addFrame(ws) {
       '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:system-ui;font-size:13px;color:#8a9198">Starting…</div>';
   framesEl.appendChild(iframe);
 
-  const f = { id: ws.id, path: ws.path, url: ws.url, iframe, tabEl: null, hidden: false };
-  frames.set(ws.id, f);
-  ensureTab(f);
+  frames.set(ws.id, { id: ws.id, path: ws.path, url: ws.url, iframe, hidden: false });
+  iframe.addEventListener("load", () => broadcastTabs());
   renderEmptyState();
+  broadcastTabs();
+}
+
+async function restoreHiddenFrame(hidden, ws) {
+  let alive = true;
+  try {
+    alive = await invoke("workspace_alive", { id: hidden.id });
+  } catch {
+    /* probe failed — assume alive, next open re-checks */
+  }
+  if (!alive) {
+    const path = hidden.path;
+    removeFrame(hidden.id);
+    showError(`Workspace "${baseName(path)}" was stopped — restarting it.`);
+    spawnAt(path); // respawn; workspace-opened/cli:url will rebuild the frame
+    return;
+  }
+  frames.delete(hidden.id);
+  const restored = {
+    ...hidden,
+    id: ws.id,
+    url: ws.url ?? hidden.url,
+    hidden: false,
+  };
+  restored.iframe.dataset.wsId = String(ws.id);
+  restored.iframe.dataset.path = ws.path;
+  if (ws.url && ws.url !== restored.url) restored.iframe.src = frameSrc(ws.url);
+  frames.set(ws.id, restored);
+  renderEmptyState();
+  broadcastTabs();
+  activate(ws.id);
 }
 
 function updateFrame(ws) {
@@ -136,15 +123,12 @@ function updateFrame(ws) {
   if (ws.path && ws.path !== f.path) {
     f.path = ws.path;
     f.iframe.dataset.path = ws.path;
-    if (f.tabEl) {
-      f.tabEl.dataset.path = ws.path;
-      f.tabEl.querySelector(".name").textContent = baseName(ws.path);
-    }
   }
   if (ws.url && ws.url !== f.url) {
     f.url = ws.url;
     f.iframe.src = frameSrc(ws.url);
   }
+  broadcastTabs();
 }
 
 /** Remove a frame entirely (workspace really died). */
@@ -152,7 +136,6 @@ function removeFrame(id) {
   const f = frames.get(id);
   if (!f) return;
   f.iframe.remove();
-  f.tabEl?.remove();
   frames.delete(id);
   if (activeId === id) {
     const visible = [...frames.values()].filter((x) => !x.hidden);
@@ -160,6 +143,7 @@ function removeFrame(id) {
     if (activeId) activate(activeId);
     else renderEmptyState();
   }
+  broadcastTabs();
 }
 
 /** Close a tab: hide the iframe, keep the CLI process + dashboard alive. */
@@ -168,39 +152,31 @@ function hideFrame(id) {
   if (!f) return;
   f.hidden = true;
   f.iframe.style.display = "none";
-  f.tabEl?.remove();
   if (activeId === id) {
     const visible = [...frames.values()].filter((x) => !x.hidden);
     activeId = visible.length ? visible[visible.length - 1].id : null;
     if (activeId) activate(activeId);
     else renderEmptyState();
   }
+  broadcastTabs();
 }
 
 function activate(id) {
   activeId = id;
   for (const [fid, f] of frames) {
-    const show = fid === id;
-    f.iframe.style.display = show ? "" : "none";
-    if (f.tabEl) f.tabEl.classList.toggle("active", show);
+    f.iframe.style.display = fid === id ? "" : "none";
   }
   emptyEl.classList.remove("show");
-  // Immediate liveness check on activation — don't wait for the poll.
-  const f = frames.get(id);
-  if (f) checkFrameAlive(f);
+  broadcastTabs();
 }
 
 function renderEmptyState() {
   emptyEl.classList.toggle("show", frames.size === 0);
 }
 
-// ── Liveness probing ────────────────────────────────────────────
-// DOM state is not truth: the CLI process / dashboard server behind a
-// hidden iframe may have been killed externally. Probe the shell (it
-// checks the process AND does an HTTP round-trip to the server) and
-// drop dead frames; reopening the folder spawns a fresh instance.
+// ── Liveness (reopen-time only, no heartbeat) ───────────────────
 async function checkFrameAlive(f) {
-  if (!f.url) return; // still starting — cli:url / workspace-opened will arrive
+  if (!f.url) return; // still starting
   try {
     const alive = await invoke("workspace_alive", { id: f.id });
     if (!alive) {
@@ -209,16 +185,9 @@ async function checkFrameAlive(f) {
       showError(`Workspace "${name}" stopped — reopen it to restart.`);
     }
   } catch {
-    /* probe failed — leave the frame, next poll retries */
+    /* probe failed — leave the frame */
   }
 }
-
-async function checkAllAlive() {
-  for (const f of [...frames.values()]) {
-    await checkFrameAlive(f);
-  }
-}
-setInterval(checkAllAlive, 15000);
 
 // ── Workspace creation ──────────────────────────────────────────
 async function spawnAt(path) {
@@ -239,15 +208,16 @@ async function pickWorkspace() {
 
 // ── Boot ────────────────────────────────────────────────────────
 async function init() {
+  // Shell versions go in the native window title.
   try {
     const build = await invoke("desktop_build");
     const env = await invoke("check_environment");
-    const parts = [];
+    const parts = ["Reasonix Code"];
     parts.push(build === "dev" ? "dev" : `build ${build}`);
     if (env?.cli_version) parts.push(`cli ${env.cli_version}`);
-    versionsEl.textContent = parts.join(" · ");
+    await invoke("set_window_title", { title: parts.join(" · ") });
   } catch {
-    /* non-Tauri shell — skip badge */
+    /* non-Tauri shell — keep default title */
   }
 
   let list = [];
@@ -256,7 +226,7 @@ async function init() {
   } catch (e) {
     showError(`list_workspaces failed: ${e}`);
   }
-  for (const ws of list) await addFrame(ws);
+  for (const ws of list) addFrame(ws);
   if (list.length) {
     const first = list.find((w) => w.url) ?? list[0];
     activate(first.id);
@@ -271,15 +241,41 @@ async function init() {
   }
 }
 
+// ── Messages from the embedded dashboards ───────────────────────
+const CHILD_ORIGIN_OK = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/;
+
+window.addEventListener("message", (ev) => {
+  if (!CHILD_ORIGIN_OK.test(ev.origin)) return;
+  const msg = ev.data;
+  if (!msg || typeof msg !== "object" || typeof msg.type !== "string") return;
+
+  switch (msg.type) {
+    case "reasonix:tab-activate":
+      if (msg.id != null && frames.has(msg.id)) activate(msg.id);
+      break;
+    case "reasonix:tab-new":
+      pickWorkspace();
+      break;
+    case "reasonix:tab-close":
+      if (msg.id != null && frames.has(msg.id)) hideFrame(msg.id);
+      break;
+    case "reasonix:open-workspace":
+      if (typeof msg.path === "string" && msg.path) spawnAt(msg.path);
+      break;
+    default:
+      break;
+  }
+});
+
 // ── Events from the shell ───────────────────────────────────────
-listen("cli:url", async (payload) => {
+listen("cli:url", (payload) => {
   if (!payload?.id || !payload?.url) return;
-  await addFrame({ id: payload.id, url: payload.url, path: payload.path });
+  addFrame({ id: payload.id, url: payload.url, path: payload.path });
   activate(payload.id);
 });
-listen("workspace-opened", async (payload) => {
+listen("workspace-opened", (payload) => {
   if (!payload?.id || !payload?.url) return;
-  await addFrame({ id: payload.id, url: payload.url, path: payload.path });
+  addFrame({ id: payload.id, url: payload.url, path: payload.path });
   activate(payload.id);
 });
 listen("workspace-closed", (payload) => {
@@ -297,7 +293,6 @@ listen("cli:error", (payload) => {
 });
 
 // ── UI wiring ───────────────────────────────────────────────────
-btnNew.addEventListener("click", pickWorkspace);
 btnChoose.addEventListener("click", pickWorkspace);
 btnLast.addEventListener("click", async () => {
   try {

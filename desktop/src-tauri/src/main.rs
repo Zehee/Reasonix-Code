@@ -302,6 +302,14 @@ fn desktop_build() -> String {
     option_env!("DESKTOP_BUILD").unwrap_or("dev").to_string()
 }
 
+/// Set the native window title (used for "Reasonix Code · build N · cli X").
+#[tauri::command]
+fn set_window_title(app: AppHandle, title: String) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.set_title(&title);
+    }
+}
+
 /// Robust liveness probe for a workspace: checks both the process (via
 /// try_wait, so a killed CLI is caught even if the exit watcher hasn't
 /// fired yet) and the dashboard server (HTTP GET on its URL, 2 s timeout).
@@ -1326,6 +1334,7 @@ fn main() {
             check_environment,
             latest_cli_version,
             desktop_build,
+            set_window_title,
             workspace_alive,
             install_cli,
             install_node,

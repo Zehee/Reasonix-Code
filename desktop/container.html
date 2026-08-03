@@ -8,127 +8,25 @@
     />
     <title>Reasonix Code</title>
     <style>
-      :root {
-        --brand: #339933;
-        --brand-soft: #e8f3e8;
-        --ink: #16181a;
-        --ink-2: #5c636a;
-        --ink-3: #8a9198;
-        --danger: #e5484d;
-        --line: #e3e6e8;
-        --bg: #ffffff;
-      }
-
       * {
         box-sizing: border-box;
       }
-
       html,
       body {
         margin: 0;
         padding: 0;
         width: 100%;
         height: 100%;
-        background: var(--bg);
-        color: var(--ink);
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          "Helvetica Neue", Arial, sans-serif;
+        background: #0b0b0b;
         overflow: hidden;
-        user-select: none;
-        -webkit-font-smoothing: antialiased;
       }
-
-      /* ── Top workspace tab bar ─────────────────────────────── */
-      #tabbar {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        height: 42px;
-        padding: 0 10px;
-        background: #f6f7f8;
-        border-bottom: 1px solid var(--line);
-        -webkit-app-region: drag;
-      }
-      #tabbar button,
-      #tabbar .new {
-        -webkit-app-region: no-drag;
-      }
-      .ws-tab {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        height: 28px;
-        padding: 0 6px 0 12px;
-        max-width: 200px;
-        border: 1px solid transparent;
-        border-radius: 7px;
-        background: transparent;
-        font: inherit;
-        font-size: 12.5px;
-        color: var(--ink-2);
-        cursor: pointer;
-        white-space: nowrap;
-      }
-      .ws-tab:hover {
-        background: #eceef0;
-      }
-      .ws-tab.active {
-        background: #ffffff;
-        border-color: var(--line);
-        color: var(--ink);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-      }
-      .ws-tab .name {
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .ws-tab .x {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 16px;
-        height: 16px;
-        border-radius: 4px;
-        font-size: 12px;
-        line-height: 1;
-        color: var(--ink-3);
-      }
-      .ws-tab .x:hover {
-        background: #e2e4e7;
-        color: var(--ink);
-      }
-      .new {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 28px;
-        height: 28px;
-        border: none;
-        border-radius: 7px;
-        background: transparent;
-        font-size: 16px;
-        color: var(--ink-3);
-        cursor: pointer;
-      }
-      .new:hover {
-        background: var(--brand-soft);
-        color: var(--brand);
-      }
-      .grow {
-        flex: 1;
-      }
-      #versions {
-        font-size: 11px;
-        color: var(--ink-3);
-        white-space: nowrap;
-        padding: 0 8px;
-        user-select: text;
-      }
-
-      /* ── Workspace iframe area ─────────────────────────────── */
+      /* Each workspace dashboard fills the window; the dashboards render
+         their own TabBar (driven via postMessage) — this page owns only
+         the iframes and the empty state. */
       #frames {
         position: relative;
-        height: calc(100% - 42px);
+        width: 100%;
+        height: 100%;
       }
       .ws-frame {
         position: absolute;
@@ -136,10 +34,9 @@
         width: 100%;
         height: 100%;
         border: none;
-        background: var(--bg);
+        background: #0b0b0b;
       }
 
-      /* ── Empty state ───────────────────────────────────────── */
       #empty {
         position: absolute;
         inset: 0;
@@ -148,7 +45,9 @@
         align-items: center;
         justify-content: center;
         gap: 18px;
-        background: var(--bg);
+        background: #0b0b0b;
+        color: #e5e5e5;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
         text-align: center;
       }
       #empty.show {
@@ -159,11 +58,6 @@
         height: 84px;
         filter: drop-shadow(0 14px 30px rgba(51, 153, 51, 0.22));
       }
-      #empty .logo svg {
-        width: 100%;
-        height: 100%;
-        display: block;
-      }
       #empty h1 {
         margin: 0;
         font-size: 20px;
@@ -173,7 +67,7 @@
       #empty p {
         margin: 0;
         font-size: 13px;
-        color: var(--ink-2);
+        color: #8a9198;
       }
       #empty .actions {
         display: flex;
@@ -190,20 +84,13 @@
         cursor: pointer;
       }
       button.action.primary {
-        background: var(--brand);
+        background: #339933;
         color: #fff;
-        box-shadow: 0 6px 18px -6px rgba(51, 153, 51, 0.45);
-      }
-      button.action.primary:hover {
-        background: #2c8630;
       }
       button.action.secondary {
-        background: #fff;
-        color: var(--brand);
-        border-color: var(--line);
-      }
-      button.action.secondary:hover {
-        background: var(--brand-soft);
+        background: transparent;
+        color: #339933;
+        border-color: #3a3a3a;
       }
 
       #errbar {
@@ -215,21 +102,16 @@
         max-width: 70vw;
         padding: 8px 14px;
         border-radius: 8px;
-        background: #fdecec;
-        border: 1px solid #f5c2c2;
-        color: var(--danger);
+        background: #2b1414;
+        border: 1px solid #5c2a2a;
+        color: #ff6b6b;
+        font-family: system-ui, sans-serif;
         font-size: 12.5px;
         z-index: 10;
       }
     </style>
   </head>
   <body>
-    <div id="tabbar">
-      <button type="button" class="new" id="btn-new" title="New workspace">+</button>
-      <span id="versions"></span>
-      <span class="grow"></span>
-    </div>
-
     <div id="frames"></div>
 
     <div id="empty">
@@ -240,7 +122,7 @@
               .c { fill: #339933; }
             </style>
           </defs>
-          <rect x="6.03" y="6.03" width="1241.94" height="1241.94" rx="212.47" ry="212.47" fill="#ffffff"/>
+          <rect x="6.03" y="6.03" width="1241.94" height="1241.94" rx="212.47" ry="212.47" fill="#0b0b0b"/>
           <path class="c" d="M657.07,556.02c4.59,3.86,10.93,5.3,17.45,2.32,2.59-1.18,4.3-4.19,3.22-7.14-8.6-23.51-32.86-40.71-42.55-27.41-1.18,1.63-1.14,3.74-.24,5.03.71,1.02,2.14,1.26,3.99.88,5.89-1.22,13.21,2.87,12.52,9.44-.72,6.85.66,12.72,5.61,16.89Z"/>
           <path class="c" d="M798.75,598.8c22.21-24.86,36.14-54.9,40.99-87.98,11.07-72.3-24.83-138.35-92.45-166.33-23.77-9.56-48.19-13.62-74.13-13.37l-251.41.07.02,481.78,123.58-.1v-169.44c-4.09-1.52-6.91-2.78-6.91-2.78-26.86-12.28-47.42-33.58-58.71-60.25-14.41-34.05-9.96-72.23,12.69-101.26,22.56-28.2,53.39-37.16,88.72-32.2,13.05,1.83,27-13.49,53.57-10.57,1.79.2,3.58,1.54,3.76,2.6.62,3.63-9.65,5.57-9.66,15.48,0,4.17,1.87,9,5.81,11.76,13.54,9.5,25.27,20.18,37.54,31.22,5.96,5.36,26.19,20.45,31.34,8.16,3-7.17,4.99-14.67,6.98-22.28.98-3.77-1.1-6.02-4.14-7.82-20.87-12.35-28.73-38.11-20.57-60.92.79-2.2,2.82-3.27,4.56-3.34,7.01-.3,3.28,12.7,20.59,18.03,16.44,5.06,16.94,18.73,24.93,13.29,18.63-12.7,25.34-2.3,42.61-18.58,1.78-1.67,4.83-1.79,6.68-.51,1.14.79,2.12,2.84,2.03,5.22-.51,13.75-5.87,26.88-15.26,36.97-17.76,19.08-32.69,9.95-33.65,23.31-2.83,39.22-15.66,78.37-43.49,106.85-.89.91-1.43,2.22-1.28,3.1.16.92,1.26,1.82,2.46,2.23l23.45,7.97c3.32,1.13,5.72,4.1,5.3,7.27-.37,2.76-2.57,5.2-5.74,6.25-17.21,5.7-35.7,4.7-53.23-.6-23.19,19.53-51.68,29.59-82.74,28.38l45.08,62.23,73.54,100.4,146.79-.2-124.45-168.04c28.97-8.55,54.42-23.87,74.8-45.98Z"/>
           <circle class="c" cx="640.36" cy="538.21" r="3.47"/>
