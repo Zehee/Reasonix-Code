@@ -247,7 +247,11 @@ function activate(id) {
 
 function renderEmptyState() {
   const show = frames.size === 0;
-  emptyEl.classList.toggle("show", show);  // Ambient particles only make sense behind the picker; hide them once
+  emptyEl.classList.toggle("show", show);
+  // Re-render the recent list whenever the picker becomes visible (page
+  // load, or after every tab is closed — it wasn't refreshed on close).
+  if (show) void renderRecent();
+  // Ambient particles only make sense behind the picker; hide them once
   // a dashboard iframe is up.
   if (particlesEl) particlesEl.style.visibility = show ? "visible" : "hidden";
 }
@@ -371,9 +375,8 @@ async function init() {
     const first = list.find((w) => w.url) ?? list[0];
     activate(first.id);
   } else {
-    // No running instances: show the workspace picker instead of
-    // auto-resuming, so the user chooses which workspace to open.
-    await renderRecent();
+    // No running instances: show the workspace picker (renderEmptyState
+    // refreshes the recent list).
     renderEmptyState();
   }
 }
