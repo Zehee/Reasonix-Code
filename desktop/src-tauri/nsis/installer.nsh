@@ -12,7 +12,7 @@
 
 !macro NSIS_HOOK_POSTINSTALL
   DetailPrint "Checking reasonix-code CLI..."
-  nsExec::ExecToStack 'cmd /c reasonix-code --version'
+  nsExec::ExecToStack /TIMEOUT=10000 'cmd /c reasonix-code --version'
   Pop $0
   Pop $1
 
@@ -26,12 +26,12 @@
     Goto done
 
   check_npm:
-    nsExec::ExecToStack 'cmd /c node --version && npm --version'
+    nsExec::ExecToStack /TIMEOUT=10000 'cmd /c node --version && npm --version'
     Pop $0
     Pop $1
     IntCmp $0 0 npm_ok
       DetailPrint "Node.js / npm not found, installing Node.js LTS via winget..."
-      nsExec::ExecToStack 'cmd /c winget install -e --id OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements'
+      nsExec::ExecToStack /TIMEOUT=300000 'cmd /c winget install -e --id OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements'
       Pop $0
       Pop $1
       IntCmp $0 0 node_installed
