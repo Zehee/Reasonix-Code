@@ -45,7 +45,7 @@ export const en = {
       suggestion1: "Open settings",
       suggestion2: "View overview",
       suggestion3: "Browse sessions",
-      welcome: "Welcome to Reasonix",
+      welcome: "Welcome to Reasonix Code",
     },
     errorLabel: "Error",
     connecting: "Connecting…",

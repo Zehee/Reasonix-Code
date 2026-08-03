@@ -53,7 +53,7 @@ export const ja: typeof en = {
       suggestion1: "設定を開く",
       suggestion2: "概要を表示",
       suggestion3: "セッションを閲覧",
-      welcome: "Reasonix へようこそ",
+      welcome: "Reasonix Code へようこそ",
     },
     errorLabel: "エラー",
     connecting: "接続中…",

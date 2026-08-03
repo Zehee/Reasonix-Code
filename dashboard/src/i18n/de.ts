@@ -52,7 +52,7 @@ export const de: typeof en = {
       suggestion1: "Alle TypeScript-Fehler in der aktuellen Datei beheben",
       suggestion2: "README ins Chinesische/Englische übersetzen",
       suggestion3: "CHANGELOG für dieses Repo generieren",
-      welcome: "Willkommen bei Reasonix",
+      welcome: "Willkommen bei Reasonix Code",
     },
     errorLabel: "Fehler",
     connecting: "Verbinde…",

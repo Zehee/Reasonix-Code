@@ -45,7 +45,7 @@ export const zhCN = {
       suggestion1: "打开设置",
       suggestion2: "查看概览",
       suggestion3: "浏览会话",
-      welcome: "欢迎使用 Reasonix",
+      welcome: "欢迎使用 Reasonix Code",
     },
     errorLabel: "错误",
     connecting: "连接中…",
