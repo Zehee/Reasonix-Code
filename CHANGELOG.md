@@ -1,3 +1,21 @@
+## [0.2.3] - 2026-08-03
+
+### Added
+- Frosted-glass Reasonix Rx logo across the dashboard (splash, empty state, title bar, about) with a sharp drop-shadow so it reads on light themes; splash got a deep radial-gradient backdrop.
+- Post-install npm package now appends the npm global bin dir to the user PATH on Windows, so `reasonix-code` works from any terminal.
+- Desktop installer writes the CLI's npm-global dir into the user PATH after installing the CLI.
+
+### Fixed
+- Desktop shell: tab switches no longer run liveness probes (they killed healthy tabs when the CLI server was briefly busy); `workspace_alive` is process-only now.
+- Desktop shell: a workspace that stalls before its dashboard URL registers is killed and auto-retried once after 30s (was a silent dead tab).
+- Desktop shell: removed menu bar and Ctrl+Q quit (0.2.1); window close still cleans up all spawned CLI processes.
+- Desktop shell: iframe dashboard URLs are now proxied by the shell (tauri.localhost), CSP no longer blocks them.
+- Dashboard: welcome/splash branding unified to "Reasonix Code" in en/zh/ja/de.
+- Dashboard: token meter now shows resumed-context usage immediately on session open (ctx_breakdown snapshot).
+
+### Changed
+- Debug logging removed from the dashboard bridge and the shell's stdout watcher; dev-only monitor scripts dropped.
+
 # Changelog
 
 All notable changes to Reasonix. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);

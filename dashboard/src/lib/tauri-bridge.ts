@@ -75,8 +75,6 @@ export function isWebRuntime(): boolean {
   return isServerMode && tauriApi() === undefined;
 }
 
-console.log(`[tauri-bridge] mode=${MODE}`);
-
 // 事件广播
 function broadcast(eventName: string, payload: any) {
   const callbacks = listeners.get(eventName);
@@ -1085,8 +1083,6 @@ async function serverRpc(payload: Record<string, any>): Promise<void> {
 // // ═══ 导出接口（Mock + Server 双模式）
 // Tauri core API
 export async function invoke(cmd: string, args?: any): Promise<any> {
-  console.log(`[tauri-bridge] invoke -> cmd: ${cmd}${args ? " " + JSON.stringify(args) : ""}`);
-
   // Tauri desktop mode: delegate to real Tauri invoke via the runtime bridge
   if (MODE === "tauri") {
     const tauri = tauriApi()!;
@@ -1128,7 +1124,6 @@ export async function invoke(cmd: string, args?: any): Promise<any> {
       return tauri.invoke(cmd, args ?? {});
     }
     if (cmd === "open_in_editor") {
-      console.log("[tauri-bridge] open in editor:", args);
     }
     return Promise.resolve();
   }
@@ -1172,7 +1167,6 @@ export async function invoke(cmd: string, args?: any): Promise<any> {
   }
 
   if (cmd === "open_in_editor") {
-    console.log("[tauri-bridge] open in editor simulation:", args);
     return Promise.resolve();
   }
 
@@ -1215,7 +1209,6 @@ export async function listen<T = any>(
 export function getCurrentWebview(): any {
   return {
     onDragDropEvent: async (_callback: any): Promise<() => void> => {
-      console.log("[tauri-bridge] onDragDropEvent (no-op in web)");
       return () => {};
     },
   };
@@ -1263,13 +1256,10 @@ export function getCurrentWindow(): any {
   return {
     isMaximized: async () => false,
     minimize: async () => {
-      console.log("[tauri-bridge] minimize (no-op)");
     },
     close: async () => {
-      console.log("[tauri-bridge] close (no-op)");
     },
     toggleMaximize: async () => {
-      console.log("[tauri-bridge] toggleMaximize (no-op)");
     },
     listen:
       async (_event: string, _callback: any): Promise<() => void> =>
@@ -1281,18 +1271,9 @@ export function getCurrentWindow(): any {
 // 4. @tauri-apps/plugin-dialog
 export async function open(options?: any): Promise<any> {
   const tauri = tauriApi();
-  console.log(
-    "[tauri-bridge] dialog open:",
-    JSON.stringify(options),
-    "mode:",
-    MODE,
-    "hasTAURI:",
-    !!tauri?.invoke,
-  );
   if (tauri?.invoke) {
     try {
       const result = await tauri.invoke("plugin:dialog|open", { options });
-      console.log("[tauri-bridge] dialog result:", result);
       return result;
     } catch (err) {
       console.error("[tauri-bridge] dialog invoke error:", err);
@@ -1304,7 +1285,6 @@ export async function open(options?: any): Promise<any> {
 
 export async function save(options?: any): Promise<any> {
   const tauri = tauriApi();
-  console.log("[tauri-bridge] dialog save:", options);
   if (tauri?.invoke) {
     try {
       return await tauri.invoke("plugin:dialog|save", { options });
@@ -1318,7 +1298,6 @@ export async function save(options?: any): Promise<any> {
 
 // 5. @tauri-apps/plugin-opener
 export async function openUrl(url: string, openWith?: string): Promise<void> {
-  console.log(`[tauri-bridge] open url -> ${url}`);
   const tauri = tauriApi();
   if (tauri?.invoke) {
     await tauri.invoke("plugin:opener|open_url", { url, with: openWith });
@@ -1328,7 +1307,6 @@ export async function openUrl(url: string, openWith?: string): Promise<void> {
 }
 
 export async function openPath(path: string, openWith?: string): Promise<void> {
-  console.log(`[tauri-bridge] open path -> ${path}`);
   const tauri = tauriApi();
   if (tauri?.invoke) {
     await tauri.invoke("plugin:opener|open_path", { path, with: openWith });
@@ -1339,7 +1317,6 @@ export async function openPath(path: string, openWith?: string): Promise<void> {
 
 // 6. @tauri-apps/plugin-process
 export async function relaunch(): Promise<void> {
-  console.log("[tauri-bridge] process relaunch (reload page)");
   window.location.reload();
   return Promise.resolve();
 }

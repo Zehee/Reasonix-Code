@@ -1219,20 +1219,7 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
     let current_out = state.current.clone();
     let found_out = found_url.clone();
     thread::spawn(move || {
-        let mut logged = 0;
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-            if !found_out.load(Ordering::SeqCst) {
-                // Diagnostic: log what the CLI prints before the dashboard
-                // ready line (trimmed; token-bearing URLs are skipped).
-                let trimmed = line.trim();
-                if logged < 20 && !trimmed.is_empty() && !is_dashboard_ready_line(trimmed) {
-                    logged += 1;
-                    log_line(&format!(
-                        "stdout[{id}]: {}",
-                        trimmed.chars().take(80).collect::<String>()
-                    ));
-                }
-            }
             if found_out.load(Ordering::SeqCst) {
                 continue;
             }
