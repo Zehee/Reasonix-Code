@@ -8,7 +8,6 @@ const framesEl = document.getElementById("frames");
 const emptyEl = document.getElementById("empty");
 const errbarEl = document.getElementById("errbar");
 const particlesEl = document.getElementById("particles");
-const btnLast = document.getElementById("btn-last");
 const btnChoose = document.getElementById("btn-choose");
 const recentWrap = document.getElementById("recent-wrap");
 const keyPanel = document.getElementById("key-panel");
@@ -369,22 +368,41 @@ async function init() {
   } else {
     // No running instances: show the workspace picker instead of
     // auto-resuming, so the user chooses which workspace to open.
-    let lastPath = null;
-    try {
-      lastPath = await invoke("last_workspace");
-    } catch {
-      /* no last workspace */
-    }
-    const recentWrap = document.getElementById("recent-wrap");
-    if (lastPath) {
-      recentWrap.style.display = "";
-      document.getElementById("last-name").textContent = baseName(lastPath);
-      document.getElementById("last-path").textContent = lastPath;
-      btnLast.dataset.path = lastPath;
-    } else {
-      recentWrap.style.display = "none";
-    }
+    await renderRecent();
     renderEmptyState();
+  }
+}
+
+// Up to 3 recently opened workspaces, newest first; clicking one opens it.
+async function renderRecent() {
+  let list = [];
+  try {
+    list = await invoke("recent_workspaces");
+  } catch {
+    /* shell too old — hide the list */
+  }
+  recentWrap.innerHTML = "";
+  if (!Array.isArray(list) || list.length === 0) {
+    recentWrap.style.display = "none";
+    return;
+  }
+  recentWrap.style.display = "";
+  const label = document.createElement("div");
+  label.className = "recent-label";
+  label.textContent = "最近打开";
+  recentWrap.appendChild(label);
+  for (const path of list.slice(0, 3)) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "recent-item";
+    const name = baseName(path) || path;
+    b.innerHTML =
+      '<span class="folder" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>' +
+      `<span class="recent-name">${name}</span>` +
+      `<span class="recent-path">${path}</span>` +
+      '<span class="open">打开</span>';
+    b.addEventListener("click", () => spawnAt(path));
+    recentWrap.appendChild(b);
   }
 }
 
@@ -455,15 +473,17 @@ listen("cli:exit", (payload) => {
   }
 });
 listen("cli:error", (payload) => {
-  showError(String(payload ?? "Failed to start Reasonix"));
+  const s = String(payload ?? "Failed to start Reasonix");
+  // No API key: the CLI cannot boot at all — show the inline key form
+  // instead of an opaque error (spawns are rejected with NO_API_KEY:<path>).
+  if (s.includes("NO_API_KEY")) {
+    handleNoApiKey(s);
+    return;
+  }
+  showError(s);
 });
 
 // ── UI wiring ───────────────────────────────────────────────────
 btnChoose.addEventListener("click", pickWorkspace);
-btnLast.addEventListener("click", async () => {
-  const path = btnLast.dataset.path;
-  if (!path) return;
-  spawnAt(path);
-});
 
 init();

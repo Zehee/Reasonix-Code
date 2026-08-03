@@ -348,6 +348,49 @@ fn has_api_key() -> bool {
     config_has_api_key()
 }
 
+// ── Recent workspaces (up to 3, newest first) ──────────────────
+fn recent_file() -> Option<std::path::PathBuf> {
+    let home = std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))?;
+    Some(std::path::PathBuf::from(home).join(".reasonix-code").join("recent.json"))
+}
+
+fn record_recent(path: &Path) {
+    let Some(file) = recent_file() else { return };
+    let mut list: Vec<String> = std::fs::read_to_string(&file)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
+    let s = path.to_string_lossy().into_owned();
+    list.retain(|p| p != &s);
+    list.insert(0, s);
+    list.truncate(3);
+    if let Some(parent) = file.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_string(&list) {
+        let _ = std::fs::write(&file, json);
+    }
+}
+
+/// Newest-first recent workspace paths, filtered to existing directories.
+#[tauri::command]
+fn recent_workspaces() -> Vec<String> {
+    let Some(file) = recent_file() else {
+        return vec![];
+    };
+    let Ok(text) = std::fs::read_to_string(&file) else {
+        return vec![];
+    };
+    let Ok(list) = serde_json::from_str::<Vec<String>>(&text) else {
+        return vec![];
+    };
+    list.into_iter()
+        .filter(|p| Path::new(p).is_dir())
+        .take(3)
+        .collect()
+}
+
 /// Persist the DeepSeek API key into ~/.reasonix/config.json (preserving
 /// all other fields) and export it for child processes.
 #[tauri::command]
@@ -1231,6 +1274,7 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
                         serde_json::json!({ "id": id, "url": url, "path": path }),
                     );
                 }
+                record_recent(workspace);
                 return Ok(id);
             }
         }
@@ -1242,7 +1286,6 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
     if !config_has_api_key() {
         return Err(format!("NO_API_KEY:{}", workspace.to_string_lossy()));
     }
-
     if let Some(prefix) = reasonix_npm_prefix() {
         add_prefix_bin_to_path(&prefix);
     }
@@ -1452,6 +1495,7 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
         });
     }
 
+    record_recent(workspace);
     Ok(id)
 }
 
@@ -1597,6 +1641,7 @@ fn main() {
             install_node,
             has_api_key,
             save_api_key,
+            recent_workspaces,
             launch_backend,
             pick_workspace,
             switch_workspace,
