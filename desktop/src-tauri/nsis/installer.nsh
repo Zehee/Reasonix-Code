@@ -61,16 +61,18 @@
         Goto npm_ok
 
   npm_ok:
-    DetailPrint "Installing reasonix-code via npm..."
+    DetailPrint "正在安装 reasonix-code 命令行版（首次安装可能需要几分钟，请耐心等待）..."
     ; npm may have just been installed by winget — the current process's
     ; PATH is stale, so try the canonical install location first and fall
-    ; back to PATH.
-    nsExec::ExecToStack 'cmd /c if exist "$LOCALAPPDATA\Programs\nodejs\npm.cmd" ("$LOCALAPPDATA\Programs\nodejs\npm.cmd" install -g --prefix "$PROFILE\.reasonix-code\npm-global" reasonix-code) else (npm install -g --prefix "$PROFILE\.reasonix-code\npm-global" reasonix-code)'
+    ; back to PATH. A 5-minute timeout keeps the installer from hanging
+    ; forever on a stalled network.
+    nsExec::ExecToStack /TIMEOUT=300000 'cmd /c if exist "$LOCALAPPDATA\Programs\nodejs\npm.cmd" ("$LOCALAPPDATA\Programs\nodejs\npm.cmd" install -g --prefix "$PROFILE\.reasonix-code\npm-global" reasonix-code) else (npm install -g --prefix "$PROFILE\.reasonix-code\npm-global" reasonix-code)'
     Pop $0
     Pop $1
     IntCmp $0 0 path_setup
-      DetailPrint "Warning: npm install failed (exit code $0)."
-      DetailPrint "The desktop app will prompt you to install it on first launch."
+      DetailPrint "npm 安装失败或超时（退出码 $0）。"
+      DetailPrint "可稍后在终端手动执行：npm install -g --prefix ""$PROFILE\.reasonix-code\npm-global"" reasonix-code"
+      DetailPrint "桌面版首次启动时也会提示安装命令行版。"
       Goto done
   path_setup:
     ; Make reasonix-code available in the user's terminals too: append the
