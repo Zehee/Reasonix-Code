@@ -1,51 +1,36 @@
-import { useId } from "react";
-
-// The Reasonix brand mark: three concentric diamonds (outer hollow, middle
-// hollow, inner solid) filled with the signature cyan → indigo → fuchsia
-// gradient. Mirrors docs/logo.svg (minus the animated pulse/rotation).
-export function BrandMark({
-  size = 58,
+// The Reasonix-Code brand logo: white rounded square with the green "Rx"
+// mark, matching desktop/icons/source.svg (the app icon). Used on the
+// splash screen, the welcome/empty state, the title bar and the about
+// dialog. The wordmark text is omitted — it is unreadable at small sizes.
+export function BrandLogo({
+  size = 56,
   className,
 }: {
   size?: number;
   className?: string;
 }) {
-  const gid = useId();
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 92 92"
+      viewBox="0 0 1254 1254"
       className={className}
       aria-hidden="true"
     >
-      <defs>
-        <linearGradient id={`${gid}-g`} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#5eead4" />
-          <stop offset="50%" stopColor="#93c5fd" />
-          <stop offset="100%" stopColor="#c4b5fd" />
-        </linearGradient>
-      </defs>
-      <g transform="translate(46, 46)">
-        <path
-          d="M 0,-38 L 38,0 L 0,38 L -38,0 Z"
-          fill="none"
-          stroke={`url(#${gid}-g)`}
-          strokeWidth="3.5"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M 0,-22 L 22,0 L 0,22 L -22,0 Z"
-          fill="none"
-          stroke={`url(#${gid}-g)`}
-          strokeWidth="2"
-          strokeLinejoin="round"
-          opacity="0.7"
-        />
-        <path
-          d="M 0,-9 L 9,0 L 0,9 L -9,0 Z"
-          fill={`url(#${gid}-g)`}
-        />
+      <rect
+        x="6.03"
+        y="6.03"
+        width="1241.94"
+        height="1241.94"
+        rx="212.47"
+        ry="212.47"
+        fill="#fff"
+      />
+      <g fill="#339933">
+        <path d="M657.07,556.02c4.59,3.86,10.93,5.3,17.45,2.32,2.59-1.18,4.3-4.19,3.22-7.14-8.6-23.51-32.86-40.71-42.55-27.41-1.18,1.63-1.14,3.74-.24,5.03.71,1.02,2.14,1.26,3.99.88,5.89-1.22,13.21,2.87,12.52,9.44-.72,6.85.66,12.72,5.61,16.89Z" />
+        <path d="M798.75,598.8c22.21-24.86,36.14-54.9,40.99-87.98,11.07-72.3-24.83-138.35-92.45-166.33-23.77-9.56-48.19-13.62-74.13-13.37l-251.41.07.02,481.78,123.58-.1v-169.44c-4.09-1.52-6.91-2.78-6.91-2.78-26.86-12.28-47.42-33.58-58.71-60.25-14.41-34.05-9.96-72.23,12.69-101.26,22.56-28.2,53.39-37.16,88.72-32.2,13.05,1.83,27-13.49,53.57-10.57,1.79.2,3.58,1.54,3.76,2.6.62,3.63-9.65,5.57-9.66,15.48,0,4.17,1.87,9,5.81,11.76,13.54,9.5,25.27,20.18,37.54,31.22,5.96,5.36,26.19,20.45,31.34,8.16,3-7.17,4.99-14.67,6.98-22.28.98-3.77-1.1-6.02-4.14-7.82-20.87-12.35-28.73-38.11-20.57-60.92.79-2.2,2.82-3.27,4.56-3.34,7.01-.3,3.28,12.7,20.59,18.03,16.44,5.06,16.94,18.73,24.93,13.29,18.63-12.7,25.34-2.3,42.61-18.58,1.78-1.67,4.83-1.79,6.68-.51,1.14.79,2.12,2.84,2.03,5.22-.51,13.75-5.87,26.88-15.26,36.97-17.76,19.08-32.69,9.95-33.65,23.31-2.83,39.22-15.66,78.37-43.49,106.85-.89.91-1.43,2.22-1.28,3.1.16.92,1.26,1.82,2.46,2.23l23.45,7.97c3.32,1.13,5.72,4.1,5.3,7.27-.37,2.76-2.57,5.2-5.74,6.25-17.21,5.7-35.7,4.7-53.23-.6-23.19,19.53-51.68,29.59-82.74,28.38l45.08,62.23,73.54,100.4,146.79-.2-124.45-168.04c28.97-8.55,54.42-23.87,74.8-45.98Z" />
+        <circle cx="640.36" cy="538.21" r="3.47" />
+        <path d="M504.6,517.71c-7.75.94-12.41,6.5-11.66,14.8,5.25,57.86,58.62,105.22,118.44,93.8,12.73-2.43,24.33-7.49,33.74-16.99-20.35-17.53-30.27-35.39-47.01-52.99-23.95-25.18-58.04-42.91-93.5-38.62Z" />
       </g>
     </svg>
   );

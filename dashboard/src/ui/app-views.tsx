@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { t, useLang } from "../i18n";
 import { I } from "../icons";
+import { BrandLogo } from "./brand";
 
 export function MainHead({
   session,
@@ -116,24 +117,8 @@ export function EmptyState({
         fontFamily: "var(--font-sans, 'Geist', sans-serif)",
       }}
     >
-      <div
-        style={{
-          width: 56,
-          height: 56,
-          borderRadius: 12,
-          margin: "0 auto 14px",
-          background: "linear-gradient(135deg, var(--accent), var(--violet))",
-          position: "relative",
-        }}
-      >
-        <span
-          style={{
-            position: "absolute",
-            inset: 8,
-            borderRadius: 6,
-            background: "var(--bg)",
-          }}
-        />
+      <div style={{ margin: "0 auto 14px", width: 56 }}>
+        <BrandLogo size={56} />
       </div>
       <div style={{ fontSize: 18, fontWeight: 600, color: "var(--fg)", marginBottom: 4 }}>
         {t("app.empty.welcome")}

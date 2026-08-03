@@ -1,7 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { t } from "../i18n";
 import { I } from "../icons";
-import { BrandMark } from "./brand";
+import { BrandLogo } from "./brand";
 
 const REPO_URL = "https://github.com/esengine/DeepSeek-Reasonix";
 
@@ -17,7 +17,7 @@ export function AboutModal({ onClose }: { onClose: () => void }) {
           <I.x size={14} />
         </button>
         <div className="about-brand">
-          <BrandMark size={44} />
+          <BrandLogo size={44} />
           <div className="about-name">Reasonix Code</div>
           <div className="about-tagline">{t("about.tagline")}</div>
         </div>
