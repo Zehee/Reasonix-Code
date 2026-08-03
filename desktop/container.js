@@ -7,6 +7,7 @@ const tauri = typeof window !== "undefined" ? window.__TAURI__ : undefined;
 const framesEl = document.getElementById("frames");
 const emptyEl = document.getElementById("empty");
 const errbarEl = document.getElementById("errbar");
+const particlesEl = document.getElementById("particles");
 const btnLast = document.getElementById("btn-last");
 const btnChoose = document.getElementById("btn-choose");
 
@@ -171,7 +172,11 @@ function activate(id) {
 }
 
 function renderEmptyState() {
-  emptyEl.classList.toggle("show", frames.size === 0);
+  const show = frames.size === 0;
+  emptyEl.classList.toggle("show", show);
+  // Ambient particles only make sense behind the picker; hide them once
+  // a dashboard iframe is up.
+  if (particlesEl) particlesEl.style.visibility = show ? "visible" : "hidden";
 }
 
 // ── Liveness (reopen-time only, no heartbeat) ───────────────────
@@ -206,6 +211,53 @@ async function pickWorkspace() {
   }
 }
 
+// ── Ambient particles (picker background) ──────────────────────
+// Small green motes drifting upward behind the workspace picker.
+function initParticles() {
+  const canvas = document.getElementById("particles");
+  if (!canvas || !canvas.getContext) return;
+  const ctx = canvas.getContext("2d");
+  let W = 0;
+  let H = 0;
+  const parts = [];
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener("resize", resize);
+  const COUNT = 42;
+  for (let i = 0; i < COUNT; i++) {
+    parts.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: Math.random() * 1.8 + 0.6,
+      v: Math.random() * 0.28 + 0.08,
+      o: Math.random() * 0.45 + 0.12,
+      p: Math.random() * Math.PI * 2,
+    });
+  }
+  function tick() {
+    ctx.clearRect(0, 0, W, H);
+    for (const p of parts) {
+      p.y -= p.v;
+      p.p += 0.01;
+      if (p.y < -4) {
+        p.y = H + 4;
+        p.x = Math.random() * W;
+      }
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle =
+        "rgba(76, 175, 80, " + p.o * (0.55 + 0.45 * Math.sin(p.p)) + ")";
+      ctx.fill();
+    }
+    requestAnimationFrame(tick);
+  }
+  tick();
+}
+initParticles();
+
 // ── Boot ────────────────────────────────────────────────────────
 async function init() {
   // Shell versions go in the native window title.
@@ -226,18 +278,29 @@ async function init() {
   } catch (e) {
     showError(`list_workspaces failed: ${e}`);
   }
-  for (const ws of list) addFrame(ws);
+  for (const ws of list) await addFrame(ws);
   if (list.length) {
     const first = list.find((w) => w.url) ?? list[0];
     activate(first.id);
   } else {
+    // No running instances: show the workspace picker instead of
+    // auto-resuming, so the user chooses which workspace to open.
+    let lastPath = null;
     try {
-      const last = await invoke("last_workspace");
-      if (last) spawnAt(last);
-      else renderEmptyState();
+      lastPath = await invoke("last_workspace");
     } catch {
-      renderEmptyState();
+      /* no last workspace */
     }
+    const recentWrap = document.getElementById("recent-wrap");
+    if (lastPath) {
+      recentWrap.style.display = "";
+      document.getElementById("last-name").textContent = baseName(lastPath);
+      document.getElementById("last-path").textContent = lastPath;
+      btnLast.dataset.path = lastPath;
+    } else {
+      recentWrap.style.display = "none";
+    }
+    renderEmptyState();
   }
 }
 
@@ -261,6 +324,11 @@ window.addEventListener("message", (ev) => {
       break;
     case "reasonix:open-workspace":
       if (typeof msg.path === "string" && msg.path) spawnAt(msg.path);
+      break;
+    case "reasonix:iframe-ready":
+      // Dashboard mounted and its listener is live — (re)send the tab
+      // snapshot. The iframe-load broadcast can race the React mount.
+      broadcastTabs();
       break;
     default:
       break;
@@ -295,12 +363,9 @@ listen("cli:error", (payload) => {
 // ── UI wiring ───────────────────────────────────────────────────
 btnChoose.addEventListener("click", pickWorkspace);
 btnLast.addEventListener("click", async () => {
-  try {
-    const last = await invoke("last_workspace");
-    if (last) spawnAt(last);
-  } catch {
-    /* no last workspace */
-  }
+  const path = btnLast.dataset.path;
+  if (!path) return;
+  spawnAt(path);
 });
 
 init();

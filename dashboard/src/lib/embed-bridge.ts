@@ -20,6 +20,17 @@ export function postToParent(msg: unknown): void {
   window.parent.postMessage(msg, "*");
 }
 
+/**
+ * Handshake: once the dashboard has mounted and its message listener is
+ * registered, tell the container so it (re)broadcasts the tab snapshot.
+ * The container's iframe-load broadcast can race the React mount; this
+ * pull-style handshake makes the first tab list reliable.
+ */
+export function announceEmbedReady(): void {
+  if (!isEmbed || window.parent === window) return;
+  window.parent.postMessage({ type: "reasonix:iframe-ready" }, "*");
+}
+
 /** Subscribe to container messages (no-op outside embed mode). Returns an
  *  unsubscribe function. Only messages from the local dashboard servers
  *  (127.0.0.1 / localhost) are accepted. */

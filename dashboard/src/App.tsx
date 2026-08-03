@@ -8,7 +8,7 @@ import { CommandPalette, Toast, buildCommands, useCommandPalette } from "./Comma
 import { WorkspaceProvider } from "./Markdown";
 import { getLang, getLangLabel, getSupportedLangs, setLang, t, useLang } from "./i18n";
 import { I } from "./icons";
-import { isEmbed, onEmbedMessage, postToParent } from "./lib/embed-bridge";
+import { announceEmbedReady, isEmbed, onEmbedMessage, postToParent } from "./lib/embed-bridge";
 import { readSessionFromUrl, writeSessionToUrl } from "./lib/session-url";
 import { setActiveTabIdInBridge } from "./lib/tauri-bridge";
 import type {
@@ -342,6 +342,10 @@ export function App() {
   // workspace) and broadcasts it here, so this dashboard's TabBar renders
   // and activates the container's tabs.
   useEffect(() => {
+    if (!isEmbed) return;
+    // Pull-style handshake: the container may have broadcast before React
+    // mounted (iframe-load races the module graph); ask for a fresh copy.
+    announceEmbedReady();
     return onEmbedMessage((msg) => {
       if (msg.type === "reasonix:tabs" && Array.isArray(msg.tabs)) {
         const next: TabMeta[] = msg.tabs.map((t: any) => ({

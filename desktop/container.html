@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta
@@ -17,16 +17,20 @@
         padding: 0;
         width: 100%;
         height: 100%;
-        background: #0b0b0b;
+        background: radial-gradient(1200px 800px at 50% -10%, #12281a 0%, #0b0b0b 55%);
         overflow: hidden;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC",
+          "Microsoft YaHei", sans-serif;
+        -webkit-font-smoothing: antialiased;
       }
       /* Each workspace dashboard fills the window; the dashboards render
          their own TabBar (driven via postMessage) — this page owns only
-         the iframes and the empty state. */
+         the iframes and the empty/picker state. */
       #frames {
         position: relative;
         width: 100%;
         height: 100%;
+        z-index: 1;
       }
       .ws-frame {
         position: absolute;
@@ -37,60 +41,203 @@
         background: #0b0b0b;
       }
 
+      /* Ambient particle layer behind the picker (see container.js). */
+      #particles {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+      }
+
+      /* ── Workspace picker (empty state) ─────────────────────── */
       #empty {
         position: absolute;
         inset: 0;
         display: none;
-        flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 18px;
-        background: #0b0b0b;
+        background: transparent;
         color: #e5e5e5;
-        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
         text-align: center;
+        z-index: 1;
       }
       #empty.show {
         display: flex;
       }
-      #empty .logo {
-        width: 84px;
-        height: 84px;
-        filter: drop-shadow(0 14px 30px rgba(51, 153, 51, 0.22));
+
+      .empty-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        max-width: 460px;
+        padding: 24px;
+        animation: empty-in 0.5s cubic-bezier(0.2, 0.7, 0.1, 1) both;
       }
-      #empty h1 {
+      @keyframes empty-in {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .logo {
+        width: 88px;
+        height: 88px;
+        margin-bottom: 22px;
+        filter: drop-shadow(0 16px 34px rgba(51, 153, 51, 0.28));
+      }
+      .logo svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      h1 {
         margin: 0;
-        font-size: 20px;
-        font-weight: 650;
+        font-size: 24px;
+        font-weight: 700;
         letter-spacing: -0.02em;
       }
-      #empty p {
-        margin: 0;
-        font-size: 13px;
-        color: #8a9198;
+      .tagline {
+        margin: 8px 0 0;
+        font-size: 14px;
+        color: #9fb3a6;
+        letter-spacing: 0.01em;
       }
-      #empty .actions {
+      .desc {
+        margin: 14px 0 0;
+        font-size: 12.5px;
+        line-height: 1.7;
+        color: #6d7a72;
+      }
+
+      /* Recent workspace card */
+      .recent {
+        display: none;
+        width: 100%;
+        margin-top: 28px;
+        text-align: left;
+      }
+      .recent-label {
+        font-size: 11px;
+        color: #6d7a72;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+      }
+      .recent-item {
         display: flex;
-        gap: 10px;
-        margin-top: 6px;
-      }
-      button.action {
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 12px 14px;
+        border: 1px solid #2a2f2c;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.03);
+        color: #e5e5e5;
         font: inherit;
+        cursor: pointer;
+        text-align: left;
+        transition: background 0.15s, border-color 0.15s, transform 0.08s;
+      }
+      .recent-item:hover {
+        background: rgba(51, 153, 51, 0.08);
+        border-color: rgba(51, 153, 51, 0.4);
+      }
+      .recent-item:active {
+        transform: translateY(1px);
+      }
+      .recent-item .folder {
+        flex-shrink: 0;
+        width: 34px;
+        height: 34px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        background: rgba(51, 153, 51, 0.12);
+        color: #4caf50;
+      }
+      .recent-item .recent-name {
+        flex: 1;
+        min-width: 0;
         font-size: 13px;
         font-weight: 600;
-        padding: 9px 20px;
-        border-radius: 8px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .recent-item .recent-path {
+        font-size: 11px;
+        color: #6d7a72;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 160px;
+      }
+      .recent-item .open {
+        flex-shrink: 0;
+        font-size: 12px;
+        color: #4caf50;
+        border: 1px solid rgba(51, 153, 51, 0.35);
+        border-radius: 6px;
+        padding: 4px 10px;
+      }
+
+      /* Primary action */
+      .actions {
+        margin-top: 18px;
+        width: 100%;
+      }
+      button.action {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        font: inherit;
+        font-size: 13.5px;
+        font-weight: 600;
+        padding: 12px 20px;
+        border-radius: 10px;
         border: 1px solid transparent;
         cursor: pointer;
+        transition: background 0.15s, box-shadow 0.15s, transform 0.08s;
+      }
+      button.action:active {
+        transform: translateY(1px);
       }
       button.action.primary {
-        background: #339933;
-        color: #fff;
+        background: linear-gradient(135deg, #3aa544, #2d8a38);
+        color: #ffffff;
+        box-shadow: 0 8px 24px -8px rgba(51, 153, 51, 0.55);
+      }
+      button.action.primary:hover {
+        background: linear-gradient(135deg, #43b54e, #32963d);
+        box-shadow: 0 10px 28px -8px rgba(51, 153, 51, 0.65);
       }
       button.action.secondary {
         background: transparent;
-        color: #339933;
-        border-color: #3a3a3a;
+        color: #8fa396;
+        border-color: #2a2f2c;
+      }
+      button.action.secondary:hover {
+        background: rgba(255, 255, 255, 0.04);
+        color: #c8d4cc;
+      }
+
+      .hint {
+        margin-top: 16px;
+        font-size: 11.5px;
+        color: #545d57;
+      }
+      .hint b {
+        color: #7d8f83;
+        font-weight: 600;
       }
 
       #errbar {
@@ -105,35 +252,55 @@
         background: #2b1414;
         border: 1px solid #5c2a2a;
         color: #ff6b6b;
-        font-family: system-ui, sans-serif;
         font-size: 12.5px;
         z-index: 10;
       }
     </style>
   </head>
   <body>
+    <canvas id="particles" aria-hidden="true"></canvas>
     <div id="frames"></div>
 
     <div id="empty">
-      <div class="logo" aria-hidden="true">
-        <svg viewBox="0 0 1254 1254" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <style>
-              .c { fill: #339933; }
-            </style>
-          </defs>
-          <rect x="6.03" y="6.03" width="1241.94" height="1241.94" rx="212.47" ry="212.47" fill="#0b0b0b"/>
-          <path class="c" d="M657.07,556.02c4.59,3.86,10.93,5.3,17.45,2.32,2.59-1.18,4.3-4.19,3.22-7.14-8.6-23.51-32.86-40.71-42.55-27.41-1.18,1.63-1.14,3.74-.24,5.03.71,1.02,2.14,1.26,3.99.88,5.89-1.22,13.21,2.87,12.52,9.44-.72,6.85.66,12.72,5.61,16.89Z"/>
-          <path class="c" d="M798.75,598.8c22.21-24.86,36.14-54.9,40.99-87.98,11.07-72.3-24.83-138.35-92.45-166.33-23.77-9.56-48.19-13.62-74.13-13.37l-251.41.07.02,481.78,123.58-.1v-169.44c-4.09-1.52-6.91-2.78-6.91-2.78-26.86-12.28-47.42-33.58-58.71-60.25-14.41-34.05-9.96-72.23,12.69-101.26,22.56-28.2,53.39-37.16,88.72-32.2,13.05,1.83,27-13.49,53.57-10.57,1.79.2,3.58,1.54,3.76,2.6.62,3.63-9.65,5.57-9.66,15.48,0,4.17,1.87,9,5.81,11.76,13.54,9.5,25.27,20.18,37.54,31.22,5.96,5.36,26.19,20.45,31.34,8.16,3-7.17,4.99-14.67,6.98-22.28.98-3.77-1.1-6.02-4.14-7.82-20.87-12.35-28.73-38.11-20.57-60.92.79-2.2,2.82-3.27,4.56-3.34,7.01-.3,3.28,12.7,20.59,18.03,16.44,5.06,16.94,18.73,24.93,13.29,18.63-12.7,25.34-2.3,42.61-18.58,1.78-1.67,4.83-1.79,6.68-.51,1.14.79,2.12,2.84,2.03,5.22-.51,13.75-5.87,26.88-15.26,36.97-17.76,19.08-32.69,9.95-33.65,23.31-2.83,39.22-15.66,78.37-43.49,106.85-.89.91-1.43,2.22-1.28,3.1.16.92,1.26,1.82,2.46,2.23l23.45,7.97c3.32,1.13,5.72,4.1,5.3,7.27-.37,2.76-2.57,5.2-5.74,6.25-17.21,5.7-35.7,4.7-53.23-.6-23.19,19.53-51.68,29.59-82.74,28.38l45.08,62.23,73.54,100.4,146.79-.2-124.45-168.04c28.97-8.55,54.42-23.87,74.8-45.98Z"/>
-          <circle class="c" cx="640.36" cy="538.21" r="3.47"/>
-          <path class="c" d="M504.6,517.71c-7.75.94-12.41,6.5-11.66,14.8,5.25,57.86,58.62,105.22,118.44,93.8,12.73-2.43,24.33-7.49,33.74-16.99-20.35-17.53-30.27-35.39-47.01-52.99-23.95-25.18-58.04-42.91-93.5-38.62Z"/>
-        </svg>
-      </div>
-      <h1>Reasonix Code</h1>
-      <p>Open a workspace to get started.</p>
-      <div class="actions">
-        <button type="button" class="action secondary" id="btn-last">Use last workspace</button>
-        <button type="button" class="action primary" id="btn-choose">Choose folder…</button>
+      <div class="empty-inner">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 1254 1254" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <style>
+                .c { fill: #339933; }
+              </style>
+            </defs>
+            <rect x="6.03" y="6.03" width="1241.94" height="1241.94" rx="212.47" ry="212.47" fill="#0b0b0b"/>
+            <path class="c" d="M657.07,556.02c4.59,3.86,10.93,5.3,17.45,2.32,2.59-1.18,4.3-4.19,3.22-7.14-8.6-23.51-32.86-40.71-42.55-27.41-1.18,1.63-1.14,3.74-.24,5.03.71,1.02,2.14,1.26,3.99.88,5.89-1.22,13.21,2.87,12.52,9.44-.72,6.85.66,12.72,5.61,16.89Z"/>
+            <path class="c" d="M798.75,598.8c22.21-24.86,36.14-54.9,40.99-87.98,11.07-72.3-24.83-138.35-92.45-166.33-23.77-9.56-48.19-13.62-74.13-13.37l-251.41.07.02,481.78,123.58-.1v-169.44c-4.09-1.52-6.91-2.78-6.91-2.78-26.86-12.28-47.42-33.58-58.71-60.25-14.41-34.05-9.96-72.23,12.69-101.26,22.56-28.2,53.39-37.16,88.72-32.2,13.05,1.83,27-13.49,53.57-10.57,1.79.2,3.58,1.54,3.76,2.6.62,3.63-9.65,5.57-9.66,15.48,0,4.17,1.87,9,5.81,11.76,13.54,9.5,25.27,20.18,37.54,31.22,5.96,5.36,26.19,20.45,31.34,8.16,3-7.17,4.99-14.67,6.98-22.28.98-3.77-1.1-6.02-4.14-7.82-20.87-12.35-28.73-38.11-20.57-60.92.79-2.2,2.82-3.27,4.56-3.34,7.01-.3,3.28,12.7,20.59,18.03,16.44,5.06,16.94,18.73,24.93,13.29,18.63-12.7,25.34-2.3,42.61-18.58,1.78-1.67,4.83-1.79,6.68-.51,1.14.79,2.12,2.84,2.03,5.22-.51,13.75-5.87,26.88-15.26,36.97-17.76,19.08-32.69,9.95-33.65,23.31-2.83,39.22-15.66,78.37-43.49,106.85-.89.91-1.43,2.22-1.28,3.1.16.92,1.26,1.82,2.46,2.23l23.45,7.97c3.32,1.13,5.72,4.1,5.3,7.27-.37,2.76-2.57,5.2-5.74,6.25-17.21,5.7-35.7,4.7-53.23-.6-23.19,19.53-51.68,29.59-82.74,28.38l45.08,62.23,73.54,100.4,146.79-.2-124.45-168.04c28.97-8.55,54.42-23.87,74.8-45.98Z"/>
+            <circle class="c" cx="640.36" cy="538.21" r="3.47"/>
+            <path class="c" d="M504.6,517.71c-7.75.94-12.41,6.5-11.66,14.8,5.25,57.86,58.62,105.22,118.44,93.8,12.73-2.43,24.33-7.49,33.74-16.99-20.35-17.53-30.27-35.39-47.01-52.99-23.95-25.18-58.04-42.91-93.5-38.62Z"/>
+          </svg>
+        </div>
+        <h1>Reasonix Code</h1>
+        <p class="tagline">选择一个工作区开始</p>
+        <p class="desc">工作区对应一个代码目录，每个工作区拥有独立的会话、上下文与工具状态，互不干扰。</p>
+
+        <div class="recent" id="recent-wrap">
+          <div class="recent-label">最近使用</div>
+          <button type="button" class="recent-item" id="btn-last">
+            <span class="folder" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+            </span>
+            <span class="recent-name" id="last-name">workspace</span>
+            <span class="recent-path" id="last-path"></span>
+            <span class="open">打开</span>
+          </button>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="action primary" id="btn-choose">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            选择工作区文件夹…
+          </button>
+        </div>
+
+        <p class="hint">进入后可通过顶部 <b>+</b> 新建工作区，或在状态栏随时切换</p>
       </div>
     </div>
 
