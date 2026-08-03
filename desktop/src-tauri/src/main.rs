@@ -1094,7 +1094,7 @@ fn dashboard_url_from_config_text(text: &str) -> Option<String> {
 /// (the TUI appends it in getDashboardUrl); without it the history panel stays
 /// empty and the already-active session can't be re-clicked to load.
 fn dashboard_url_from_config() -> Option<String> {
-    let path = home_dir()?.join(".reasonix").join("config.json");
+    let path = cli_config_path()?;
     let text = std::fs::read_to_string(path).ok()?;
     let (host, port, token) = dashboard_config_from_text(&text)?;
     let mut url = format!("http://{host}:{port}/?token={token}");
