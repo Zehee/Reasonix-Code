@@ -376,16 +376,13 @@ fn console_forwarding_hook(
 /// fired yet) and the dashboard server (HTTP GET on its URL, 2 s timeout).
 /// The container page checks this before restoring a hidden iframe, so it
 /// never shows a frame whose backend is gone.
+/// Checked before restoring a hidden iframe so we never show a frame whose
+/// backend is gone. Death is decided ONLY by the process layer: a live
+/// process (even if its dashboard HTTP is temporarily slow or mid-restart)
+/// keeps its tab. Probe errors are treated as alive — a busy CLI server
+/// must not look like a dead workspace (that killed tabs on tab switches).
 #[tauri::command]
 async fn workspace_alive(state: State<'_, DesktopState>, id: u64) -> Result<bool, String> {
-    let url = {
-        let instances = state.instances.lock();
-        instances.iter().find(|i| i.id == id).and_then(|i| i.url.clone())
-    };
-    let Some(url) = url else {
-        return Ok(false);
-    };
-
     // Process layer.
     {
         let mut instances = state.instances.lock();
@@ -398,19 +395,7 @@ async fn workspace_alive(state: State<'_, DesktopState>, id: u64) -> Result<bool
         }
     }
 
-    // Server layer.
-    match reqwest::Client::builder()
-        .timeout(Duration::from_secs(2))
-        .build()
-    {
-        Ok(client) => client
-            .get(&url)
-            .send()
-            .await
-            .map(|r| Ok(r.status().is_success()))
-            .unwrap_or(Ok(false)),
-        Err(_) => Ok(true), // can't probe — assume alive
-    }
+    Ok(true)
 }
 
 /// `npm view reasonix-code version` — the latest published version.

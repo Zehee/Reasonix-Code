@@ -186,7 +186,6 @@ function activate(id) {
       /* frame not ready */
     }
   }
-  if (f) checkFrameAlive(f);
 }
 
 function renderEmptyState() {
