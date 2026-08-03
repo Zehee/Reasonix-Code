@@ -1236,6 +1236,13 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
         }
     }
 
+    // A fresh CLI cannot boot without an API key (DeepSeekClient throws at
+    // construction). The container intercepts this error and shows the
+    // inline key setup, then retries the spawn automatically.
+    if !config_has_api_key() {
+        return Err(format!("NO_API_KEY:{}", workspace.to_string_lossy()));
+    }
+
     if let Some(prefix) = reasonix_npm_prefix() {
         add_prefix_bin_to_path(&prefix);
     }

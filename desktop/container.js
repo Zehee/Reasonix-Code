@@ -33,9 +33,13 @@ function showError(text) {
   }, 6000);
 }
 
-// First-run API key setup. The CLI cannot boot without a key, so the
-// picker is replaced by an inline form; saving writes config.json via
-// the shell and re-runs the boot sequence.
+// Pending workspace chosen before the API key was provided — the spawn
+// was rejected with NO_API_KEY:<path>; after saving we resume it.
+let pendingPath = null;
+
+// First-run API key setup. The CLI cannot boot without a key; when a
+// spawn is rejected we swap the picker for an inline form, then resume
+// the pending workspace automatically after saving.
 function showKeyPanel() {
   recentWrap.style.display = "none";
   btnChoose.style.display = "none";
@@ -57,12 +61,27 @@ async function saveApiKey() {
     recentWrap.style.display = "";
     btnChoose.style.display = "";
     keyInput.value = "";
-    await init(); // full boot with the key now in place
+    const resume = pendingPath;
+    pendingPath = null;
+    if (resume) {
+      await spawnAt(resume); // pick up where the rejected spawn left off
+    } else {
+      await init();
+    }
   } catch (e) {
     showError(`保存 API Key 失败：${e}`);
   } finally {
     keySave.disabled = false;
   }
+}
+
+// Intercept the shell's NO_API_KEY rejection: remember the workspace and
+// show the key form instead of an opaque error.
+function handleNoApiKey(err) {
+  const s = String(err);
+  const m = s.match(/NO_API_KEY:(.*)/);
+  pendingPath = m ? m[1].trim() : null;
+  showKeyPanel();
 }
 
 keySave.addEventListener("click", saveApiKey);
@@ -256,6 +275,10 @@ async function spawnAt(path) {
   try {
     await invoke("launch_backend", { cwd: path });
   } catch (e) {
+    if (String(e).includes("NO_API_KEY")) {
+      handleNoApiKey(e);
+      return;
+    }
     showError(`Failed to start workspace: ${e}`);
   }
 }
@@ -264,6 +287,10 @@ async function pickWorkspace() {
   try {
     await invoke("pick_workspace");
   } catch (e) {
+    if (String(e).includes("NO_API_KEY")) {
+      handleNoApiKey(e);
+      return;
+    }
     showError(`Failed to pick folder: ${e}`);
   }
 }
@@ -317,18 +344,6 @@ initParticles();
 
 // ── Boot ────────────────────────────────────────────────────────
 async function init() {
-  // First run without an API key: the CLI can't boot (DeepSeekClient
-  // throws at construction), so show the inline key setup instead of
-  // failing workspace spawns in a loop.
-  try {
-    const hasKey = await invoke("has_api_key");
-    if (!hasKey) {
-      showKeyPanel();
-      return;
-    }
-  } catch {
-    /* probe failed — proceed; spawns will surface real errors */
-  }
   // Shell versions go in the native window title.
   try {
     const build = await invoke("desktop_build");
