@@ -12,7 +12,7 @@
 export const isEmbed = new URLSearchParams(window.location.search).has("embed");
 
 const PARENT_ORIGIN_OK = (origin: string) =>
-  /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin);
+  /^https?:\/\/((127\.0\.0\.1|localhost|tauri\.localhost)(:\d+)?)$/.test(origin);
 
 /** Send a message to the container page (no-op outside embed mode). */
 export function postToParent(msg: unknown): void {

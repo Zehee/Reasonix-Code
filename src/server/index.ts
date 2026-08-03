@@ -129,7 +129,13 @@ export async function dispatch(
       return;
     }
     const html = await renderIndexHtml(expectedToken, ctx.mode);
-    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.writeHead(200, {
+      "content-type": "text/html; charset=utf-8",
+      // Never cache the shell HTML — the container iframe must pick up
+      // dashboard updates immediately (WebView2 heuristically caches
+      // responses without explicit headers).
+      "cache-control": "no-store",
+    });
     res.end(html);
     return;
   }
@@ -147,7 +153,10 @@ export async function dispatch(
       res.end("not found");
       return;
     }
-    res.writeHead(200, { "content-type": asset.contentType });
+    res.writeHead(200, {
+      "content-type": asset.contentType,
+      "cache-control": "no-store",
+    });
     res.end(asset.body);
     return;
   }
