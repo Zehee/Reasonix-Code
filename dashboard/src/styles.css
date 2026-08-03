@@ -7121,7 +7121,10 @@ html:not([data-platform="macos"]) .cmdk-row .kb .shortcut kbd[data-key="mod"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg);
+  background:
+    radial-gradient(1200px 700px at 50% -10%, oklch(30% 0.06 250 / 0.9), transparent 60%),
+    radial-gradient(900px 600px at 85% 110%, oklch(28% 0.05 320 / 0.7), transparent 55%),
+    oklch(16% 0.02 255 / 1);
   transition: opacity 0.42s ease;
 }
 html[data-platform="macos"] .splash {

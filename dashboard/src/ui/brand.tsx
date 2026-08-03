@@ -34,7 +34,7 @@ export function BrandLogo({
     <svg
       width={size}
       height={size}
-      viewBox="452 282 366 366"
+      viewBox="330 400 575 575"
       className={className}
       aria-hidden="true"
       style={{ display: "block" }}
