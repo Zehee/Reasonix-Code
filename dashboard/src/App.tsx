@@ -10,7 +10,7 @@ import { getLang, getLangLabel, getSupportedLangs, setLang, t, useLang } from ".
 import { I } from "./icons";
 import { announceEmbedReady, isEmbed, onEmbedMessage, postToParent } from "./lib/embed-bridge";
 import { readSessionFromUrl, writeSessionToUrl } from "./lib/session-url";
-import { setActiveTabIdInBridge, forceDashboardReconnect } from "./lib/tauri-bridge";
+import { setActiveTabIdInBridge, forceDashboardReconnect, replayServerInit } from "./lib/tauri-bridge";
 import type {
   CheckpointVerdict,
   ChoiceVerdict,
@@ -346,6 +346,7 @@ export function App() {
     // Pull-style handshake: the container may have broadcast before React
     // mounted (iframe-load races the module graph); ask for a fresh copy.
     announceEmbedReady();
+    let firstTabs = true;
     return onEmbedMessage((msg) => {
       if (msg.type === "reasonix:activate") {
         // The container just showed this tab; the browser throttled the
@@ -355,6 +356,14 @@ export function App() {
         return;
       }
       if (msg.type === "reasonix:tabs" && Array.isArray(msg.tabs)) {
+        if (firstTabs) {
+          firstTabs = false;
+          // serverInit's snapshots ($ready, $settings, $sessions, …) raced
+          // this broadcast and were stamped with an empty tabId — dropped
+          // by routing. Re-run so the dashboard actually comes online
+          // (status bar, session list, context, model name).
+          replayServerInit();
+        }
         const next: TabMeta[] = msg.tabs.map((t: any) => ({
           id: String(t.id),
           workspaceDir: t.path ?? "",

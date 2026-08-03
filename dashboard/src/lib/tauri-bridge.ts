@@ -377,6 +377,21 @@ export function forceDashboardReconnect(): void {
   connectSSE();
 }
 
+/**
+ * Re-run the server bootstrap. Embed mode races: serverInit emits the
+ * initial snapshots ($ready, $settings, …) stamped with activeTabId, which
+ * is still empty until the container's reasonix:tabs broadcast arrives — so
+ * the snapshots get routed to no tab and the dashboard stays "offline".
+ * The container calls this once the tab list is known.
+ */
+export function replayServerInit(): void {
+  // Small delay so the React activeTabId state (and the bridge sync effect)
+  // settles before serverInit stamps its snapshots.
+  setTimeout(() => {
+    serverInit().catch(console.warn);
+  }, 50);
+}
+
 function connectSSE(): void {
   if (sse) sse.close();
   const token =
