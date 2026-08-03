@@ -1340,27 +1340,52 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
     });
 
     // Watchdog: if the dashboard URL never registers (CLI stalls before the
-    // ready line), log the stdout trace and surface a toast instead of
-    // leaving a silent dead tab.
+    // ready line — occasionally seen when several workspaces spawn at once),
+    // kill the stalled process, drop the instance, log the stdout trace and
+    // automatically retry once. The user never has to act.
     {
         let app_tmo = app.clone();
+        let state_tmo = state.clone();
         let found_tmo = found_url.clone();
         let tmo_id = id;
         let tmo_path = workspace.to_string_lossy().into_owned();
         thread::spawn(move || {
-            for _ in 0..120 {
+            for _ in 0..60 {
                 if found_tmo.load(Ordering::SeqCst) {
                     return;
                 }
                 thread::sleep(Duration::from_millis(500));
             }
-            if !found_tmo.load(Ordering::SeqCst) {
-                log_line(&format!("dashboard url timeout id={tmo_id} path={tmo_path}"));
-                let _ = app_tmo.emit(
-                    "cli:error",
-                    format!("工作区启动超时（dashboard 未就绪）：{tmo_path}"),
-                );
+            if found_tmo.load(Ordering::SeqCst) {
+                return;
             }
+            log_line(&format!("dashboard url timeout id={tmo_id} path={tmo_path}"));
+            // Reap the stalled process + instance.
+            {
+                let mut instances = state_tmo.instances.lock();
+                if let Some(idx) = instances.iter().position(|i| i.id == tmo_id) {
+                    let inst = instances.remove(idx);
+                    kill_process_tree(inst.child.id());
+                    let _ = inst.child.kill();
+                }
+            }
+            // Retry once after a short pause.
+            let app_r = app_tmo.clone();
+            let state_r = state_tmo.clone();
+            let path_r = tmo_path.clone();
+            thread::spawn(move || {
+                thread::sleep(Duration::from_secs(2));
+                match spawn_instance(&app_r, &state_r, Path::new(&path_r)) {
+                    Ok(new_id) => log_line(&format!("retry spawn ok id={new_id} path={path_r}")),
+                    Err(e) => {
+                        log_line(&format!("retry spawn failed path={path_r} err={e}"));
+                        let _ = app_r.emit(
+                            "cli:error",
+                            format!("工作区启动失败：{path_r}（{e}）"),
+                        );
+                    }
+                }
+            });
         });
     }
 
