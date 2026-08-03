@@ -311,6 +311,8 @@ window.addEventListener("message", (ev) => {
   if (!CHILD_ORIGIN_OK.test(ev.origin)) return;
   const msg = ev.data;
   if (!msg || typeof msg !== "object" || typeof msg.type !== "string") return;
+  // Debug aid for the e2e suite: last protocol message received.
+  window.__lastMsg = msg.type;
 
   switch (msg.type) {
     case "reasonix:tab-activate":

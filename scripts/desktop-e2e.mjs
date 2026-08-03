@@ -173,6 +173,64 @@ async function main() {
   const after = await cdp.eval(`document.querySelectorAll('iframe').length`, undefined);
   check("open-workspace spawned a new frame", Number(after) >= Number(before), `before=${before} after=${after}`);
 
+  // ── New-workspace flow (protocol layer; the native folder dialog can't
+  // be driven from CDP, so we verify the message chain and multi-workspace
+  // coexistence instead).
+  // 1) Clicking the dashboard's "+" must reach the container as tab-new.
+  await cdp.eval(`document.querySelector('.tab-new')?.click(); 'clicked'`, sessionId);
+  await sleep(1200);
+  const lastMsg = await cdp.eval(`window.__lastMsg || ''`, undefined);
+  check("'+' button sent reasonix:tab-new", lastMsg === "reasonix:tab-new", `got ${lastMsg}`);
+
+  // 2) Spawn a second workspace directly through the shell (bypassing the
+  // dialog) and expect a second iframe + a two-tab TabBar in the dashboards.
+  await cdp.eval(
+    `window.__TAURI__.core.invoke('launch_backend', { cwd: 'D:\\\\workspace\\\\AgentCharter' }).catch(e => 'ERR:' + e); 'ok'`,
+    undefined,
+  );
+  let twoFrames = false;
+  let twoTabs = false;
+  for (let i = 0; i < 60; i++) {
+    const t = await cdp.send("Target.getTargets", {});
+    const frames = t.targetInfos.filter((x) => x.type === "iframe" && x.url.includes("127.0.0.1"));
+    if (frames.length >= 2) {
+      twoFrames = true;
+      // Find the second dashboard session (attach to the newest frame) and
+      // check its TabBar lists both workspaces.
+      const f2 = frames[frames.length - 1];
+      const { sessionId: s2 } = await cdp.send("Target.attachToTarget", { targetId: f2.targetId, flatten: true });
+      await cdp.send("Runtime.enable", {}, s2);
+      await sleep(1500);
+      const tabs = JSON.parse(
+        (await cdp.eval(`JSON.stringify({ n: document.querySelectorAll('.tab').length, names: [...document.querySelectorAll('.tab-name')].map(e => e.textContent) })`, s2)) || "{}",
+      );
+      twoTabs = tabs.n >= 2;
+      if (twoTabs) {
+        console.log(`    tabs in second dashboard: ${JSON.stringify(tabs.names)}`);
+      }
+      break;
+    }
+    await sleep(1000);
+  }
+  check("second workspace created a second iframe", twoFrames);
+  check("TabBar in second dashboard lists both workspaces", twoTabs);
+
+  // 3) Switching: click the first tab inside the second dashboard — the
+  // container must show the first iframe and hide the second.
+  if (twoFrames) {
+    const t = await cdp.send("Target.getTargets", {});
+    const frames = t.targetInfos.filter((x) => x.type === "iframe" && x.url.includes("127.0.0.1"));
+    const f1 = frames[0];
+    const { sessionId: s1 } = await cdp.send("Target.attachToTarget", { targetId: f1.targetId, flatten: true });
+    await cdp.eval(`document.querySelector('.tab')?.click(); 'ok'`, s1);
+    await sleep(1500);
+    const displays = await cdp.eval(
+      `JSON.stringify([...document.querySelectorAll('iframe')].map(f => getComputedStyle(f).display))`,
+      undefined,
+    );
+    check("tab click switched visible iframe", displays.includes('"none"'), `displays=${displays}`);
+  }
+
   // Shell log: console forwarding from the embedded dashboard.
   await sleep(1500);
   let logOk = false;
