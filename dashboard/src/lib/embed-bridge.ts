@@ -11,6 +11,44 @@
 
 export const isEmbed = new URLSearchParams(window.location.search).has("embed");
 
+// Forward console output to the container page, which writes it to
+// ~/.reasonix-code/desktop.log (via log_console). Enables debugging from
+// the log file even without CDP.
+if (isEmbed && typeof window !== "undefined") {
+  const fwd = (level: string, args: unknown[]) =>
+    postToParent({
+      type: "reasonix:console",
+      level,
+      msg: args.map(String).join(" ").slice(0, 2000),
+    });
+  const orig = {
+    log: console.log.bind(console),
+    info: console.info.bind(console),
+    warn: console.warn.bind(console),
+    error: console.error.bind(console),
+  };
+  console.log = (...a) => {
+    fwd("log", a);
+    orig.log(...a);
+  };
+  console.info = (...a) => {
+    fwd("info", a);
+    orig.info(...a);
+  };
+  console.warn = (...a) => {
+    fwd("warn", a);
+    orig.warn(...a);
+  };
+  console.error = (...a) => {
+    fwd("error", a);
+    orig.error(...a);
+  };
+  window.addEventListener("error", (e) => fwd("error", [e.message, e.filename, e.lineno]));
+  window.addEventListener("unhandledrejection", (e) =>
+    fwd("error", ["unhandledrejection:", String(e.reason).slice(0, 300)]),
+  );
+}
+
 const PARENT_ORIGIN_OK = (origin: string) =>
   /^https?:\/\/((127\.0\.0\.1|localhost|tauri\.localhost)(:\d+)?)$/.test(origin);
 

@@ -310,6 +310,62 @@ fn set_window_title(app: AppHandle, title: String) {
     }
 }
 
+/// Append a line to ~/.reasonix-code/desktop.log (created on demand).
+/// The splash/container pages forward their console through this command,
+/// and embedded dashboards relay via postMessage — so CDP-less debugging
+/// works from the log file alone.
+#[tauri::command]
+fn log_console(level: String, msg: String) {
+    let Some(home) = std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
+        .map(std::path::PathBuf::from)
+    else {
+        return;
+    };
+    let dir = home.join(".reasonix-code");
+    let _ = std::fs::create_dir_all(&dir);
+    let path = dir.join("desktop.log");
+    use std::io::Write;
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis().to_string())
+        .unwrap_or_default();
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(f, "[{ts}] [{level}] {msg}");
+    }
+}
+
+/// Console-forwarding page-load hook for the Builder: wraps console.* and
+/// routes errors to desktop.log via log_console. Embedded dashboards are
+/// cross-origin iframes — those relay via embed-bridge instead.
+fn console_forwarding_hook(
+) -> impl Fn(&tauri::Webview, &tauri::webview::PageLoadPayload) + Send + Sync + 'static {
+    |window, _payload| {
+        let _ = window.eval(
+            r#"(function () {
+              try {
+                var fwd = function (level, args) {
+                  try {
+                    var msg = Array.prototype.map.call(args, String).join(' ').slice(0, 2000);
+                    window.__TAURI_INTERNALS__.invoke('log_console', { level: level, msg: msg });
+                  } catch (e) {}
+                };
+                ['log','info','warn','error'].forEach(function (l) {
+                  var orig = console[l];
+                  console[l] = function () { fwd(l, arguments); orig.apply(console, arguments); };
+                });
+                window.addEventListener('error', function (e) {
+                  fwd('error', [e.message, (e.filename||''), e.lineno]);
+                });
+                window.addEventListener('unhandledrejection', function (e) {
+                  fwd('error', ['unhandledrejection:', String(e.reason).slice(0, 300)]);
+                });
+              } catch (e) {}
+            })();"#,
+        );
+    }
+}
+
 /// Robust liveness probe for a workspace: checks both the process (via
 /// try_wait, so a killed CLI is caught even if the exit watcher hasn't
 /// fired yet) and the dashboard server (HTTP GET on its URL, 2 s timeout).
@@ -1392,6 +1448,7 @@ fn main() {
                 )
                 .build(),
         )
+        .on_page_load(console_forwarding_hook())
         .manage(DesktopState::default())
         .invoke_handler(tauri::generate_handler![
             open_in_editor,
@@ -1402,6 +1459,7 @@ fn main() {
             latest_cli_version,
             desktop_build,
             set_window_title,
+            log_console,
             workspace_alive,
             install_cli,
             install_node,
@@ -1443,6 +1501,7 @@ fn main() {
             // Startup CLI update check (native dialog, shell-owned — does
             // not depend on the dashboard bundle).
             prompt_cli_update(app.handle().clone());
+
 
             if let Some(w) = app.get_webview_window("main") {
                 // HiDPI fit: the JSON config asks for 1024x720 logical px.

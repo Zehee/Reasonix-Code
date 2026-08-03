@@ -330,6 +330,12 @@ window.addEventListener("message", (ev) => {
       // snapshot. The iframe-load broadcast can race the React mount.
       broadcastTabs();
       break;
+    case "reasonix:console":
+      // Relay embedded-dashboard console output to the shell log.
+      if (typeof msg.level === "string" && typeof msg.msg === "string") {
+        invoke("log_console", { level: msg.level, msg: msg.msg }).catch(() => {});
+      }
+      break;
     default:
       break;
   }
