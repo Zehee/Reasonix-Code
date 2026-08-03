@@ -37,7 +37,11 @@ export function BrandLogo({
       viewBox="401 311 522 522"
       className={className}
       aria-hidden="true"
-      style={{ display: "block" }}
+      style={{
+        display: "block",
+        filter:
+          "drop-shadow(0 0 1.5px rgba(255,255,255,0.35)) drop-shadow(0 1.5px 2.5px rgba(0,0,0,0.45))",
+      }}
     >
       <defs>
         <linearGradient id={`${gid}-glass`} x1="0" y1="0" x2="0" y2="1">
