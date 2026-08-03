@@ -1364,7 +1364,7 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
             {
                 let mut instances = state_tmo.instances.lock();
                 if let Some(idx) = instances.iter().position(|i| i.id == tmo_id) {
-                    let inst = instances.remove(idx);
+                    let mut inst = instances.remove(idx);
                     kill_process_tree(inst.child.id());
                     let _ = inst.child.kill();
                 }
