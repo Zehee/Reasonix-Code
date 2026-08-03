@@ -53,8 +53,7 @@
         },
         "installerHooks": "nsis/installer.nsh",
         "template": "nsis/template.nsi",
-        "installerIcon": "icons/icon.ico",
-        "installerHeaderIcon": "icons/icon.ico"
+        "installerIcon": "icons/icon.ico"
       }
     }
   },
