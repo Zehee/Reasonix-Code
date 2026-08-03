@@ -1222,6 +1222,31 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
     *state.current.lock() = Some(id);
     save_last_workspace(workspace);
 
+    // Watchdog: if the dashboard URL never registers (CLI stalls before the
+    // ready line), log the stdout trace and surface a toast instead of
+    // leaving a silent dead tab.
+    {
+        let app_tmo = app.clone();
+        let found_tmo = found_url.clone();
+        let tmo_id = id;
+        let tmo_path = workspace.to_string_lossy().into_owned();
+        thread::spawn(move || {
+            for _ in 0..120 {
+                if found_tmo.load(Ordering::SeqCst) {
+                    return;
+                }
+                thread::sleep(Duration::from_millis(500));
+            }
+            if !found_tmo.load(Ordering::SeqCst) {
+                log_line(&format!("dashboard url timeout id={tmo_id} path={tmo_path}"));
+                let _ = app_tmo.emit(
+                    "cli:error",
+                    format!("工作区启动超时（dashboard 未就绪）：{tmo_path}"),
+                );
+            }
+        });
+    }
+
     // The ink TUI prints a `/dashboard  →  URL` line to STDOUT once the server
     // is up — but piped output wraps to 80 columns and truncates the token, so
     // we treat that line only as a readiness signal and read the authoritative
@@ -1234,7 +1259,20 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
     let current_out = state.current.clone();
     let found_out = found_url.clone();
     thread::spawn(move || {
+        let mut logged = 0;
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if !found_out.load(Ordering::SeqCst) {
+                // Diagnostic: log what the CLI prints before the dashboard
+                // ready line (trimmed; token-bearing URLs are skipped).
+                let trimmed = line.trim();
+                if logged < 20 && !trimmed.is_empty() && !is_dashboard_ready_line(trimmed) {
+                    logged += 1;
+                    log_line(&format!(
+                        "stdout[{id}]: {}",
+                        trimmed.chars().take(80).collect::<String>()
+                    ));
+                }
+            }
             if found_out.load(Ordering::SeqCst) {
                 continue;
             }
