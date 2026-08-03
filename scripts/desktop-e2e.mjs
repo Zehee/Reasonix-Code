@@ -7,7 +7,7 @@
 // Usage: node scripts/desktop-e2e.mjs [debugPort]
 // Requires a local CLI (npm-global) matching the dashboard bundle.
 
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { existsSync, readFileSync, rmSync } from "node:fs";
@@ -70,6 +70,14 @@ class Cdp {
 async function main() {
   // Clean the previous log so we only assert on this run.
   if (existsSync(LOG)) rmSync(LOG);
+  // Kill any running shell first — a second instance can't bring up its
+  // webview while another holds the WebView2 user-data folder.
+  try {
+    execSync("taskkill /F /IM reasonix-code-desktop.exe", { stdio: "ignore" });
+  } catch {
+    /* none running */
+  }
+  await sleep(1000);
 
   console.log(`[e2e] starting shell on debug port ${PORT}...`);
   const child = spawn(EXE, [], {
@@ -81,28 +89,21 @@ async function main() {
     stdio: "ignore",
   });
 
-  // Wait for CDP.
-  let targets = null;
+  // Wait for CDP, then for the local page target (splash or container) —
+  // the devtools endpoint comes up before the page target registers.
+  let page = null;
   for (let i = 0; i < 90; i++) {
     try {
-      const r = await fetch(`http://127.0.0.1:${PORT}/json`);
-      if (r.ok) {
-        targets = await r.json();
-        break;
-      }
+      const t = await (await fetch(`http://127.0.0.1:${PORT}/json`)).json();
+      page = t.find((x) => x.type === "page" && x.url.includes("tauri.localhost"));
+      if (page) break;
     } catch {
       /* not up yet */
     }
     await sleep(1000);
   }
-  if (!targets) {
-    console.log("✗ CDP never came up — did the shell start?");
-    process.exit(1);
-  }
-
-  const page = targets.find((t) => t.type === "page" && t.url.includes("tauri.localhost"));
   if (!page) {
-    console.log("✗ no local container page found");
+    console.log("✗ no local page found (CDP up but no tauri.localhost page)");
     process.exit(1);
   }
   const cdp = await Cdp.connect(page.webSocketDebuggerUrl);
@@ -112,11 +113,23 @@ async function main() {
 
   console.log("[e2e] container page up, waiting for workspace iframe…");
   let frameId = null;
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 30; i++) {
     const t = await cdp.send("Target.getTargets", {});
     frameId = t.targetInfos.find((x) => x.type === "iframe" && x.url.includes("127.0.0.1"))?.targetId;
     if (frameId) break;
     await sleep(1000);
+  }
+  if (!frameId) {
+    // Empty state (no running instances): the picker shows instead of
+    // auto-resuming — click "最近工作区" like a user would.
+    console.log("[e2e] no instance — clicking recent-workspace card…");
+    await cdp.eval(`document.getElementById('btn-last')?.click(); 'clicked'`);
+    for (let i = 0; i < 60; i++) {
+      const t = await cdp.send("Target.getTargets", {});
+      frameId = t.targetInfos.find((x) => x.type === "iframe" && x.url.includes("127.0.0.1"))?.targetId;
+      if (frameId) break;
+      await sleep(1000);
+    }
   }
   check("workspace iframe exists", !!frameId);
   if (!frameId) {
