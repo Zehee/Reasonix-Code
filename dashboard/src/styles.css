@@ -877,20 +877,8 @@ html[data-platform="macos"] .titlebar .tb-left {
   letter-spacing: -0.01em;
   color: var(--fg);
 }
-.titlebar .brand .mark {
-  width: 15px;
-  height: 15px;
-  border-radius: 4px;
-  background: linear-gradient(135deg, var(--accent), var(--violet));
+.titlebar .brand svg {
   flex-shrink: 0;
-  position: relative;
-}
-.titlebar .brand .mark::after {
-  content: "";
-  position: absolute;
-  inset: 3px;
-  border-radius: 2px;
-  background: var(--bg-2);
 }
 .titlebar .brand .brand-name {
   font-size: 13.5px;
@@ -7164,21 +7152,9 @@ html[data-platform="macos"] .splash {
   }
 }
 
-.splash-mark {
-  width: 58px;
-  height: 58px;
-  border-radius: 15px;
-  background: linear-gradient(140deg, var(--accent), var(--violet));
-  position: relative;
-  box-shadow: 0 12px 38px -10px oklch(60% 0.19 38 / 0.45);
+.splash-card > svg {
   margin-bottom: 22px;
-}
-.splash-mark::after {
-  content: "";
-  position: absolute;
-  inset: 12px;
-  border-radius: 7px;
-  background: var(--bg);
+  filter: drop-shadow(0 12px 30px oklch(60% 0.19 38 / 0.35));
 }
 
 .splash-name {
@@ -7659,6 +7635,10 @@ html[data-platform="macos"] .splash {
   color: var(--fg);
 }
 .about-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   text-align: center;
   margin-bottom: 20px;
 }

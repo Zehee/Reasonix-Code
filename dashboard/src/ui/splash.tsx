@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
+import { BrandMark } from "./brand";
 
 const SPLASH_FLAG = "reasonix.splash.shown";
 
@@ -54,8 +55,8 @@ export function Splash({ onDone }: { onDone: () => void }) {
   return (
     <div className="splash" data-leaving={leaving} onClick={skipClick}>
       <div className="splash-card">
-        <div className="splash-mark" />
-        <div className="splash-name">Reasonix</div>
+        <BrandMark size={64} />
+        <div className="splash-name">Reasonix Code</div>
         <div className="splash-sub">{t("app.splashSubtitle")}</div>
         <div className="splash-dots">
           <span />

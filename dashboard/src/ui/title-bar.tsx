@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { t, useLang } from "../i18n";
 import { I } from "../icons";
+import { BrandMark } from "./brand";
 import { Shortcut, localizeShortcutText } from "./shortcut";
 import { WorkspaceTabs, type WorkspaceTab } from "./workspace-tabs";
 
@@ -165,7 +166,7 @@ export function TitleBar({
         </button>
         <div className="tb-meta" data-tauri-drag-region>
           <div className="brand" data-tauri-drag-region>
-            <span className="mark" />
+            <BrandMark size={15} />
             <span className="brand-name">Reasonix Code</span>
           </div>
           {session && (
