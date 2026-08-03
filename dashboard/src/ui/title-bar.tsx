@@ -166,7 +166,7 @@ export function TitleBar({
         <div className="tb-meta" data-tauri-drag-region>
           <div className="brand" data-tauri-drag-region>
             <span className="mark" />
-            <span className="brand-name">Reasonix</span>
+            <span className="brand-name">Reasonix Code</span>
           </div>
           {session && (
             <div className="crumbs" data-tauri-drag-region>
@@ -407,7 +407,7 @@ export function TabBar({
         onClick={onNew}
         title={t("workspaceTab.new")}
       >
-        <I.plus size={12} />
+        <I.plus size={15} />
       </button>
     </div>
   );

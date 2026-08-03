@@ -396,6 +396,28 @@ html[data-platform="macos"] .app {
   display: none;
 }
 
+.tabbar .tab-new {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-left: 8px;
+  align-self: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.tabbar .tab-new:hover {
+  background: var(--accent-alpha);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .tab {
   display: inline-flex;
   align-items: center;
@@ -8124,6 +8146,15 @@ html[data-web="true"] .win-controls {
    switching in its own tab bar — hide the dashboard's workspace
    chrome to avoid duplicated controls. */
 html[data-embed] .titlebar {
+  display: flex;
+}
+html[data-embed] .titlebar .workspace-tabs {
+  display: none;
+}
+html[data-embed] .titlebar .tb-version {
+  display: none;
+}
+html[data-embed] .titlebar .win-controls {
   display: none;
 }
 html[data-embed] .ws-crumb {

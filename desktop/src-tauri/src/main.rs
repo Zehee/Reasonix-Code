@@ -311,11 +311,7 @@ fn set_window_title(app: AppHandle, title: String) {
 }
 
 /// Append a line to ~/.reasonix-code/desktop.log (created on demand).
-/// The splash/container pages forward their console through this command,
-/// and embedded dashboards relay via postMessage — so CDP-less debugging
-/// works from the log file alone.
-#[tauri::command]
-fn log_console(level: String, msg: String) {
+fn log_line(msg: &str) {
     let Some(home) = std::env::var_os("USERPROFILE")
         .or_else(|| std::env::var_os("HOME"))
         .map(std::path::PathBuf::from)
@@ -331,8 +327,17 @@ fn log_console(level: String, msg: String) {
         .map(|d| d.as_millis().to_string())
         .unwrap_or_default();
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
-        let _ = writeln!(f, "[{ts}] [{level}] {msg}");
+        let _ = writeln!(f, "[{ts}] [rust] {msg}");
     }
+}
+
+/// Append a line to ~/.reasonix-code/desktop.log (created on demand).
+/// The splash/container pages forward their console through this command,
+/// and embedded dashboards relay via postMessage — so CDP-less debugging
+/// works from the log file alone.
+#[tauri::command]
+fn log_console(level: String, msg: String) {
+    log_line(&format!("[{level}] {msg}"));
 }
 
 /// Console-forwarding page-load hook for the Builder: wraps console.* and
@@ -671,13 +676,25 @@ fn pick_workspace(app: AppHandle, state: State<DesktopState>) {
         dialog = dialog.set_directory(dir);
     }
     dialog.pick_folder(move |folder| {
-        let Some(folder) = folder else { return };
-        let Ok(path) = folder.into_path() else { return };
+        let Some(folder) = folder else {
+            log_line("pick_workspace: dialog cancelled");
+            return;
+        };
+        let Ok(path) = folder.into_path() else {
+            log_line("pick_workspace: bad path");
+            return;
+        };
         if !path.is_dir() {
+            log_line(&format!("pick_workspace: not a directory: {}", path.display()));
             return;
         }
-        if let Err(err) = spawn_instance(&app, &state, &path) {
-            let _ = app.emit("cli:error", err);
+        log_line(&format!("pick_workspace: picked {}", path.display()));
+        match spawn_instance(&app, &state, &path) {
+            Ok(id) => log_line(&format!("spawn_instance ok id={id} path={}", path.display())),
+            Err(err) => {
+                log_line(&format!("spawn_instance error: {err}"));
+                let _ = app.emit("cli:error", err);
+            }
         }
     });
 }
