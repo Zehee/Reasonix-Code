@@ -14,7 +14,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -39,7 +39,7 @@ jobs:
           Copy-Item $exe.FullName -Destination "reasonix-code-desktop-windows-build${{ github.run_number }}.exe"
 
       - name: Upload Windows installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: reasonix-code-desktop-windows
           path: reasonix-code-desktop-windows-build${{ github.run_number }}.exe
@@ -66,7 +66,7 @@ jobs:
           done
 
       - name: Publish Windows installer to desktop release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: desktop-latest
           name: Desktop build ${{ github.run_number }}
@@ -76,7 +76,7 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -100,7 +100,7 @@ jobs:
           cp "$dmg" "reasonix-code-desktop-macos-build${{ github.run_number }}.dmg"
 
       - name: Upload macOS .dmg
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: reasonix-code-desktop-macos
           path: reasonix-code-desktop-macos-build${{ github.run_number }}.dmg
@@ -127,7 +127,7 @@ jobs:
           done
 
       - name: Publish macOS installer to desktop release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: desktop-latest
           name: Desktop build ${{ github.run_number }}
@@ -137,7 +137,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install system dependencies
         run: |
@@ -171,7 +171,7 @@ jobs:
           cp "$deb" "reasonix-code-desktop-linux-build${{ github.run_number }}.deb"
 
       - name: Upload Linux .deb
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: reasonix-code-desktop-linux
           path: reasonix-code-desktop-linux-build${{ github.run_number }}.deb
@@ -198,7 +198,7 @@ jobs:
           done
 
       - name: Publish Linux installer to desktop release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: desktop-latest
           name: Desktop build ${{ github.run_number }}
