@@ -1,13 +1,4 @@
-/**
- * Embed mode: the desktop container page (container.html) hosts each
- * workspace dashboard in an iframe and drives the dashboard's own TabBar
- * via postMessage — the container never touches this document's DOM
- * (cross-origin). Protocol:
- *
- *   container -> iframe: { type:"reasonix:tabs", tabs:[{id,path,active}] }
- *   iframe    -> parent: { type:"reasonix:tab-activate"|"tab-new"|"tab-close", id? }
- *                        { type:"reasonix:open-workspace", path }
- */
+/** Embed mode: container hosts each workspace in an iframe; container->iframe reasonix:tabs, iframe->parent tab-activate|tab-new|tab-close|open-workspace. */
 
 export const isEmbed = new URLSearchParams(window.location.search).has("embed");
 
@@ -58,12 +49,7 @@ export function postToParent(msg: unknown): void {
   window.parent.postMessage(msg, "*");
 }
 
-/**
- * Handshake: once the dashboard has mounted and its message listener is
- * registered, tell the container so it (re)broadcasts the tab snapshot.
- * The container's iframe-load broadcast can race the React mount; this
- * pull-style handshake makes the first tab list reliable.
- */
+/** Pull-style handshake: after mount, ask the container to re-broadcast the tab snapshot (its iframe-load broadcast can race our React mount). */
 export function announceEmbedReady(): void {
   if (!isEmbed || window.parent === window) return;
   window.parent.postMessage({ type: "reasonix:iframe-ready" }, "*");

@@ -14,11 +14,7 @@ const modeMeta = document.querySelector('meta[name="reasonix-mode"]');
 const rawMode = modeMeta?.getAttribute("content") ?? "";
 const isServerMode = rawMode !== "" && rawMode !== "__REASONIX_MODE__";
 
-/**
- * Normalized Tauri surface. Tauri 2 exposes `window.__TAURI_INTERNALS__`
- * (invoke + event); Tauri 1 used `window.__TAURI__`. Returns undefined
- * outside a Tauri webview (plain browser).
- */
+/** Normalized Tauri surface: Tauri 2 uses __TAURI_INTERNALS__ (invoke+event), Tauri 1 used __TAURI__; undefined outside a Tauri webview. */
 function tauriApi():
   | {
       invoke: (cmd: string, args?: unknown) => Promise<unknown>;
@@ -57,14 +53,7 @@ const isIframe = typeof window !== "undefined" && window.self !== window.top;
 // REST/SSE bridge, even if it happens to be loaded inside the Tauri webview.
 const MODE: "tauri" | "server" | "mock" = isServerMode ? "server" : hasTauriApi ? "tauri" : "mock";
 
-/**
- * Web vs. native dispatcher hint — `true` only when the dashboard is served
- * by the CLI server in a plain browser (no Tauri shell). Evaluated lazily:
- * `window.__TAURI_INTERNALS__` is created by the real @tauri-apps/api modules
- * when they load (plugin-dialog etc.), which can happen after this bridge
- * module initializes — a module-load-time check would wrongly classify the
- * desktop shell as web.
- */
+/** Web-mode hint — true only when served by the CLI server in a plain browser. Lazy: __TAURI_INTERNALS__ is created when the real @tauri-apps modules load, possibly after this module — a load-time check would misclassify the shell. */
 export function isWebRuntime(): boolean {
   // In an iframe (the desktop container hosts each workspace dashboard in
   // one) the page must behave as plain web: WebView2 injects the Tauri
@@ -357,11 +346,7 @@ function sseToIncoming(ev: any): Record<string, any>[] {
   return results;
 }
 
-/**
- * The container activates a tab whose iframe was display:none — the browser
- * throttles hidden frames, so its SSE stream may be stale or dead. Force a
- * clean reopen (also resets the give-up flag).
- */
+/** A display:none iframe gets its SSE throttled; on activation force a clean reconnect (also resets the give-up flag). */
 export function forceDashboardReconnect(): void {
   if (sse) {
     try {
@@ -375,13 +360,7 @@ export function forceDashboardReconnect(): void {
   connectSSE();
 }
 
-/**
- * Re-run the server bootstrap. Embed mode races: serverInit emits the
- * initial snapshots ($ready, $settings, …) stamped with activeTabId, which
- * is still empty until the container's reasonix:tabs broadcast arrives — so
- * the snapshots get routed to no tab and the dashboard stays "offline".
- * The container calls this once the tab list is known.
- */
+/** Re-run the server bootstrap: initial snapshots are stamped with an empty activeTabId until reasonix:tabs arrives, so they route nowhere and the dashboard stays offline. */
 export function replayServerInit(): void {
   // Small delay so the React activeTabId state (and the bridge sync effect)
   // settles before serverInit stamps its snapshots.
