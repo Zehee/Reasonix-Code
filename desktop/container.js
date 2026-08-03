@@ -36,12 +36,10 @@ function showError(text) {
 // was rejected with NO_API_KEY:<path>; after saving we resume it.
 let pendingPath = null;
 
-// First-run API key setup. The CLI cannot boot without a key; when a
-// spawn is rejected we swap the picker for an inline form, then resume
-// the pending workspace automatically after saving.
+// First-run API key setup. The CLI cannot boot without a key; the form
+// shows alongside the picker (and when a spawn is rejected). Saving hides
+// it, then resumes the pending workspace or re-boots.
 function showKeyPanel() {
-  recentWrap.style.display = "none";
-  btnChoose.style.display = "none";
   keyPanel.hidden = false;
   keyInput.focus();
 }
@@ -343,6 +341,13 @@ initParticles();
 
 // ── Boot ────────────────────────────────────────────────────────
 async function init() {
+  // First run without an API key: show the inline key form alongside the
+  // picker (spawns would be rejected anyway). Saving hides it and re-boots.
+  try {
+    if (!(await invoke("has_api_key"))) showKeyPanel();
+  } catch {
+    /* probe failed — spawns will surface real errors */
+  }
   // Shell versions go in the native window title.
   try {
     const build = await invoke("desktop_build");

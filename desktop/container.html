@@ -198,19 +198,26 @@
         border-radius: 14px;
         padding: 18px;
         background: rgba(255, 255, 255, 0.03);
+        text-align: left;
         animation: rise 0.35s ease both;
       }
       .key-title {
         font-size: 15px;
         font-weight: 700;
         color: var(--ink);
-        margin-bottom: 6px;
+        margin-bottom: 10px;
+        text-align: left;
       }
-      .key-sub {
+      .key-notice {
         font-size: 12.5px;
         line-height: 1.6;
         color: var(--ink-2);
+        background: rgba(51, 153, 51, 0.1);
+        border: 1px solid rgba(51, 153, 51, 0.28);
+        border-radius: 9px;
+        padding: 10px 12px;
         margin-bottom: 14px;
+        text-align: left;
       }
       .key-row {
         display: flex;
@@ -231,12 +238,13 @@
       #key-input:focus {
         border-color: var(--brand);
       }
-      button.key-save {
+      .key-row .key-save {
         width: auto;
         flex-shrink: 0;
         padding: 12px 18px;
       }
       .key-hint {
+        text-align: left;
         margin: 12px 0 0;
         font-size: 11.5px;
         color: var(--ink-3);
@@ -349,7 +357,7 @@
 
         <div class="key-panel" id="key-panel" hidden>
           <div class="key-title">首次使用：配置 API Key</div>
-          <div class="key-sub">Reasonix-Code 需要 DeepSeek API Key 才能运行。填入后保存，即可开始使用。</div>
+          <div class="key-notice">Reasonix-Code 需要 DeepSeek API Key 才能运行。填入后保存，即可开始使用。</div>
           <div class="key-row">
             <input type="password" id="key-input" placeholder="sk-…" autocomplete="off" spellcheck="false" />
             <button type="button" class="action primary key-save" id="key-save">保存并开始</button>
