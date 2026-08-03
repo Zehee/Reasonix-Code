@@ -1127,6 +1127,14 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("failed to start Reasonix TUI: {e}"))?;
+    // Bind the process tree to the kill-on-close job so the OS reaps
+    // everything when this shell dies (normal exit, kill, or crash).
+    #[cfg(windows)]
+    {
+        if let Some(Some(job)) = KILL_JOB.get() {
+            job::assign(job, &child);
+        }
+    }
     let stdout = child.stdout.take().ok_or("no stdout")?;
     let stderr = child.stderr.take().ok_or("no stderr")?;
 
@@ -1302,7 +1310,66 @@ fn kill_process_tree(pid: u32) {
     }
 }
 
+/// Windows Job Object with KILL_ON_JOB_CLOSE: the OS terminates every
+/// process assigned to the job (and their descendants) when the handle is
+/// closed — i.e. whenever this shell process dies, whether via normal exit,
+/// a task-manager kill, or a crash. This makes the per-workspace CLI
+/// processes true children of the shell at the OS level.
+#[cfg(windows)]
+mod job {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
+        JobObjectExtendedLimitInformation, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+
+    pub struct KillOnCloseJob(HANDLE);
+
+    // The handle is a plain OS value; sharing it across threads is safe
+    // (all uses are AssignProcessToJobObject on the same process).
+    unsafe impl Sync for KillOnCloseJob {}
+    unsafe impl Send for KillOnCloseJob {}
+
+    pub fn create() -> Option<KillOnCloseJob> {
+        unsafe {
+            let handle = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+            if handle == 0 {
+                return None;
+            }
+            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            let ok = SetInformationJobObject(
+                handle,
+                JobObjectExtendedLimitInformation,
+                &info as *const _ as *const _,
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            );
+            if ok == 0 {
+                CloseHandle(handle);
+                return None;
+            }
+            Some(KillOnCloseJob(handle))
+        }
+    }
+
+    /// Assign a spawned child (and implicitly its descendants) to the job.
+    /// Failure is non-fatal — the ExitRequested taskkill path still runs.
+    pub fn assign(job: &KillOnCloseJob, child: &std::process::Child) -> bool {
+        let handle = child.as_raw_handle() as HANDLE;
+        unsafe { AssignProcessToJobObject(job.0, handle) != 0 }
+    }
+}
+
+#[cfg(windows)]
+static KILL_JOB: std::sync::OnceLock<Option<job::KillOnCloseJob>> = std::sync::OnceLock::new();
+
 fn main() {
+    #[cfg(windows)]
+    {
+        let _ = KILL_JOB.set(job::create());
+    }
     #[cfg(target_os = "linux")]
     linux_webkit_compat();
 
