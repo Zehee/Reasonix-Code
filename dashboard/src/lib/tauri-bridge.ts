@@ -49,6 +49,10 @@ function tauriApi():
 }
 
 const hasTauriApi = tauriApi() !== undefined;
+// WebView2 injects the Tauri init script into every frame, so a dashboard
+// inside the desktop container's iframe may see a half-initialized Tauri
+// API — but its IPC is ACL-rejected. Treat iframes as plain web.
+const isIframe = typeof window !== "undefined" && window.self !== window.top;
 // When the page is served by the CLI dashboard server we always use the
 // REST/SSE bridge, even if it happens to be loaded inside the Tauri webview.
 const MODE: "tauri" | "server" | "mock" = isServerMode ? "server" : hasTauriApi ? "tauri" : "mock";
@@ -62,6 +66,12 @@ const MODE: "tauri" | "server" | "mock" = isServerMode ? "server" : hasTauriApi 
  * desktop shell as web.
  */
 export function isWebRuntime(): boolean {
+  // In an iframe (the desktop container hosts each workspace dashboard in
+  // one) the page must behave as plain web: WebView2 injects the Tauri
+  // init script into every frame, so __TAURI_INTERNALS__ may exist here,
+  // but capabilities don't cover remote frames and every IPC call would be
+  // ACL-rejected. The container page talks to the shell, not us.
+  if (isIframe) return true;
   return isServerMode && tauriApi() === undefined;
 }
 
@@ -1065,6 +1075,11 @@ export async function invoke(cmd: string, args?: any): Promise<any> {
   }
 
   if (MODE === "server") {
+    // In an iframe (desktop container) only the HTTP RPC commands make
+    // sense; anything that would need Tauri IPC is ACL-rejected there.
+    if (isIframe && cmd !== "rpc_spawn" && cmd !== "rpc_send") {
+      return Promise.reject(new Error("Tauri IPC unavailable in embed mode"));
+    }
     if (cmd === "rpc_spawn") {
       serverInit().catch(console.warn);
       return Promise.resolve();
@@ -1177,6 +1192,19 @@ export function getCurrentWebview(): any {
 // Tauri 2 has no window namespace on __TAURI_INTERNALS__ — window commands
 // go through the core plugin (permissions granted in capabilities/default.json).
 export function getCurrentWindow(): any {
+  // Inside an iframe there is no window control available (and IPC is
+  // ACL-rejected) — return the no-op surface so title-bar buttons degrade
+  // gracefully instead of throwing.
+  if (typeof window !== "undefined" && window.self !== window.top) {
+    return {
+      isMaximized: async () => false,
+      minimize: async () => {},
+      close: async () => {},
+      toggleMaximize: async () => {},
+      listen: async (): Promise<() => void> => () => {},
+      label: "main",
+    };
+  }
   const tauri = tauriApi();
   if (tauri?.invoke) {
     const invoke = tauri.invoke;
