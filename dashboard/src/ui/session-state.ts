@@ -1,3 +1,7 @@
+// Dashboard session state — pure reducer + helpers.
+// Extracted from App.tsx (3257 → 790 lines).
+// No UI, no hooks — pure functions only.
+
 import type {
   Action,
   AssistantSegment,

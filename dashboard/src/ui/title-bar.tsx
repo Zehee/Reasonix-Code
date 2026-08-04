@@ -1,3 +1,7 @@
+// TitleBar + TabBar — top-level UI shell.
+// Extracted from App.tsx. Renders macOS/Windows window controls,
+// workspace tabs (WorkspaceTabs component), and the "more" popup menu.
+
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";

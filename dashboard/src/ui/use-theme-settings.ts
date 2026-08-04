@@ -1,3 +1,7 @@
+// Workspace user preferences hook (theme, font, sidebar, currency).
+// Extracted from App.tsx to centralise localStorage read/write/DOM sync.
+// 6 state values × persistence effects — all in one place.
+
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useState } from "react";
 import {
   FONT_FAMILY,

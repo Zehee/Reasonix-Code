@@ -1,3 +1,7 @@
+// MainHead, EmptyState, NeedsSetupView — top-level view components.
+// Extracted from App.tsx. Stateless presentational components
+// for the header, empty-state prompt, and first-run setup wizard.
+
 import { useState } from "react";
 import { t, useLang } from "../i18n";
 import { I } from "../icons";
