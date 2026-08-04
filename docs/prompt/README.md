@@ -7,6 +7,7 @@
 | 文档 | 内容 |
 |---|---|
 | [system-prompts.md](system-prompts.md) | 主系统提示词（code / run / acp）+ 组装链 |
+| [prompt.md](prompt.md) / [prompt.en.md](prompt.en.md) | 全部 prompt 节点原文（19 节点，按渲染顺序，中英双语） |
 | [fragments.md](fragments.md) | 共享片段（TUI 格式 / 负面声明 / 升级契约） |
 | [conditional-blocks.md](conditional-blocks.md) | 条件注入块（搜索路由 / 历史溯源 / .gitignore / 记忆栈） |
 | [subagents-skills.md](subagents-skills.md) | 子代理 base/persona + 内置技能 body |
