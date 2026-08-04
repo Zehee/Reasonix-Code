@@ -674,3 +674,45 @@
 >   return truncated;  
 > }  
 
+---
+
+## Node 20 · 共享片段 · NEGATIVE_CLAIM_RULE（负面声明规则）
+
+- **来源 / Source**: `src/prompt-fragments.ts:30-36`
+- **Notes**: Shared fragment embedded via `${NEGATIVE_CLAIM_RULE}` in nodes 14-17: negative claims are the #1 hallucination shape — search before asserting absence.
+
+> export const NEGATIVE_CLAIM_RULE = `Negative claims ("X is missing", "Y isn't implemented", "there's no Z") are the #1 hallucination shape. They feel safe to write because no citation seems possible — but that's exactly why you must NOT write them on instinct.  
+>
+> If you have a search tool (\`grep\`, web search), call it FIRST before asserting absence:  
+> - Returns matches → you were wrong; correct yourself and cite the matches.  
+> - Returns nothing → state the absence WITH the search query as evidence: \`No callers of \\\`foo()\\\` found (grep "foo").\`  
+>
+> If you have no search tool, qualify hard: "I haven't verified — this is a guess." Never assert absence with fake authority.`;  
+
+---
+
+## Node 21 · 工具层 · Tool specs 注入（动态节点）
+
+- **来源 / Source**: `src/tools/*.ts → src/tools/schema-canon.ts`
+- **Notes**: Dynamic node injected with the system in the same request batch: 47 built-in tool names + shrunk descriptions + parameter schemas. Conditional: semantic_search / MCP tools.
+
+> # Tool specs — injected with every request (same batch as system)  
+>
+> 47 built-in tools registered by src/tools/*.ts (list extracted statically from the register calls):  
+>
+> add_mcp_server ask_choice copy_file create_directory create_skill delete_directory delete_file delete_range delete_symbol directory_tree edit_file find_in_code forget get_file_info get_symbols glob grep install_skill java_source job_output list_directory list_fold_views list_jobs list_search_views list_themes load_turns_context mark_step_complete move_file multi_edit read_file recall_memory remember revise_plan run_background run_command run_skill search_context search_files stop_job submit_plan tag_theme todo_write trace_theme wait_for_job web_fetch web_search write_file  
+>
+> Notes:  
+> - Every tool's description is canonicalized + shrunk to <=120 chars by  
+>   normalizeToolDescriptor / shrinkDescription (node 19) before it ships.  
+> - parameters JSON schema rides along in the same spec; see src/tools/*.ts  
+>   for the full schemas.  
+> - Conditional registrations: semantic_search (enabled when ollama is  
+>   reachable — see src/code/setup.ts:97; when enabled, node 4 is appended  
+>   to the system prompt), MCP-provided tools (user-installed servers,  
+>   resolved at runtime).  
+> - The toolSpecs hash feeds the prefix-cache fingerprint  
+>   (src/memory/runtime.ts) — each addTool costs one cache-miss turn.  
+> - fewShots (ImmutablePrefix option) is empty by default; the framework  
+>   supports injecting example messages, but no caller currently passes any.  
+

@@ -698,6 +698,53 @@ T19 = """（shrinkDescription 的压缩逻辑，代码原文——规则说明�
 - 如果描述已经 ≤120 字符，保持原样。
 - 硬截断到 120 字符，并在句号边界收尾；没有句号就直接截断。"""
 
+# ── 20. NEGATIVE_CLAIM_RULE（共享片段，内嵌于 14-17）──
+N20 = extract("src/prompt-fragments.ts", 30, 36)
+
+T20 = """负面声明（"X 不存在"、"Y 没有实现"、"没有 Z"）是头号幻觉形态。它们写起来很安全，因为似乎无需引用——但正因如此，你绝不能凭本能去写。
+
+如果你有搜索工具（`grep`、web 搜索），断言缺失前先调用它：
+- 有匹配 → 你错了；纠正自己并引用匹配结果。
+- 无匹配 → 把"不存在"连同搜索查询一起作为证据陈述：`No callers of `foo()` found (grep "foo").`
+
+如果没有搜索工具，严格限定："我还没验证——这是猜测。"绝不要带着虚假的权威断言缺失。"""
+
+# ── 21. 工具层注入（tool specs）──
+TOOL_NAMES = "add_mcp_server ask_choice copy_file create_directory create_skill delete_directory delete_file delete_range delete_symbol directory_tree edit_file find_in_code forget get_file_info get_symbols glob grep install_skill java_source job_output list_directory list_fold_views list_jobs list_search_views list_themes load_turns_context mark_step_complete move_file multi_edit read_file recall_memory remember revise_plan run_background run_command run_skill search_context search_files stop_job submit_plan tag_theme todo_write trace_theme wait_for_job web_fetch web_search write_file"
+
+N21 = """# Tool specs — injected with every request (same batch as system)
+
+47 built-in tools registered by src/tools/*.ts (list extracted statically from the register calls):
+
+%s
+
+Notes:
+- Every tool's description is canonicalized + shrunk to <=120 chars by
+  normalizeToolDescriptor / shrinkDescription (node 19) before it ships.
+- parameters JSON schema rides along in the same spec; see src/tools/*.ts
+  for the full schemas.
+- Conditional registrations: semantic_search (enabled when ollama is
+  reachable — see src/code/setup.ts:97; when enabled, node 4 is appended
+  to the system prompt), MCP-provided tools (user-installed servers,
+  resolved at runtime).
+- The toolSpecs hash feeds the prefix-cache fingerprint
+  (src/memory/runtime.ts) — each addTool costs one cache-miss turn.
+- fewShots (ImmutablePrefix option) is empty by default; the framework
+  supports injecting example messages, but no caller currently passes any.""" % TOOL_NAMES
+
+T21 = """# 工具规范——随每次请求注入（与 system 同一批次）
+
+47 个内置工具由 src/tools/*.ts 注册（清单为从注册调用静态提取）：
+
+%s
+
+说明：
+- 每个工具的描述在发出前都会经 normalizeToolDescriptor / shrinkDescription（节点 19）规范化并压缩到 ≤120 字符。
+- parameters JSON schema 随同一 spec 发送；完整 schema 见 src/tools/*.ts。
+- 条件注册：semantic_search（ollama 可达时启用——见 src/code/setup.ts:97；启用时会在 system 提示词后附加节点 4）、MCP 提供的工具（用户安装的服务器，运行时解析）。
+- toolSpecs 的哈希参与前缀缓存指纹（src/memory/runtime.ts）——每次 addTool 都会损失一次缓存命中回合。
+- fewShots（ImmutablePrefix 选项）默认空；框架支持注入示例消息，但目前没有调用方传入。""" % TOOL_NAMES
+
 nodes = [
     ("1", "CODE_SYSTEM_TEMPLATE（身份与规则基座）", "src/code/prompt.ts:13-133",
      "无条件（code 模式第一块）。19 段固定文案：身份固定、引用证据、审计护栏、工具选型、编辑规则等。`__ESCALATION_CONTRACT__` 与 `${TUI_FORMATTING_RULES}` 为占位符，渲染时替换为节点 2 / 3。",
@@ -775,6 +822,14 @@ nodes = [
      "非 system 文本，但与 system 同批进请求：工具描述压缩到 ≤120 字符（保留首句/句边界）。",
      "Not system text but ships with it: tool descriptions shrunk to ≤120 chars (first sentence / sentence boundary).",
      N19, T19),
+    ("20", "共享片段 · NEGATIVE_CLAIM_RULE（负面声明规则）", "src/prompt-fragments.ts:30-36",
+     "被节点 14-17 以 `${NEGATIVE_CLAIM_RULE}` 内嵌的共享片段：否定性断言（『X 不存在』）是头号幻觉形态，先搜索再断言缺失。",
+     "Shared fragment embedded via `${NEGATIVE_CLAIM_RULE}` in nodes 14-17: negative claims are the #1 hallucination shape — search before asserting absence.",
+     N20, T20),
+    ("21", "工具层 · Tool specs 注入（动态节点）", "src/tools/*.ts → src/tools/schema-canon.ts",
+     "与 system 同批注入请求的动态节点：47 个内置工具名 + 压缩后描述 + 参数 schema。条件注册 semantic_search / MCP 工具。",
+     "Dynamic node injected with the system in the same request batch: 47 built-in tool names + shrunk descriptions + parameter schemas. Conditional: semantic_search / MCP tools.",
+     N21, T21),
 ]
 
 SUB_LABEL = {

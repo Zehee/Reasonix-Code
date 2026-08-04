@@ -660,3 +660,38 @@
 > - 如果描述已经 ≤120 字符，保持原样。  
 > - 硬截断到 120 字符，并在句号边界收尾；没有句号就直接截断。  
 
+---
+
+## 节点 20 · 共享片段 · NEGATIVE_CLAIM_RULE（负面声明规则）
+
+- **来源 / Source**: `src/prompt-fragments.ts:30-36`
+- **说明**: 被节点 14-17 以 `${NEGATIVE_CLAIM_RULE}` 内嵌的共享片段：否定性断言（『X 不存在』）是头号幻觉形态，先搜索再断言缺失。
+
+> 负面声明（"X 不存在"、"Y 没有实现"、"没有 Z"）是头号幻觉形态。它们写起来很安全，因为似乎无需引用——但正因如此，你绝不能凭本能去写。  
+>
+> 如果你有搜索工具（`grep`、web 搜索），断言缺失前先调用它：  
+> - 有匹配 → 你错了；纠正自己并引用匹配结果。  
+> - 无匹配 → 把"不存在"连同搜索查询一起作为证据陈述：`No callers of `foo()` found (grep "foo").`  
+>
+> 如果没有搜索工具，严格限定："我还没验证——这是猜测。"绝不要带着虚假的权威断言缺失。  
+
+---
+
+## 节点 21 · 工具层 · Tool specs 注入（动态节点）
+
+- **来源 / Source**: `src/tools/*.ts → src/tools/schema-canon.ts`
+- **说明**: 与 system 同批注入请求的动态节点：47 个内置工具名 + 压缩后描述 + 参数 schema。条件注册 semantic_search / MCP 工具。
+
+> # 工具规范——随每次请求注入（与 system 同一批次）  
+>
+> 47 个内置工具由 src/tools/*.ts 注册（清单为从注册调用静态提取）：  
+>
+> add_mcp_server ask_choice copy_file create_directory create_skill delete_directory delete_file delete_range delete_symbol directory_tree edit_file find_in_code forget get_file_info get_symbols glob grep install_skill java_source job_output list_directory list_fold_views list_jobs list_search_views list_themes load_turns_context mark_step_complete move_file multi_edit read_file recall_memory remember revise_plan run_background run_command run_skill search_context search_files stop_job submit_plan tag_theme todo_write trace_theme wait_for_job web_fetch web_search write_file  
+>
+> 说明：  
+> - 每个工具的描述在发出前都会经 normalizeToolDescriptor / shrinkDescription（节点 19）规范化并压缩到 ≤120 字符。  
+> - parameters JSON schema 随同一 spec 发送；完整 schema 见 src/tools/*.ts。  
+> - 条件注册：semantic_search（ollama 可达时启用——见 src/code/setup.ts:97；启用时会在 system 提示词后附加节点 4）、MCP 提供的工具（用户安装的服务器，运行时解析）。  
+> - toolSpecs 的哈希参与前缀缓存指纹（src/memory/runtime.ts）——每次 addTool 都会损失一次缓存命中回合。  
+> - fewShots（ImmutablePrefix 选项）默认空；框架支持注入示例消息，但目前没有调用方传入。  
+
