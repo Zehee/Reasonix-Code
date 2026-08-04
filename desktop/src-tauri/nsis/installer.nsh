@@ -23,11 +23,11 @@
   Pop $0
   Pop $1
   ${If} $0 == 0
-    DetailPrint "reasonix-code 已安装：$1"
-    DetailPrint "启动后应用会检查更新。"
+    DetailPrint "reasonix-code already installed: $1"
+    DetailPrint "The app will check for updates on startup."
     Goto done
   ${ElseIf} ${FileExists} "$PROFILE\.reasonix-code\npm-global\reasonix-code.cmd"
-    DetailPrint "reasonix-code 已安装（npm-global，补充 PATH）。"
+    DetailPrint "reasonix-code already installed (npm-global); adding to PATH."
     Goto path_setup
   ${Else}
     DetailPrint "reasonix-code not found, checking Node.js / npm..."
@@ -70,7 +70,7 @@
         Goto npm_ok
 
   npm_ok:
-    DetailPrint "正在安装 reasonix-code 命令行版（首次安装可能需要几分钟，请耐心等待）..."
+    DetailPrint "Installing reasonix-code CLI (first install may take a few minutes)..."
     ; Prefer the canonical npm location (a just-installed Node may not be
     ; on this process's PATH yet); fall back to PATH. Keep the command
     ; simple — no cmd if/else parenthesis nesting, which can stall.
@@ -82,9 +82,9 @@
     Pop $0
     Pop $1
     IntCmp $0 0 path_setup
-      DetailPrint "npm 安装失败或超时（退出码 $0）。"
-      DetailPrint "可稍后在终端手动执行：npm install -g --prefix ""$PROFILE\.reasonix-code\npm-global"" reasonix-code"
-      DetailPrint "桌面版首次启动时也会提示安装命令行版。"
+      DetailPrint "npm install failed or timed out (exit code $0)."
+      DetailPrint "You can install it manually later: npm install -g --prefix ""$PROFILE\.reasonix-code\npm-global"" reasonix-code"
+      DetailPrint "The desktop app will also offer to install the CLI on first launch."
       Goto done
   path_setup:
     ; Make reasonix-code available in the user's terminals too: append the
