@@ -153,12 +153,10 @@ reasonix-code --help
 | Flag | Purpose |
 |---|---|
 | `--no-session` | Don't persist session |
-| `--session <name>` | Resume/pin to named session |
-| `--continue` | Resume most recent session |
-| `--new` | Force new session |
+| `-r, --resume` | Skip session picker, always resume prior messages |
+| `-n, --new` | Force new session |
+| `--continue` | Resume most recent session (top-level flag) |
 | `--budget <usd>` | Per-session USD cap |
-| `--preset <auto\|flash\|pro>` | Model preset |
-| `--mcp <spec>` | Attach MCP server |
 | `--no-dashboard` | Don't start Dashboard |
 | `--profile [path]` | CPU profiling |
 
@@ -204,7 +202,7 @@ reasonix-code --help
 │   │   ├── {sessionId}__archive_{ts}.jsonl  ← Archived raw session
 │   │   ├── {sessionId}.toolcache.jsonl     ← Tool result cache
 │   │   └── {sessionId}.meta.json           ← Metadata
-│   └── __chat__/                  ← Non-workspace sessions
+│   └── active.jsonl             ← Non-workspace sessions (ephemeral)
 ├── refined/{workspace-slug}/      ← Refinement index
 │   ├── refined.sqlite
 │   ├── folds/*.json               ← Fold views
@@ -225,7 +223,7 @@ reasonix-code --help
 | `command not found: reasonix-code` | Run `npm install -g reasonix-code` and restart terminal |
 | Desktop can't start CLI | Check Node.js >= 22 is installed |
 | Dashboard inaccessible | Check token in URL (`?token=...`) |
-| Low cache hit rate | Check `--preset` is `flash`, check tool results aren't truncated |
+| Low cache hit rate | Check tool results aren't truncated, review fold thresholds |
 
 ### Logs
 

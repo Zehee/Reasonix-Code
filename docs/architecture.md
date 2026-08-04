@@ -32,7 +32,7 @@ Reasonix-Code 是**面向 DeepSeek 前缀缓存优化的编程 agent**。每一�
 
 ### 模块 1 — Cache-First 循环
 
-**问题**：DeepSeek 对缓存输入收费仅为未命中的 1/10。大多数 agent 循环每轮重排/重写/注入时间戳，实际缓存命中率 <20%。
+**问题**：DeepSeek 对缓存输入收费仅为未命中的 1/50（0.0028 vs 0.14）。大多数 agent 循环每轮重排/重写/注入时间戳，实际缓存命中率 <20%。
 
 **解决方案**：将上下文分为四个区域：
 
@@ -77,7 +77,7 @@ Reasonix-Code 是**面向 DeepSeek 前缀缓存优化的编程 agent**。每一�
 │  只读审计                                     │
 ├──────────────────────────────────────────────┤
 │  第二层：材料库                                │
-│  ~/.reasonix/refined/<ws>.sqlite              │
+│  ~/.reasonix/refined/<ws>/refined.sqlite      │
 │  ~/.reasonix/refined/<ws>/searches/*.json     │
 │  ~/.reasonix/refined/<ws>/folds/*.json        │
 │  确定性提炼 + 跨 session 搜索 + fold 视图      │
@@ -95,7 +95,7 @@ Reasonix-Code 是**面向 DeepSeek 前缀缓存优化的编程 agent**。每一�
 **跨 session 主题追溯**：
 
 ```
-tag_theme "auth-flow" with sessionName="..." turnId=12
+tag_theme "auth-flow" sessionId="..." turnId=12
 trace_theme "auth-flow"
   → 按时间线展示所有相关决策
   → 即使跨越 3 周、8 个 session
@@ -147,9 +147,9 @@ src/
 ├── loop/                   # 循环子模块
 │   ├── dispatch.ts         # 工具调用调度（并行 chunk + serial barrier）
 │   ├── streaming.ts        # SSE 流处理
-│   ├── repair.ts           # 工具调用修复
 │   ├── healing.ts          # 崩溃恢复
 │   └── force-summary.ts    # 迭代限制后强制摘要
+├── repair/                 # 工具调用修复管线（scavenge/flatten/storm）
 ├── context-manager.ts      # 上下文折叠决策
 ├── tools/                  # 工具实现
 │   ├── filesystem.ts       # 读/列/搜/编辑/写（含 symlink 感知）
@@ -203,8 +203,8 @@ src/
 - **v0.7.x** — 桌面版多工作区，workspace tabs
 - **v0.8.x** — 鲁棒性优先（自愈 sessionId、崩溃安全写入、.bak 回退）
 - **v0.9.x** — 工具调用修复增强（lenientJsonParse 5 策略、fuzzyMatchParamStrict）
-- **v0.10.x** — Dashboard 重构（App.tsx 3257→790 行），workspace tabs 替代原生菜单
-- **v0.2.0** — 当前版本：12 bug fix + 5 大型重构 + 桌面体验
+- **v0.10.x** — Dashboard 重构（App.tsx 3257→790 行），workspace tabs 替代原生菜单（以上为 DeepSeek-Reasonix 上游历史）
+- **v0.1.x / v0.2.x** — Reasonix-Code 独立版本线；当前版本 **0.2.4**
 
 ## 明确的非目标
 

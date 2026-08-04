@@ -149,14 +149,13 @@ flowchart LR
     BIN["reasonix-code<br/>dist/cli/index.js"] --> BOOT["启动守卫<br/>node-version · heap · strip-bel · proxy"]
     BOOT --> CMD["commander"]
     CMD --> CODE ["code [dir]<br/>commands/code.tsx"]
-    CMD --> CHAT ["chat<br/>commands/chat.tsx"]
     CMD --> RUN ["run <task><br/>commands/run.ts"]
     CMD --> ACP ["acp<br/>commands/acp.ts"]
     CMD --> UTIL["stats · sessions · replay · diff<br/>mcp · doctor · commit · update · index"]
 
     CODE --> TOOLSET["buildCodeToolset(rootDir)"]
-    TOOLSET --> CHAT
-    CHAT --> ROOT["render(<App/>)"]
+    TOOLSET --> CHATCMD["commands/chat.tsx<br/>（共享 TUI 运行器）"]
+    CHATCMD --> ROOT["render(<App/>)"]
     RUN --> LOOP2["new CacheFirstLoop"]
     ROOT --> APP["App.tsx 构建<br/>DeepSeekClient + ImmutablePrefix + CacheFirstLoop"]
     ACP --> LOOP3["CacheFirstLoop"]

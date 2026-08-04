@@ -25,19 +25,16 @@
 | `reasonix-code index` | 构建语义索引 |
 | `reasonix-code version` / `reasonix-code update` | 版本信息 |
 
-### 运行时标志（chat / code）
+### 运行时标志（code）
 
 | 标志 | 用途 |
 |---|---|
 | `--no-session` | 不保存 session |
-| `--session <name>` | 恢复/锁定到指定 session |
-| `--continue` | 恢复最近 session |
-| `--new` | 强制新建 session |
+| `-r, --resume` | 跳过会话选择，始终恢复上次消息 |
+| `-n, --new` | 强制新建 session |
+| `--continue` | 恢复最近 session（顶层 flag） |
 | `--budget <usd>` | 每 session USD 上限 |
-| `--preset <auto\|flash\|pro>` | 模型预设 |
-| `--mcp <spec>` | 附加 MCP 服务器 |
 | `--no-dashboard` | 不启动 Dashboard |
-| `--no-alt-screen` | 滚动回溯模式 |
 | `--no-mouse` | 禁用鼠标 |
 | `--profile [path]` | CPU 性能分析 |
 
@@ -56,13 +53,11 @@
 | `/retry` | 重发上一消息 |
 | `/compact` | 手动折叠旧 turns |
 | `/stop` | 中止当前 turn |
-| `/copy` | 复制模式 |
 
 ### 设置
 
 | 命令 | 用途 |
 |---|---|
-| `/preset <auto\|flash\|pro>` | 切换模型预设 |
 | `/model <id>` | 切换模型 ID |
 | `/language <EN\|zh-CN>` (`/lang`) | 切换语言 |
 | `/theme <name>` | 切换主题 |
@@ -124,11 +119,10 @@
 
 | 命令 | 用途 |
 |---|---|
-| `/pro [off]` | 下一 turn 启用 v4-pro |
-| `/budget [usd\|off>` | Session USD 上限 |
+| `/budget [usd\|off]` | Session USD 上限 |
 | `/search-engine <engine>` (`/se`) | 切换搜索引擎 |
 | `/hooks [reload]` | 列出/重载 hooks |
-| `/permissions [list\|add\|remove\|clear>` | 编辑 shell 白名单 |
+| `/permissions [list\|add\|remove\|clear]` | 编辑 shell 白名单 |
 | `/dashboard [stop]` | 启动/停止 Dashboard |
 | `/loop <interval> <prompt>` | 自动重复提交 |
 | `/plans` | 列出计划 |

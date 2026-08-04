@@ -153,12 +153,10 @@ reasonix-code --help
 | 标志 | 用途 |
 |---|---|
 | `--no-session` | 不保存 session |
-| `--session <name>` | 恢复/锁定到指定 session |
-| `--continue` | 恢复最近 session |
-| `--new` | 强制新建 session |
+| `-r, --resume` | 跳过会话选择，始终恢复上次消息 |
+| `-n, --new` | 强制新建 session |
+| `--continue` | 恢复最近 session（顶层 flag） |
 | `--budget <usd>` | 每 session USD 上限 |
-| `--preset <auto\|flash\|pro>` | 模型预设 |
-| `--mcp <spec>` | 附加 MCP 服务器 |
 | `--no-dashboard` | 不启动 Dashboard |
 | `--profile [path]` | CPU 性能分析 |
 
@@ -204,7 +202,7 @@ reasonix-code --help
 │   │   ├── {sessionId}__archive_{ts}.jsonl  ← 归档原始会话
 │   │   ├── {sessionId}.toolcache.jsonl     ← 工具结果缓存
 │   │   └── {sessionId}.meta.json           ← 元数据
-│   └── __chat__/                  ← 无工作区会话
+│   └── active.jsonl              ← 无工作区会话（临时）
 ├── refined/{workspace-slug}/      ← 提炼索引
 │   ├── refined.sqlite
 │   ├── folds/*.json               ← fold 视图
@@ -225,7 +223,7 @@ reasonix-code --help
 | `command not found: reasonix-code` | 运行 `npm install -g reasonix-code` 并重启终端 |
 | 桌面版无法启动 CLI | 检查 Node.js >= 22 是否安装 |
 | Dashboard 无法访问 | 检查 token 是否正确（URL 中的 `?token=...`） |
-| 缓存命中率低 | 检查 `--preset` 是否为 `flash`，检查 tool result 是否被截断 |
+| 缓存命中率低 | 检查工具结果是否被截断、review fold 阈值 |
 
 ### 日志
 
