@@ -11,19 +11,28 @@
 ;   template.nsi) and letting the shell prompt on first launch.
 
 !macro NSIS_HOOK_POSTINSTALL
+  ; Allow cancel / close during install (the instfiles page disables its
+  ; Cancel button by default; a stalled npm step shouldn't be unescapable).
+  GetDlgItem $0 $HWNDPARENT 2
+  EnableWindow $0 1
+
   DetailPrint "Checking reasonix-code CLI..."
+  ; PATH lookup first, then the canonical npm-global shim — a CLI installed
+  ; there is valid even before it's on PATH, so we don't reinstall it.
   nsExec::ExecToStack /TIMEOUT=10000 'cmd /c reasonix-code --version'
   Pop $0
   Pop $1
-
-  IntCmp $0 0 cli_exists
+  ${If} $0 == 0
+    DetailPrint "reasonix-code 已安装：$1"
+    DetailPrint "启动后应用会检查更新。"
+    Goto done
+  ${ElseIf} ${FileExists} "$PROFILE\.reasonix-code\npm-global\reasonix-code.cmd"
+    DetailPrint "reasonix-code 已安装（npm-global，补充 PATH）。"
+    Goto path_setup
+  ${Else}
     DetailPrint "reasonix-code not found, checking Node.js / npm..."
     Goto check_npm
-
-  cli_exists:
-    DetailPrint "reasonix-code already installed: $1"
-    DetailPrint "The app will check for updates on startup."
-    Goto done
+  ${EndIf}
 
   check_npm:
     nsExec::ExecToStack /TIMEOUT=10000 'cmd /c node --version && npm --version'
@@ -66,9 +75,9 @@
     ; on this process's PATH yet); fall back to PATH. Keep the command
     ; simple — no cmd if/else parenthesis nesting, which can stall.
     ${If} ${FileExists} "$LOCALAPPDATA\Programs\nodejs\npm.cmd"
-      nsExec::ExecToStack /TIMEOUT=300000 'cmd /c ""$LOCALAPPDATA\Programs\nodejs\npm.cmd" install -g --prefix "$PROFILE\.reasonix-code\npm-global" reasonix-code"'
+      nsExec::ExecToStack /TIMEOUT=120000 'cmd /c ""$LOCALAPPDATA\Programs\nodejs\npm.cmd" install -g --prefix "$PROFILE\.reasonix-code\npm-global" reasonix-code"'
     ${Else}
-      nsExec::ExecToStack /TIMEOUT=300000 'cmd /c npm install -g --prefix "$PROFILE\.reasonix-code\npm-global" reasonix-code'
+      nsExec::ExecToStack /TIMEOUT=120000 'cmd /c npm install -g --prefix "$PROFILE\.reasonix-code\npm-global" reasonix-code'
     ${EndIf}
     Pop $0
     Pop $1
