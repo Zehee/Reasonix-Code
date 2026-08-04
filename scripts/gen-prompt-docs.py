@@ -8,6 +8,7 @@ Chinese translation (technical terms / tool names / commands kept as-is).
 """
 import os
 import re
+import html as html_lib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -786,37 +787,43 @@ SUB_LABEL = {
 }
 
 
+def esc(s):
+    """HTML-escape block content (quotes left alone inside <pre>)."""
+    return html_lib.escape(s, quote=False)
+
+
 def render_node(num, title, src, zh, en, body, zh_body, lang):
-    fence = "````text"
+    pre_open = '<pre style="white-space: pre-wrap; word-break: break-word;">'
+    pre_close = "</pre>"
     title_line = ("## 节点 %s · %s" % (num, title)) if lang == "zh" else ("## Node %s · %s" % (num, title))
     src_line = "- **来源 / Source**: `%s`" % src
     cond = ("- **说明**: %s" % zh) if lang == "zh" else ("- **Notes**: %s" % en)
     out = ["---", "", title_line, "", src_line, cond, ""]
     if lang == "en":
         if body is not None:
-            out += [fence, body, "````", ""]
+            out += [pre_open, esc(body), pre_close, ""]
         elif num == "17":
             for k in ["explore", "research", "review", "security-review", "test", "qq"]:
                 out += [
                     "#### 17.%s · BUILTIN_%s_BODY" % (SUB_LABEL[k].split(" ")[0], k.upper()),
                     "",
-                    fence,
-                    N17[k],
-                    "````",
+                    pre_open,
+                    esc(N17[k]),
+                    pre_close,
                     "",
                 ]
         return "\n".join(out)
     # zh: translation only (EN original lives in prompt.en.md)
     if body is not None:
-        out += [fence, zh_body, "````", ""]
+        out += [pre_open, esc(zh_body), pre_close, ""]
     elif num == "17":
         for k in ["explore", "research", "review", "security-review", "test", "qq"]:
             out += [
                 "#### 17.%s · BUILTIN_%s_BODY" % (SUB_LABEL[k].split(" ")[0], k.upper()),
                 "",
-                fence,
-                zh_body[k],
-                "````",
+                pre_open,
+                esc(zh_body[k]),
+                pre_close,
                 "",
             ]
     return "\n".join(out)
