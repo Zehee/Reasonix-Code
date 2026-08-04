@@ -1,3 +1,15 @@
+## [0.2.4] - 2026-08-04
+
+### Security
+- All Dependabot advisories resolved (0 open across root / desktop / dashboard):
+  - vitest ^3.2.6 + @vitest/coverage-v8 (critical UI-server RCE)
+  - esbuild ^0.28.1 + overrides (dev-server file read)
+  - undici / ws upgraded (production deps — proxy.ts, qq/bot.ts)
+  - qs ^6.15.3 override (typed-rest-client transitive)
+  - vite ^6.4.3 (dashboard; server.fs.deny bypass, .map path traversal)
+  - postcss / @babel/core / launch-editor via audit fix
+  - sharp ^0.35.3 override (desktop; libvips CVEs via icon-gen)
+
 ## [0.2.3] - 2026-08-03
 
 ### Added
