@@ -45,3 +45,18 @@ const host = document.getElementById("root");
 if (!host) throw new Error("#root missing");
 
 createRoot(host).render(<App />);
+
+// The desktop shell hosts this dashboard in a WebView2 iframe; browser
+// accelerator keys (Ctrl+P print, Ctrl+F find, Ctrl+S save…) are enabled by
+// default and surface the browser UI we don't want inside a desktop app.
+// Block them globally (keydown fires inside the iframe before WebView2
+// handles the accelerator).
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.metaKey) {
+    const k = e.key.toLowerCase();
+    if (k === "p" || k === "s" || k === "f" || k === "u" || k === "g") {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }
+});
