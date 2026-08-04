@@ -36,7 +36,34 @@
 
 跨 session 的决策追溯——你在第 1 天决定用 JWT，第 30 天 Agent 不会再建议 localStorage。
 
+**一个真实的场景**——你花数周做一个认证模块：
+
+```
+时间轴
+──────────────────────────────────────────────────────►
+  第 X 天          数日后          一周后           数周后
+   │               │                │                │
+   ▼               ▼                ▼                ▼
+[JWT 方案]    [登录接口实现]    [Safari 调整]    [Agent 建议 localStorage]
+   │                                                   │
+   └────────────────── auth-flow 主题 ──────────────────┘
+```
+
+如果 Agent 能看到 `auth-flow` 这个主题的完整时间线，它就不会提出与早期决策相矛盾的建议。它会问：
+
+> "我们周一明确排除了 localStorage。周五的调整是为了解决 Safari 问题。你这次修改是想推翻原决策，还是只是补充？"
+
+**工作流程**：
+
+1. **提炼**（自动、零 LLM）— 基于关键词 + Markdown 结构分析，把原始 turn 压缩成结构化摘要，存入 SQLite
+2. **搜索**（`search_context`）— 跨 session 关键词命中，按 90 秒时间窗口聚簇，自动提炼未处理的 turn
+3. **主题挂载**（`tag_theme`）— 将相关 turn 关联到主题，形成按时间线排列的历史档案
+4. **主题追溯**（`trace_theme`）— 查看主题的完整演进过程，可选包含每个 turn 的降噪内容
+
 ```bash
+# 搜索跨 session 的历史材料
+search_context query="auth JWT cookie"
+
 # 标记当前 turn 到主题
 tag_theme theme="auth-flow" sessionId="..." turnId=12
 
@@ -49,6 +76,11 @@ trace_theme theme="auth-flow" includeContent=true
 # 列出所有主题
 list_themes
 ```
+
+**设计原则**：
+- **搜索即权重** — 只提炼被搜索过的内容，无人提及的决策留在原始记录中
+- **搜索同时是打捞** — `search_context` 命中未提炼的 turns 时自动触发提炼入库，材料库随着使用自然增长
+- **主题只保存引用** — 内容仍存放在材料库和原始日志中，删除主题不会丢失数据
 
 主题存储在 `~/.reasonix/themes/<name>.json`，纯 JSON 可读可改。
 

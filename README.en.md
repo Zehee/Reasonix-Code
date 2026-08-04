@@ -36,19 +36,51 @@
 
 Cross-session decision tracing — if you decided on JWT on day 1, the Agent won't suggest localStorage on day 30.
 
+**A real scenario** — you spend weeks building an auth module:
+
+```
+Timeline
+──────────────────────────────────────────────────────►
+  Day X          Days later       A week later     Weeks later
+   │               │                │                │
+   ▼               ▼                ▼                ▼
+[JWT decision] [Login endpoint] [Safari tweak] [Agent suggests localStorage]
+   │                                                   │
+   └────────────────── auth-flow theme ─────────────────┘
+```
+
+If the Agent can see the full timeline of the `auth-flow` theme, it won't suggest approaches that contradict earlier decisions. It will ask:
+
+> "We explicitly ruled out localStorage on Monday. Friday's adjustment was for Safari. Are you overturning the original decision or just supplementing it?"
+
+**Workflow**:
+
+1. **Refinement** (automatic, zero LLM) — Keyword + Markdown structural analysis compresses raw turns into structured summaries stored in SQLite
+2. **Search** (`search_context`) — Cross-session keyword matching with 90-second time-window clustering, auto-refining unprocessed turns
+3. **Theme tagging** (`tag_theme`) — Associates related turns with a theme, forming a chronologically-ordered history
+4. **Theme tracing** (`trace_theme`) — Views the complete evolution of a theme, optionally including denoised content per turn
+
 ```bash
-# Tag the current turn to a theme
+# Search cross-session historical material
+search_context query="auth JWT cookie"
+
+# Tag current turn to a theme
 tag_theme theme="auth-flow" sessionId="..." turnId=12
 
 # Trace the full evolution timeline of a theme
 trace_theme theme="auth-flow"
 
-# Include the denoised content of each turn
+# Include denoised content of each turn
 trace_theme theme="auth-flow" includeContent=true
 
 # List all themes
 list_themes
 ```
+
+**Design principles**:
+- **Search is weight** — Only refine content that has been searched for; decisions no one mentions stay in raw logs
+- **Search is also salvage** — `search_context` auto-triggers refinement when hitting unprocessed turns; the material library grows organically with use
+- **Themes only store references** — Content remains in the material library and raw logs; deleting a theme doesn't lose data
 
 Themes are stored in `~/.reasonix/themes/<name>.json`, plain JSON readable and editable.
 
