@@ -183,6 +183,8 @@ export class CacheFirstLoop {
   private readonly _rebuildSystem: (() => string) | null;
 
   private _turn = 0;
+  /** Per-step counters feeding the auto-escalation rule (3+ repair/SEARCH errors in a single turn → retry on deepseek-v4-pro). */
+  private _autoEscalate = { repair: 0, toolErrors: 0 };
   private _streamPreference: boolean;
   /** Threaded through HTTP + every tool dispatch so Esc cancels in-flight work, not after. */
   private _turnAbort: AbortController = new AbortController();
@@ -549,6 +551,12 @@ export class CacheFirstLoop {
         readTracker: this.readTracker,
         rootDir: this.hookCwd,
       });
+      // Tool-level errors (incl. edit SEARCH-mismatch blocks) feed the
+      // auto-escalation counter — dispatch serializes failures as
+      // '{"error": …}' (loop/dispatch.ts).
+      if (typeof result === "string" && result.trimStart().startsWith('{"error":')) {
+        this._autoEscalate.toolErrors++;
+      }
 
       const postReport = await runHooks({
         hooks: this.hooks,
@@ -790,6 +798,8 @@ export class CacheFirstLoop {
     }
     const baseModelForTurn = this.model;
     let restoreModelAfterTurn = false;
+    this._autoEscalate.repair = 0;
+    this._autoEscalate.toolErrors = 0;
     const restoreModelIfNeeded = () => {
       if (restoreModelAfterTurn && this.model === "deepseek-v4-pro") {
         this.model = baseModelForTurn;
@@ -1072,6 +1082,24 @@ export class CacheFirstLoop {
         continue;
       }
 
+      // Auto-escalation contract (prompt-fragments.ts): 3+ repair /
+      // SEARCH-mismatch errors in a single turn retry this turn on
+      // deepseek-v4-pro, with a typed breakdown shown to the user.
+      if (callModel !== "deepseek-v4-pro") {
+        const total = this._autoEscalate.repair + this._autoEscalate.toolErrors;
+        if (total >= 3) {
+          yield {
+            turn: this._turn,
+            role: "warning",
+            severity: "high",
+            content: `⇧ auto-escalated to deepseek-v4-pro — ${total} repair/SEARCH errors this turn (repair: ${this._autoEscalate.repair}, tool errors: ${this._autoEscalate.toolErrors})`,
+          };
+          restoreModelAfterTurn = true;
+          this.model = "deepseek-v4-pro";
+          continue;
+        }
+      }
+
       // Attribute under the actual model used (escalated → pro, else callModel)
       // so cost/usage logs reflect reality.
       const cacheDiagnostics = this.cacheDiagnosticsForUsage(cacheShape, usage);
@@ -1129,6 +1157,7 @@ export class CacheFirstLoop {
         reasoningContent || null,
         assistantContent || null,
       );
+      this._autoEscalate.repair += report.scavenged + report.truncationsFixed;
 
       this.appendAndPersist(
         buildAssistantMessage(assistantContent, repairedCalls, callModel, reasoningContent),

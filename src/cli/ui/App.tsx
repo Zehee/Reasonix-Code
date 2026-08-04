@@ -130,6 +130,7 @@ import { PlanReviseEditor } from "./PlanReviseEditor.js";
 import { PromptInput } from "./PromptInput.js";
 import { SessionPicker } from "./SessionPicker.js";
 import { ShellConfirm, type ShellConfirmChoice } from "./ShellConfirm.js";
+import { setCitationRoot } from "./citation-check.js";
 import { useRenderTrace } from "./render-trace.js";
 
 import { SlashArgPicker } from "./SlashArgPicker.js";
@@ -393,6 +394,8 @@ interface StreamingState {
 
 export function App(props: AppProps): React.ReactElement {
   markPhase("app_render_start");
+  // Citation validation resolves relative paths against the code-mode root.
+  setCitationRoot(props.codeMode?.rootDir ?? process.cwd());
   const session = useAgentSession({
     sessionId: props.session,
     model: props.model,

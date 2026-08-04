@@ -1,6 +1,7 @@
 import { Box, Link, Text } from "ink";
 // biome-ignore lint/style/useImportType: tsconfig jsx=react needs React in value scope for JSX compilation
 import React from "react";
+import { citationPathExists } from "./citation-check.js";
 import { type InlineSpan, type MdLine, markdownToLines } from "./markdown-lines.js";
 
 const FG_BODY = "#c9d1d9";
@@ -10,6 +11,7 @@ const FG_META = "#8b949e";
 const TONE_BRAND = "#79c0ff";
 const TONE_OK = "#7ee787";
 const TONE_WARN = "#f0b07d";
+const TONE_ERR = "#f85149";
 const SURFACE_ELEV = "#161b22";
 
 export function MarkdownView({ text }: { text: string }): React.ReactElement {
@@ -151,26 +153,32 @@ function SpanText({
       </Text>
     );
   }
-  const color = span.fileRef
-    ? TONE_BRAND
-    : span.link
+  // Citation contract: broken paths render as red strikethrough + ❌ and
+  // stop being clickable links.
+  const missingRef = span.fileRef ? !citationPathExists(span.fileRef.path) : false;
+  const color = missingRef
+    ? TONE_ERR
+    : span.fileRef
       ? TONE_BRAND
-      : strongColor
-        ? FG_STRONG
-        : FG_BODY;
+      : span.link
+        ? TONE_BRAND
+        : strongColor
+          ? FG_STRONG
+          : FG_BODY;
   const inner = (
     <Text
       color={ambientDim ? FG_FAINT : color}
       bold={!!(span.bold || ambientBold)}
       italic={!!(span.italic || ambientItalic)}
-      strikethrough={!!(span.strike || ambientStrike)}
-      underline={!!(span.link || span.fileRef)}
+      strikethrough={!!(span.strike || ambientStrike || missingRef)}
+      underline={missingRef ? false : !!(span.link || span.fileRef)}
     >
       {span.text}
+      {missingRef ? " ❌" : null}
     </Text>
   );
   const target = linkTarget(span);
-  if (!target) return inner;
+  if (!target || missingRef) return inner;
   return <Link url={target}>{inner}</Link>;
 }
 

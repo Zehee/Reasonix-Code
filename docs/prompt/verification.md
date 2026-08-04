@@ -2,6 +2,8 @@
 
 > 核验目的：prompt 大多继承自上游，本文核验每个节点声称的工具与逻辑在本项目中是否真实存在、实现状态如何。
 > 核验日期：2026-08-04 · 核验范围：全部 21 个 prompt 节点 · 状态图例：✅ 存在 / ⚠️ 部分或措辞偏差 / 🔴 声称无实现 / 🔶 改名
+>
+> **后续处置（2026-08-04 已完成）**：🔴1 引用校验已实现（src/cli/ui/citation-check.ts + markdown.tsx / markdown-view.tsx 缺失路径渲染红色删除线 ❌）；🔴2 自动升级已实现（src/loop.ts 回合内 repair+tool-error 计数 ≥3 触发 deepseek-v4-pro 重试 + typed breakdown warning，测试 tests/loop-auto-escalation.test.ts）；⚠️1 `ls` 文案已改为 `list_directory`。
 
 ## 总览
 
@@ -13,16 +15,25 @@
 
 ---
 
-## 🔴 声称无实现（需决策）
+## 🔴 声称无实现（已处置 ✅）
 
-### 1. 引用校验机制不存在 — 影响节点 1、13
+### 1. 引用校验机制 — 影响节点 1、13 — **已实现（2026-08-04）**
+- 新增 `src/cli/ui/citation-check.ts`（`setCitationRoot` + `citationPathExists`，无缓存）
+- `markdown.tsx` renderInlineText：FILE_REF_RE 命中路径不存在 → 红色删除线 + ❌（不再 OSC8 链接）
+- `markdown-view.tsx` RenderSpan：同规则（红删除线 + ❌，去除下划线链接）
+- App.tsx 启动时 `setCitationRoot(codeMode.rootDir ?? cwd)`
+- 测试：tests/citation-check.test.ts（5 用例）
+- 注意：仅 CLI TUI 生效；dashboard 浏览器端未做（服务器无法 stat 客户端 fs 的语义未定）
 
 - **声称**：`src/code/prompt.ts:21` 与 `src/cli/index.ts:69` — "Reasonix VALIDATES citations and broken paths render in **red strikethrough with ❌**"
 - **实际**：全库（CLI TUI、dashboard、server）均无链接路径存在性校验。`markdown.tsx:448-453` 的红色删除线只是 `~~del~~` 通用语法渲染；`markdown-lines.ts:35,199-222` 仅拆分 fileRef 做 OSC8 链接，无校验。
 - **影响**：模型若依赖系统校验会得到误导；broken path 不会被标记。
 - **选项**：A) 实现校验（模型输出后扫描 fileRef 验证路径 → 染红）；B) 修改 prompt 文案（去掉系统校验声称，改为"引用路径应可验证"的模型指导）。
 
-### 2. "3+ repair 错误自动升级"不存在 — 影响节点 2
+### 2. "3+ repair 错误自动升级" — 影响节点 2 — **已实现（2026-08-04）**
+- `src/loop.ts`：回合内计数器 `_autoEscalate`（repair.scavenged+truncationsFixed + tool 错误 `{"error":…}`）
+- 模型响应后检查：计数 ≥3 且非 pro → yield typed-breakdown warning（`⇧ auto-escalated … (repair: X, tool errors: Y)`）+ 切 deepseek-v4-pro 重试本回合 + 回合末恢复
+- 测试：tests/loop-auto-escalation.test.ts（升级/不升级/恢复 3 用例）
 
 - **声称**：`src/prompt-fragments.ts:24` — "the system also escalates automatically if you hit 3+ repair / SEARCH-mismatch errors in a single turn (the user sees a typed breakdown)"
 - **实际**：仅 `<<<NEEDS_PRO>>>` 显式标记触发升级（`src/loop.ts:1069-1071`）；repair 相关只有重复调用抑制（`repair/storm.ts` + loop.ts:265-266），不升级模型；"typed breakdown" 无输出。
@@ -40,7 +51,7 @@
 
 | # | 位置 | 声称 | 实际 | 建议 |
 |---|---|---|---|---|
-| 1 | prompt.ts:17 | "don't `ls` / `read_file` to figure out who you are" | 无 `ls` 工具（真实名 `list_directory`） | 改为 "don't `list_directory` / `read_file`"（或明确指 shell 命令） |
+| 1 | prompt.ts:17 | "don't `ls` / `read_file` to figure out who you are" | 无 `ls` 工具（真实名 `list_directory`） | ✅ 已改 `list_directory`（2026-08-04） |
 | 2 | prompt.ts:124 | "If an MCP tool fails or times out, fall back to the built-in" | 无系统级 fallback，纯模型行为指导 | 语气改为 "you may fall back to the built-in"（可选） |
 | 3 | prompt.ts:101 | "Never use a leading `/` in arguments — Windows reads it as drive root" | 实现实际拒绝"解析后逃逸 workspace 的路径"（`src/tools/shell/parse.ts:349-360`），前导 `/` 会被相对化处理 | 措辞微调（可选，功能方向一致） |
 
@@ -89,9 +100,10 @@
 - `grep` 注册在 `filesystem.ts:559`（`tools/grep.ts` 是纯实现文件，非死代码）
 - `spawn_subagent` 工具（`registerSubagentTool`）仅库 API 导出，CLI 主会话不注册
 
-## 结论与建议
+## 结论与建议（2026-08-04 处置完成）
 
-1. **引用校验**（🔴1）：prompt 描述的系统能力不存在——建议**实现或改文案**二选一（影响节点 1、13 的用户体验与模型行为）。
-2. **自动升级**（🔴2）：建议**实现**（成本中等：loop 已有显式升级路径，加错误计数即可）或删除文案声称。
-3. **`ls` 引用**（⚠️1）：小改文案即可。
-4. 其余 21 节点内容与实现一致，仅节点 6 的查找链说明需补 `.claude/CLAUDE.md`（文档已同步修正）。
+1. **引用校验**（🔴1）：**已实现**——缺失路径在 TUI 渲染红色删除线 + ❌（citation-check.ts + 两条渲染路径 + 测试）。
+2. **自动升级**（🔴2）：**已实现**——回合内 repair/工具错误计数 ≥3 自动重试 pro + typed breakdown（loop.ts + 测试）。
+3. **`ls` 引用**（⚠️1）：**已修**——prompt.ts:17 改为 `list_directory`（文档已同步重新生成）。
+4. 其余 21 节点内容与实现一致；节点 6 查找链已补 `.claude/CLAUDE.md`。
+5. 遗留：dashboard 端引用校验未做（CLI TUI 已覆盖主要场景）。

@@ -5,6 +5,7 @@ import { Box, type Color, Link, Text, useStdout } from "ink";
 import { type Token, type Tokens, marked } from "marked";
 import React from "react";
 import stringWidth from "string-width";
+import { citationPathExists } from "./citation-check.js";
 import { decodeHtmlEntities } from "./html-entities.js";
 import { padToCells, wrapToCells } from "./text-width.js";
 import { FG, SURFACE, TONE } from "./theme/tokens.js";
@@ -405,6 +406,19 @@ function renderInlineText(raw: string): React.ReactElement {
     const path = m[1]!;
     const line = m[2];
     if (!looksLikeFileRef(path, line !== undefined)) continue;
+    // Citation contract: broken paths render as red strikethrough + ❌.
+    if (!citationPathExists(path)) {
+      hits.push({
+        start,
+        end,
+        node: (
+          <Text color={TONE.err} strikethrough>
+            {m[0]} ❌
+          </Text>
+        ),
+      });
+      continue;
+    }
     const target = line ? `file://${path}:${line}` : `file://${path}`;
     hits.push({ start, end, node: osc8(m[0], target, TONE.brand) });
   }
