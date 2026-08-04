@@ -9,8 +9,6 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["devtools", "macos-private-api"] }
-webview2-com = "0.38.2"
-windows-core = "0.61"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-opener = "2"
@@ -24,7 +22,14 @@ parking_lot = "0.12"
 anyhow = "1"
 reqwest = "0.13"
 
+# Windows-only: WebView2 accelerator-key disable (main.rs setup).
+# Must be target-gated — webview2-com pulls the whole windows crate tree
+# (windows-core, windows-future) which fails to compile on macOS
+# (windows-future 0.2.1 needs windows-core 0.62's imp::IMarshal that
+# 0.61 doesn't ship on non-Windows targets).
 [target.'cfg(windows)'.dependencies]
+webview2-com = "0.38.2"
+windows-core = "0.61"
 windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }
 
 [features]
