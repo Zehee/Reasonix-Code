@@ -224,7 +224,7 @@
 ## 节点 6 · 记忆栈 · Project memory
 
 - **来源 / Source**: `src/memory/project.ts:97-112`
-- **说明**: REASONIX.md → CLAUDE.md → AGENTS.md → AGENT.md 优先级，8000 字符截断。`${filename}` / `${mem.content}` 为插入点。
+- **说明**: 实际查找链 REASONIX.md → .claude/CLAUDE.md → CLAUDE.md → AGENTS.md → AGENT.md，8000 字符截断。`${filename}` / `${mem.content}` 为插入点。
 
 > ${basePrompt}  
 >
@@ -665,7 +665,7 @@
 ## 节点 20 · 共享片段 · NEGATIVE_CLAIM_RULE（负面声明规则）
 
 - **来源 / Source**: `src/prompt-fragments.ts:30-36`
-- **说明**: 被节点 14-17 以 `${NEGATIVE_CLAIM_RULE}` 内嵌的共享片段：否定性断言（『X 不存在』）是头号幻觉形态，先搜索再断言缺失。
+- **说明**: 内嵌于 7 处（节点 14、15、16、17.1-17.4）：否定性断言（『X 不存在』）是头号幻觉形态，先搜索再断言缺失。
 
 > 负面声明（"X 不存在"、"Y 没有实现"、"没有 Z"）是头号幻觉形态。它们写起来很安全，因为似乎无需引用——但正因如此，你绝不能凭本能去写。  
 >

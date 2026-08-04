@@ -226,7 +226,7 @@
 ## Node 6 · 记忆栈 · Project memory
 
 - **来源 / Source**: `src/memory/project.ts:97-112`
-- **Notes**: REASONIX.md → CLAUDE.md → AGENTS.md → AGENT.md priority, 8000-char cap. `${filename}` / `${mem.content}` are insertion points.
+- **Notes**: Actual chain REASONIX.md → .claude/CLAUDE.md → CLAUDE.md → AGENTS.md → AGENT.md, 8000-char cap. `${filename}` / `${mem.content}` are insertion points.
 
 > ${basePrompt}  
 >
@@ -679,7 +679,7 @@
 ## Node 20 · 共享片段 · NEGATIVE_CLAIM_RULE（负面声明规则）
 
 - **来源 / Source**: `src/prompt-fragments.ts:30-36`
-- **Notes**: Shared fragment embedded via `${NEGATIVE_CLAIM_RULE}` in nodes 14-17: negative claims are the #1 hallucination shape — search before asserting absence.
+- **Notes**: Embedded in 7 places (nodes 14, 15, 16, 17.1-17.4): negative claims are the #1 hallucination shape — search before asserting absence.
 
 > export const NEGATIVE_CLAIM_RULE = `Negative claims ("X is missing", "Y isn't implemented", "there's no Z") are the #1 hallucination shape. They feel safe to write because no citation seems possible — but that's exactly why you must NOT write them on instinct.  
 >
