@@ -39,7 +39,7 @@ jobs:
           Copy-Item $exe.FullName -Destination "reasonix-code-desktop-windows-build${{ github.run_number }}.exe"
 
       - name: Upload Windows installer
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: reasonix-code-desktop-windows
           path: reasonix-code-desktop-windows-build${{ github.run_number }}.exe
@@ -100,7 +100,7 @@ jobs:
           cp "$dmg" "reasonix-code-desktop-macos-build${{ github.run_number }}.dmg"
 
       - name: Upload macOS .dmg
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: reasonix-code-desktop-macos
           path: reasonix-code-desktop-macos-build${{ github.run_number }}.dmg
@@ -171,7 +171,7 @@ jobs:
           cp "$deb" "reasonix-code-desktop-linux-build${{ github.run_number }}.deb"
 
       - name: Upload Linux .deb
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: reasonix-code-desktop-linux
           path: reasonix-code-desktop-linux-build${{ github.run_number }}.deb
