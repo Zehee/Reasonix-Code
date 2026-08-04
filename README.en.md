@@ -25,11 +25,32 @@
 ## Key features
 
 - **Three-layer memory architecture** — Raw JSONL logs → SQLite refinement index → cross-session theme tracing, all plain files you can read and edit
+- **Theme tracing** — Cross-session decision tagging (`tag_theme`), full evolution timeline (`trace_theme`), linking decisions across weeks and multiple sessions
 - **49 native tools** — File operations, code search, shell execution, plan management, theme tracking, ready out of the box
 - **Cache-first loop** — Maximizes DeepSeek prefix cache hit rate; every cache hit is 50× cheaper than a miss
 - **Desktop app** — Multi-workspace tabs, CLI crash toasts, new tab focus, ~3 MB installer
 - **Robustness first** — Self-healing session IDs, crash-safe writes, .bak fallback chain
 - **Multi-channel** — Telegram / Weixin / QQ channel adapters
+
+### Theme tracing
+
+Cross-session decision tracing — if you decided on JWT on day 1, the Agent won't suggest localStorage on day 30.
+
+```bash
+# Tag the current turn to a theme
+tag_theme theme="auth-flow" sessionId="..." turnId=12
+
+# Trace the full evolution timeline of a theme
+trace_theme theme="auth-flow"
+
+# Include the denoised content of each turn
+trace_theme theme="auth-flow" includeContent=true
+
+# List all themes
+list_themes
+```
+
+Themes are stored in `~/.reasonix/themes/<name>.json`, plain JSON readable and editable.
 
 ---
 

@@ -25,11 +25,32 @@
 ## 核心特性
 
 - **三层记忆架构** — 原始 JSONL 日志 → SQLite 提炼索引 → 跨 session 主题追溯，纯文件可读可改
+- **主题追踪** — 跨 session 标记决策（`tag_theme`），追溯完整演进时间线（`trace_theme`），即使跨越数周、多个 session 也能串联
 - **49 个原生工具** — 文件操作、代码搜索、Shell 执行、计划管理、主题追踪，开箱即用
 - **Cache-first 循环** — 最大化 DeepSeek 前缀缓存命中率，每次缓存命中比未命中便宜 50 倍
 - **桌面版** — 多工作区 tabs、CLI 崩溃提示、新建 tab 聚焦，约 3 MB 安装包
 - **鲁棒性优先** — 自愈 sessionId、崩溃安全写入、.bak 回退链
 - **多频道** — Telegram / Weixin / QQ 频道适配器
+
+### 主题追踪
+
+跨 session 的决策追溯——你在第 1 天决定用 JWT，第 30 天 Agent 不会再建议 localStorage。
+
+```bash
+# 标记当前 turn 到主题
+tag_theme theme="auth-flow" sessionId="..." turnId=12
+
+# 追溯主题的完整演进时间线
+trace_theme theme="auth-flow"
+
+# 包含每个 turn 的降噪内容
+trace_theme theme="auth-flow" includeContent=true
+
+# 列出所有主题
+list_themes
+```
+
+主题存储在 `~/.reasonix/themes/<name>.json`，纯 JSON 可读可改。
 
 ---
 
