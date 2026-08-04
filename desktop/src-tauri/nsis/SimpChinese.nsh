@@ -1,4 +1,4 @@
-﻿; Simplified-Chinese NSIS strings (#928). See English.nsh for why
+; Simplified-Chinese NSIS strings (#928). See English.nsh for why
 ; the running-app messages hardcode the product name instead of using
 ; the upstream `{{product_name}}` runtime placeholder.
 
