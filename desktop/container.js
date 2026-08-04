@@ -497,13 +497,13 @@ btnChoose.addEventListener("click", pickWorkspace);
 // Block browser accelerators (Ctrl+P print, Ctrl+F find, Ctrl+S save…) —
 // WebView2 enables them by default and they surface browser UI inside the
 // desktop app. Must live in an external script: the CSP (script-src 'self')
-// rejects inline <script> blocks in container.html.
+// rejects inline <script> blocks in container.html. The WebView2 layer
+// also disables the native accelerators (main.rs setup); this guard is the
+// JS-visible belt-and-suspenders path.
+const BLOCKED_KEYS = new Set(["p", "s", "f", "u", "g"]);
 document.addEventListener("keydown", (e) => {
-  if (e.ctrlKey || e.metaKey) {
-    const k = e.key.toLowerCase();
-    if (k === "p" || k === "s" || k === "f" || k === "u" || k === "g") {
-      e.preventDefault();
-    }
+  if ((e.ctrlKey || e.metaKey) && BLOCKED_KEYS.has(e.key.toLowerCase())) {
+    e.preventDefault();
   }
 });
 

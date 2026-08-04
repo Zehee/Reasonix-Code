@@ -51,11 +51,14 @@ createRoot(host).render(<App />);
 // default and surface the browser UI we don't want inside a desktop app.
 // Block them globally (keydown fires inside the iframe before WebView2
 // handles the accelerator).
+// Block browser accelerators (Ctrl+P print, Ctrl+F find, Ctrl+S save…).
+// NOTE: Ctrl+F is deliberately blocked too — a future in-dashboard find
+// feature must implement it in-page; the WebView2 layer disables the
+// native accelerator regardless (see main.rs setup), so this guard only
+// covers the JS-visible path.
+const BLOCKED_KEYS = new Set(["p", "s", "f", "u", "g"]);
 document.addEventListener("keydown", (e) => {
-  if (e.ctrlKey || e.metaKey) {
-    const k = e.key.toLowerCase();
-    if (k === "p" || k === "s" || k === "f" || k === "u" || k === "g") {
-      e.preventDefault();
-    }
+  if ((e.ctrlKey || e.metaKey) && BLOCKED_KEYS.has(e.key.toLowerCase())) {
+    e.preventDefault();
   }
 });
