@@ -41,23 +41,22 @@ export const JA: TranslationSchema = {
   },
   stats: {
     ...EN.stats,
-    usageHint:
-      "`reasonix-code chat`、`reasonix-code code`、または `reasonix-code run <task>` を実行するたびに",
+    usageHint: "`reasonix-code code` または `reasonix-code run <task>` を実行するたびに",
     usageDetail: "ログに1行追加され、`reasonix-code stats` で集計されます。",
   },
   run: {
     ...EN.run,
     missingApiKey:
       "DEEPSEEK_API_KEY が設定されておらず、stdin が TTY ではありません（プロンプトを表示できません）。\n" +
-      "環境変数を設定するか、`reasonix-code chat` を一度対話的に実行してキーを保存してください。\n",
+      "環境変数を設定するか、`reasonix-code code` を一度対話的に実行してキーを保存してください。\n",
   },
   sessions: {
     ...EN.sessions,
     emptyHint:
-      "保存されたセッションはまだありません — `reasonix-code chat` を実行してください（--no-session を付けない限り自動保存されます）。",
+      "保存されたセッションはまだありません — `reasonix-code code` を実行してください（--no-session を付けない限り自動保存されます）。",
     listHeader: "保存されたセッション (~/.reasonix/sessions/):",
     inspectHint: "詳細表示:  reasonix-code sessions <name>",
-    resumeHint: "再開:   reasonix-code chat --session <name>",
+    resumeHint: "再開:   reasonix-code code",
     noSession: '"{name}" という名前のセッションはありません（または空です）。',
     lookedAt: "参照: {path}",
     noIdleSessions: "{days}日以上アイドルのセッションはありません。削除はありません。",
@@ -945,8 +944,9 @@ export const JA: TranslationSchema = {
         "                             同じURLはセッション内で1回のみ取得（インメモリキャッシュ）。",
       helpUrlPunct: "                             文末の句読点（./,/)）は自動的に除去されます。",
       helpSessionsTitle: "セッション（デフォルトで自動有効、名前は 'default'）:",
-      helpSessionCustom: "  reasonix-code chat --session <name>   別の名前付きセッションを使用",
-      helpSessionNone: "  reasonix-code chat --no-session       この実行の永続化を無効化",
+      helpSessionCustom:
+        "  別のディレクトリで `reasonix-code code` を実行   別の名前付きセッションを使用",
+      helpSessionNone: "  reasonix-code code --no-session       この実行の永続化を無効化",
       retryNone:
         "再試行するものがありません — このセッションのログにユーザーメッセージがありません。",
       retryInfo: '▸ 再試行中: "{preview}"',

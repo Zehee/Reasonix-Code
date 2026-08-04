@@ -78,7 +78,7 @@ export interface ChatOptions {
   seedTools?: ToolRegistry;
   /**
    * Enable SEARCH/REPLACE edit-block processing after each assistant turn.
-   * Set by `reasonix-code code`; plain `reasonix-code chat` leaves this off.
+   * Set by code mode; a bare library embed leaves this off.
    */
   codeMode?: {
     rootDir: string;

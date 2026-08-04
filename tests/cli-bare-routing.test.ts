@@ -1,4 +1,4 @@
-/** Bare `reasonix` routing — defaults to code mode in the current directory; explicit `chat` stays chat. */
+/** Bare `reasonix` routing — defaults to code mode in the current directory. */
 
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

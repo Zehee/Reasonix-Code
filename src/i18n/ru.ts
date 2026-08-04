@@ -40,23 +40,22 @@ export const ru: TranslationSchema = {
   },
   stats: {
     ...EN.stats,
-    usageHint:
-      "запусти `reasonix-code chat`, `reasonix-code code` или `reasonix-code run <task>` — каждый шаг",
+    usageHint: "запусти `reasonix-code code` или `reasonix-code run <task>` — каждый шаг",
     usageDetail: "добавляет одну строку в лог, а `reasonix-code stats` сводит всё вместе.",
   },
   run: {
     ...EN.run,
     missingApiKey:
       "DEEPSEEK_API_KEY не задан и stdin не TTY (нельзя запросить).\n" +
-      "Установи переменную окружения или запусти `reasonix-code chat` один раз для сохранения ключа.\n",
+      "Установи переменную окружения или запусти `reasonix-code code` один раз для сохранения ключа.\n",
   },
   sessions: {
     ...EN.sessions,
     emptyHint:
-      "ещё нет сохранённых сессий — запусти `reasonix-code chat` (сессии авто-сохраняются, если не указан --no-session).",
+      "ещё нет сохранённых сессий — запусти `reasonix-code code` (сессии авто-сохраняются, если не указан --no-session).",
     listHeader: "Сохранённые сессии (~/.reasonix/sessions/):",
     inspectHint: "Просмотр:  reasonix-code sessions <имя>",
-    resumeHint: "Возобновить: reasonix-code chat --session <имя>",
+    resumeHint: "Возобновить: reasonix-code code",
     noSession: 'нет сессии "{name}" (или она пуста).',
     lookedAt: "просмотрено: {path}",
     noIdleSessions: "нет неактивных сессий ≥{days} дн. Ничего не удалено.",

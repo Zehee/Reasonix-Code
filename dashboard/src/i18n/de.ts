@@ -548,7 +548,7 @@ export const de: typeof en = {
     records: "{count} Datensätze",
     dailyUsage: "Tägliche Nutzung",
     dailyMeta: "Kosten · Cache-Ersparnis · Turns",
-    noData: "Noch keine Nutzungsdaten — führe einen Turn in reasonix-code chat / code / run aus und aktualisiere.",
+    noData: "Noch keine Nutzungsdaten — führe einen Turn in reasonix-code code / run aus und aktualisiere.",
     windows: "Rollierende Fenster",
     colWindow: "Fenster",
     colTurns: "Turns",
@@ -587,7 +587,7 @@ export const de: typeof en = {
     deleteConfirm: 'Sitzung "{name}" löschen? Dies entfernt die Transkriptdatei und kann nicht rückgängig gemacht werden.',
     cantDeleteActive: "Wechsle zu einer anderen Sitzung, bevor du diese löschst.",
     attachRequired:
-      "Live-Sitzungsoperationen benötigen eine angehängte CLI-Sitzung. Starte über reasonix-code chat oder öffne das Dashboard von einer TUI-Sitzung aus.",
+      "Live-Sitzungsoperationen benötigen eine angehängte CLI-Sitzung. Starte über reasonix-code code oder öffne das Dashboard von einer TUI-Sitzung aus.",
     activeChip: "aktiv",
     activePill: "aktiv",
   },

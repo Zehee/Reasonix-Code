@@ -86,7 +86,7 @@ flowchart TD
     CLI3 --> RUN2["启动桌面壳"]
     RUN2 -. 自动安装/升级 .-> CLI2
 
-    CLI1 -. "也可以" .-> RUN3["reasonix-code chat ."]
+    CLI1 -. "也可以" .-> RUN3["reasonix-code code ."]
 ```
 
 - **CLI 通过 npm 发布**，由 `v*` 标签触发（`.github/workflows/release.yml`）。

@@ -10,7 +10,7 @@
  *
  * Usage:
  *   npx tsx examples/mcp-server-demo.ts          # speaks MCP on stdin/stdout
- *   reasonix-code chat --mcp "npx tsx examples/mcp-server-demo.ts"
+ *   reasonix-code run "use the demo tools" --mcp "npx tsx examples/mcp-server-demo.ts"
  *
  * Spec reference: https://spec.modelcontextprotocol.io/ (2024-11-05)
  * Only the subset this demo needs is implemented — initialize, tools/list,

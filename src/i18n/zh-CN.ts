@@ -34,21 +34,20 @@ export const zhCN: TranslationSchema = {
     index: "构建（或增量刷新）本地语义搜索索引。",
   },
   stats: {
-    usageHint:
-      "运行 `reasonix-code chat`、`reasonix-code code` 或 `reasonix-code run <task>` — 每次对话都会记录",
+    usageHint: "运行 `reasonix-code code` 或 `reasonix-code run <task>` — 每次对话都会记录",
     usageDetail: "每次对话在日志中追加一行，`reasonix-code stats` 会将其汇总统计。",
   },
   run: {
     missingApiKey:
       "未设置 DEEPSEEK_API_KEY 且标准输入不是 TTY（无法交互式输入）。\n" +
-      "请设置环境变量，或先运行 `reasonix-code chat` 交互一次以保存密钥。\n",
+      "请设置环境变量，或先运行 `reasonix-code code` 交互一次以保存密钥。\n",
   },
   sessions: {
     emptyHint:
-      "暂无已保存的会话 — 运行 `reasonix-code chat`（会话会自动保存，除非使用了 --no-session）。",
+      "暂无已保存的会话 — 运行 `reasonix-code code`（会话会自动保存，除非使用了 --no-session）。",
     listHeader: "保存的会话 (~/.reasonix/sessions/)：",
     inspectHint: "查看：reasonix-code sessions <name>",
-    resumeHint: "恢复：reasonix-code chat --session <name>",
+    resumeHint: "恢复：reasonix-code code",
     noSession: '找不到会话 "{name}"（或为空）。',
     lookedAt: "位置：{path}",
     noIdleSessions: "没有闲置 ≥{days} 天的会话。无需清理。",
@@ -801,8 +800,8 @@ export const zhCN: TranslationSchema = {
       helpUrlCache: "                             同一会话中相同 URL 只获取一次（内存缓存）。",
       helpUrlPunct: "                             自动剥离尾部标点符号（./,/））。",
       helpSessionsTitle: "会话（默认自动启用，命名为 'default'）：",
-      helpSessionCustom: "  reasonix-code chat --session <name>   使用不同的命名会话",
-      helpSessionNone: "  reasonix-code chat --no-session       禁用本次运行的持久化",
+      helpSessionCustom: "  在其他目录运行 `reasonix-code code`   使用不同的命名会话",
+      helpSessionNone: "  reasonix-code code --no-session       禁用本次运行的持久化",
       retryNone: "没有可重试的内容 — 此会话日志中没有先前的用户消息。",
       retryInfo: '▸ 重试中："{preview}"',
       loopTuiOnly: "/loop 仅在交互式 TUI 中可用（不在 run/replay 中）。",

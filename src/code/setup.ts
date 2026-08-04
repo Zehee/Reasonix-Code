@@ -138,7 +138,7 @@ export async function buildCodeToolset(opts: CodeToolsetOpts): Promise<CodeTools
         // Late-bound: the TUI's `useSubagent` writes the live callback into
         // SHARED_SUBAGENT_SINK after mount. Until then `.current` is null
         // and the events are silently dropped — that's fine for non-TUI
-        // callers (`reasonix-code chat --transcript`, library use).
+        // callers (transcript replay, library use).
         sink: opts.subagentSink ?? SHARED_SUBAGENT_SINK,
       });
       return formatSubagentResult(result);

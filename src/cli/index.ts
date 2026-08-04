@@ -21,12 +21,11 @@ import {
 } from "../config.js";
 import { t } from "../i18n/index.js";
 import { VERSION } from "../index.js";
-import { listSessions } from "../memory/session.js";
 import { applyMemoryStack } from "../memory/user.js";
 import { installProxyIfConfigured } from "../net/proxy.js";
 import { escalationContract } from "../prompt-fragments.js";
 import { startCpuProfile, stopAndSaveCpuProfile } from "./cpu-prof.js";
-import { resolveBareCommandMode, resolveContinueFlag, resolveDefaults } from "./resolve.js";
+import { resolveBareCommandMode, resolveDefaults } from "./resolve.js";
 import { markPhase } from "./startup-profile.js";
 
 async function maybeStartCpuProfile(flag: unknown): Promise<boolean> {
@@ -166,7 +165,14 @@ program
 // `reasonix-code` with no subcommand → setup wizard on first run (no API key
 // configured yet), otherwise code mode in the current directory.
 // The current directory is automatically used as the workspace root.
-program.action(async (opts: { continue?: boolean; mouse?: boolean }) => {
+program.action(async (opts: { continue?: boolean; mouse?: boolean }, cmd?: { args?: string[] }) => {
+  // commander's bare action swallows unknown subcommands into operands
+  // (e.g. the removed `chat`); never silently fall through to code mode.
+  const unknown = cmd?.args?.[0];
+  if (unknown !== undefined) {
+    process.stderr.write(`error: unknown command '${unknown}'. See 'reasonix-code --help'.\n`);
+    process.exit(1);
+  }
   const cfg = readConfig();
   const mode = resolveBareCommandMode(cfg);
   if (mode === "setup") {

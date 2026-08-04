@@ -970,7 +970,7 @@ function AppInner({
   if (transcript && !transcriptRef.current) {
     transcriptRef.current = openTranscriptFile(transcript, {
       version: 1,
-      source: "reasonix-code chat",
+      source: "reasonix-code code",
       model,
       startedAt: new Date().toISOString(),
     });
@@ -4719,7 +4719,7 @@ function AppInner({
                         onSwitchSession(outcome.name);
                       } else {
                         log.pushInfo(
-                          `to switch to "${outcome.name}", quit and run: reasonix-code chat --session ${outcome.name}`,
+                          `to switch to "${outcome.name}", quit and run: reasonix-code code`,
                         );
                       }
                       return;
@@ -4730,7 +4730,7 @@ function AppInner({
                         onSwitchSession(freshSessionName(session));
                       } else {
                         log.pushInfo(
-                          "to start a fresh session, quit and run: reasonix-code chat (no --session flag)",
+                          "to start a fresh session, quit and run: reasonix-code code --new",
                         );
                       }
                       return;

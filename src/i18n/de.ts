@@ -40,23 +40,22 @@ export const de: TranslationSchema = {
   },
   stats: {
     ...EN.stats,
-    usageHint:
-      "Führe `reasonix-code chat`, `reasonix-code code` oder `reasonix-code run <task>` aus – jeden Turn",
+    usageHint: "Führe `reasonix-code code` oder `reasonix-code run <task>` aus – jeden Turn",
     usageDetail: "Hängt eine Zeile an das Log an; `reasonix-code stats` fasst sie zusammen.",
   },
   run: {
     ...EN.run,
     missingApiKey:
       "DEEPSEEK_API_KEY ist nicht gesetzt und stdin ist kein TTY (Nachfrage nicht möglich).\n" +
-      "Setze die Umgebungsvariable oder starte einmal interaktiv `reasonix-code chat`, um einen Schlüssel zu speichern.\n",
+      "Setze die Umgebungsvariable oder starte einmal interaktiv `reasonix-code code`, um einen Schlüssel zu speichern.\n",
   },
   sessions: {
     ...EN.sessions,
     emptyHint:
-      "Noch keine gespeicherten Sitzungen – starte `reasonix-code chat` (Sitzungen werden automatisch gespeichert, außer mit --no-session).",
+      "Noch keine gespeicherten Sitzungen – starte `reasonix-code code` (Sitzungen werden automatisch gespeichert, außer mit --no-session).",
     listHeader: "Gespeicherte Sitzungen (~/.reasonix/sessions/):",
     inspectHint: "Ansehen:       reasonix-code sessions <name>",
-    resumeHint: "Fortsetzen:    reasonix-code chat --session <name>",
+    resumeHint: "Fortsetzen:    reasonix-code code",
     noSession: 'Keine Sitzung namens "{name}" (oder sie ist leer).',
     lookedAt: "Angesehen: {path}",
     noIdleSessions: "Keine Sitzungen seit >= {days} Tagen inaktiv. Nichts bereinigt.",
@@ -847,9 +846,9 @@ export const de: TranslationSchema = {
         "                             Abschluss-Satzzeichen (./,/)) werden automatisch entfernt.",
       helpSessionsTitle: "Sitzungen (standardmäßig aktiviert, heißen 'default'):",
       helpSessionCustom:
-        "  reasonix-code chat --session <name>   eine andere benannte Sitzung verwenden",
+        "  `reasonix-code code` in einem anderen Verzeichnis ausführen   eine andere benannte Sitzung verwenden",
       helpSessionNone:
-        "  reasonix-code chat --no-session       Persistenz für diesen Lauf deaktivieren",
+        "  reasonix-code code --no-session       Persistenz für diesen Lauf deaktivieren",
       retryNone: "Nichts zu wiederholen — keine vorherige Benutzernachricht im Log dieser Sitzung.",
       retryInfo: '▸ wiederhole: "{preview}"',
       loopTuiOnly: "/loop ist nur in der interaktiven TUI verfügbar (nicht in run/replay).",

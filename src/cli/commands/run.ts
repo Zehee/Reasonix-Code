@@ -127,7 +127,7 @@ export async function runCommand(opts: RunOptions): Promise<void> {
         clients.push(mcp);
         successCount++;
       } catch (err) {
-        // Non-fatal — skip and continue, same as `reasonix-code chat`. A
+        // Non-fatal — skip and continue, same as interactive code mode. A
         // one-shot `run` invocation with a broken MCP server otherwise
         // fails the whole run over a side-concern tool the task might
         // not even touch.

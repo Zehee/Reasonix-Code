@@ -528,7 +528,7 @@ export const en = {
     records: "{count} records",
     dailyUsage: "Daily usage",
     dailyMeta: "cost · cache saved · turns",
-    noData: "No usage data yet — run a turn in reasonix-code chat / code / run and refresh.",
+    noData: "No usage data yet — run a turn in reasonix-code code / run and refresh.",
     windows: "Rolling windows",
     colWindow: "window",
     colTurns: "turns",
@@ -567,7 +567,7 @@ export const en = {
       'Delete session "{name}"? This removes the transcript file and cannot be undone.',
     cantDeleteActive: "Switch to a different session before deleting this one.",
     attachRequired:
-      "Live session operations need an attached CLI session. Launch via reasonix-code chat or open the dashboard from inside a TUI session.",
+      "Live session operations need an attached CLI session. Launch via reasonix-code code or open the dashboard from inside a TUI session.",
     activeChip: "active",
     activePill: "active",
   },

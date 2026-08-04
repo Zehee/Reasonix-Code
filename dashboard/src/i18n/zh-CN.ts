@@ -528,7 +528,7 @@ export const zhCN = {
     records: "{count} 条记录",
     dailyUsage: "每日用量",
     dailyMeta: "费用 · 缓存节省 · 轮次",
-    noData: "暂无用量数据 — 在 reasonix-code chat / code / run 中执行一轮，然后刷新。",
+    noData: "暂无用量数据 — 在 reasonix-code code / run 中执行一轮，然后刷新。",
     windows: "滚动窗口",
     colWindow: "时间范围",
     colTurns: "轮次",
@@ -565,7 +565,7 @@ export const zhCN = {
     deleteConfirm: "确定删除会话「{name}」？转录文件将被移除，无法撤销。",
     cantDeleteActive: "请先切换到其他会话，再删除当前会话。",
     attachRequired:
-      "实时会话操作需要已连接的 CLI 会话。请通过 reasonix-code chat 启动，或在 TUI 会话中打开仪表盘。",
+      "实时会话操作需要已连接的 CLI 会话。请通过 reasonix-code code 启动，或在 TUI 会话中打开仪表盘。",
     activeChip: "当前",
     activePill: "当前",
   },

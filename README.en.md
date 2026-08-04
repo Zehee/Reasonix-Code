@@ -105,9 +105,6 @@ reasonix-code setup
 # Enter code mode (auto-detects current directory as workspace)
 reasonix-code code
 
-# Enter chat mode (no filesystem access)
-reasonix-code chat
-
 # View help
 reasonix-code --help
 ```
@@ -133,7 +130,6 @@ reasonix-code --help
 | Subcommand | Purpose |
 |---|---|
 | `reasonix-code code [dir]` | Code mode (file edits, plan mode, review gate) |
-| `reasonix-code chat` | Chat mode (no filesystem access) |
 | `reasonix-code run <task>` | Headless execution (CI-friendly) |
 | `reasonix-code setup` | Interactive setup wizard |
 | `reasonix-code sessions [name]` | List/open saved sessions |

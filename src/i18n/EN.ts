@@ -34,21 +34,20 @@ export const EN: TranslationSchema = {
     index: "Build (or incrementally refresh) a local semantic search index.",
   },
   stats: {
-    usageHint:
-      "run `reasonix-code chat`, `reasonix-code code`, or `reasonix-code run <task>` — every turn",
+    usageHint: "run `reasonix-code code` or `reasonix-code run <task>` — every turn",
     usageDetail: "appends one line to the log and `reasonix-code stats` will roll it up.",
   },
   run: {
     missingApiKey:
       "DEEPSEEK_API_KEY is not set and stdin is not a TTY (cannot prompt).\n" +
-      "Set the env var, or run `reasonix-code chat` once interactively to save a key.\n",
+      "Set the env var, or run `reasonix-code code` once interactively to save a key.\n",
   },
   sessions: {
     emptyHint:
-      "no saved sessions yet — run `reasonix-code chat` (sessions are auto-saved unless --no-session).",
+      "no saved sessions yet — run `reasonix-code code` (sessions are auto-saved unless --no-session).",
     listHeader: "Saved sessions (~/.reasonix/sessions/):",
     inspectHint: "Inspect:  reasonix-code sessions <name>",
-    resumeHint: "Resume:   reasonix-code chat --session <name>",
+    resumeHint: "Resume:   reasonix-code code",
     noSession: 'no session named "{name}" (or it\u2019s empty).',
     lookedAt: "looked at: {path}",
     noIdleSessions: "no sessions idle \u2265{days} days. Nothing pruned.",
@@ -844,8 +843,9 @@ export const EN: TranslationSchema = {
       helpUrlPunct:
         "                             Trailing sentence punctuation (./,/)) is stripped automatically.",
       helpSessionsTitle: "Sessions (auto-enabled by default, named 'default'):",
-      helpSessionCustom: "  reasonix-code chat --session <name>   use a different named session",
-      helpSessionNone: "  reasonix-code chat --no-session       disable persistence for this run",
+      helpSessionCustom:
+        "  run `reasonix-code code` in another directory   use a different named session",
+      helpSessionNone: "  reasonix-code code --no-session       disable persistence for this run",
       retryNone: "nothing to retry — no prior user message in this session's log.",
       retryInfo: '▸ retrying: "{preview}"',
       loopTuiOnly: "/loop is only available in the interactive TUI (not in run/replay).",
@@ -867,7 +867,7 @@ export const EN: TranslationSchema = {
       persistOn: "▸ session-persist → on  (next launch will resume the last session)",
       persistOff: "▸ session-persist → off  (next launch will start a fresh session)",
       persistSetOn:
-        "▸ session-persist set to on — next `reasonix-code code/chat` will resume the last session.",
+        "▸ session-persist set to on — next `reasonix-code code` will resume the last session.",
       persistSetOff:
         "▸ session-persist set to off — next launch starts fresh. Use -c/--continue to resume.",
       persistUsage: "usage: /session-persist <on|off>",
