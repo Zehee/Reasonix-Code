@@ -248,13 +248,15 @@ export function startDashboardServer(
       };
       resolve({ url, token, port: finalPort, close, updateContext });
     };
+    let fellBack = false;
     server.on("error", (err) => {
       // Port already in use — another CLI instance pinned to the same
       // port (e.g. the desktop shell spawns one CLI per workspace and the
       // config pins dashboard.port). Falling back to an ephemeral port
-      // keeps the session alive instead of dying on EADDRINUSE.
-      if ((err as NodeJS.ErrnoException).code === "EADDRINUSE" && port !== 0) {
-        server.removeAllListeners("error");
+      // keeps the session alive instead of dying on EADDRINUSE. The flag
+      // prevents infinite rebinding; a second failure still rejects.
+      if ((err as NodeJS.ErrnoException).code === "EADDRINUSE" && !fellBack) {
+        fellBack = true;
         server.listen(0, host, onListen);
         return;
       }

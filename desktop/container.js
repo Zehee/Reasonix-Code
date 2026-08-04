@@ -494,4 +494,17 @@ listen("cli:error", (payload) => {
 // ── UI wiring ───────────────────────────────────────────────────
 btnChoose.addEventListener("click", pickWorkspace);
 
+// Block browser accelerators (Ctrl+P print, Ctrl+F find, Ctrl+S save…) —
+// WebView2 enables them by default and they surface browser UI inside the
+// desktop app. Must live in an external script: the CSP (script-src 'self')
+// rejects inline <script> blocks in container.html.
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.metaKey) {
+    const k = e.key.toLowerCase();
+    if (k === "p" || k === "s" || k === "f" || k === "u" || k === "g") {
+      e.preventDefault();
+    }
+  }
+});
+
 init();

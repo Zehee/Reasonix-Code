@@ -376,19 +376,6 @@
 
     <div id="errbar" role="alert"></div>
 
-    <script>
-      // Shell page: block browser accelerators (Ctrl+P etc.) — WebView2
-      // enables them by default and they surface browser UI inside the app.
-      document.addEventListener("keydown", (e) => {
-        if (e.ctrlKey || e.metaKey) {
-          const k = e.key.toLowerCase();
-          if (k === "p" || k === "s" || k === "f" || k === "u" || k === "g") {
-            e.preventDefault();
-            e.stopPropagation();
-          }
-        }
-      });
-    </script>
     <script src="container.js"></script>
   </body>
 </html>

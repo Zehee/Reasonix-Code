@@ -10,6 +10,14 @@
 ;   to hiding the checkbox ($InstalledNodeByUs -> MyFinishShow in
 ;   template.nsi) and letting the shell prompt on first launch.
 
+; StrFunc.nsh for ${StrLoc} (PATH substring check). Guarded upstream, so
+; re-including alongside template.nsi's own includes is safe.
+!include StrFunc.nsh
+; Register StrLoc at script top level: the function body must not be
+; emitted inside a Section (the hook macro below expands inside the
+; install section).
+${Using:StrFunc} StrLoc
+
 !macro NSIS_HOOK_POSTINSTALL
   ; Allow cancel / close during install (the instfiles page disables its
   ; Cancel button by default; a stalled npm step shouldn't be unescapable).
@@ -57,8 +65,13 @@
         ${If} ${FileExists} "$LOCALAPPDATA\Programs\nodejs\node.exe"
           ReadRegStr $2 HKCU "Environment" "Path"
           StrCpy $5 "$LOCALAPPDATA\Programs\nodejs"
-          ; Append only if not already on PATH (reinstalls must not duplicate).
-          ${If} "$2" != "*$5*"
+          ; Append only if not already on PATH (reinstalls must not
+          ; duplicate). StrLoc (StrFunc.nsh) does a real substring check;
+          ; " > " searches from the head. Case-sensitive (StrFunc has no
+          ; case option) — the installer always writes the same casing, so
+          ; duplicate detection is reliable for our own entries.
+          ${StrLoc} $6 "$2" "$5" ">"
+          ${If} $6 == ""
             ${If} $2 == ""
               StrCpy $2 "$5"
             ${Else}
@@ -100,7 +113,10 @@
     ; but only if it isn't already there — reinstalls must not duplicate it.
     ReadRegStr $3 HKCU "Environment" "Path"
     StrCpy $4 "$PROFILE\.reasonix-code\npm-global"
-    ${If} "$3" != "*$4*"
+    ; StrLoc real substring check (LogicLib == is literal, no wildcards).
+    ; Case-sensitive; " > " searches from the head.
+    ${StrLoc} $6 "$3" "$4" ">"
+    ${If} $6 == ""
       ${If} $3 == ""
         StrCpy $3 "$4"
       ${Else}

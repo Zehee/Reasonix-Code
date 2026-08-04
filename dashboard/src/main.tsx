@@ -56,7 +56,6 @@ document.addEventListener("keydown", (e) => {
     const k = e.key.toLowerCase();
     if (k === "p" || k === "s" || k === "f" || k === "u" || k === "g") {
       e.preventDefault();
-      e.stopPropagation();
     }
   }
 });

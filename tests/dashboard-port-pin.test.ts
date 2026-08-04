@@ -62,12 +62,17 @@ describe("startDashboardServer port pinning", () => {
     expect(handle.port).toBeLessThan(65536);
   });
 
-  it("rejects when the requested port is already bound (EADDRINUSE)", async () => {
+  it("falls back to an ephemeral port when the requested port is taken (EADDRINUSE)", async () => {
     const port = await reserveEphemeralPort();
     handle = await startDashboardServer(ctx(dir), { token: TOKEN, port });
 
-    await expect(startDashboardServer(ctx(dir), { token: TOKEN, port })).rejects.toThrow(
-      /EADDRINUSE/,
-    );
+    // Second server on the same pinned port must NOT reject — it falls
+    // back to an ephemeral port so the CLI session survives collisions
+    // (desktop shell spawns one CLI per workspace).
+    const fallback = await startDashboardServer(ctx(dir), { token: TOKEN, port });
+    expect(fallback.port).not.toBe(port);
+    expect(fallback.port).toBeGreaterThan(0);
+    expect(fallback.url).toContain(`:${fallback.port}/`);
+    await fallback.close();
   });
 });

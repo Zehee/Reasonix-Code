@@ -1360,8 +1360,8 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
                 continue;
             }
             if is_dashboard_ready_line(&line) {
-                if let Some(url) = extract_dashboard_url(&line)
-                    .or_else(dashboard_url_from_config)
+                if let Some(url) = dashboard_url_from_config()
+                    .or_else(|| extract_dashboard_url(&line))
                 {
                     if found_out
                         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
@@ -1388,8 +1388,8 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
             let _ = app_stderr.emit("cli:stderr", line.clone());
             if !found_stderr.load(Ordering::SeqCst) {
                 if is_dashboard_ready_line(&line) {
-                    if let Some(url) = extract_dashboard_url(&line)
-                        .or_else(dashboard_url_from_config)
+                    if let Some(url) = dashboard_url_from_config()
+                        .or_else(|| extract_dashboard_url(&line))
                     {
                         if found_stderr
                             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
