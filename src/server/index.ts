@@ -223,8 +223,7 @@ export function startDashboardServer(
         res.end(JSON.stringify({ error: (err as Error).message }));
       });
     });
-    server.on("error", reject);
-    server.listen(port, host, () => {
+    const onListen = () => {
       const addr = server.address() as AddressInfo;
       const finalPort = addr.port;
       const url = `http://${host}:${finalPort}/?token=${token}`;
@@ -248,6 +247,19 @@ export function startDashboardServer(
         ctxRef.current = next;
       };
       resolve({ url, token, port: finalPort, close, updateContext });
+    };
+    server.on("error", (err) => {
+      // Port already in use — another CLI instance pinned to the same
+      // port (e.g. the desktop shell spawns one CLI per workspace and the
+      // config pins dashboard.port). Falling back to an ephemeral port
+      // keeps the session alive instead of dying on EADDRINUSE.
+      if ((err as NodeJS.ErrnoException).code === "EADDRINUSE" && port !== 0) {
+        server.removeAllListeners("error");
+        server.listen(0, host, onListen);
+        return;
+      }
+      reject(err);
     });
+    server.listen(port, host, onListen);
   });
 }

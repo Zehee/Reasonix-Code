@@ -1055,6 +1055,23 @@ fn is_dashboard_ready_line(line: &str) -> bool {
     line.contains("/dashboard") && line.contains('→')
 }
 
+/// Pull the dashboard URL straight out of the CLI's "/dashboard → <url>" line.
+/// The CLI prints the port it ACTUALLY bound (ephemeral after an EADDRINUSE
+/// fallback), which the config may not have caught up with yet — parsing the
+/// line is authoritative; dashboard_url_from_config() is only a fallback.
+fn extract_dashboard_url(line: &str) -> Option<String> {
+    let start = line.find("http://").or_else(|| line.find("https://"))?;
+    let url: String = line[start..]
+        .chars()
+        .take_while(|c| !c.is_whitespace() && *c != '\u{1b}' && *c != ']')
+        .collect();
+    if url.contains("token=") {
+        Some(url)
+    } else {
+        None
+    }
+}
+
 /// Read the dashboard connection parts (host, port, token) from the CLI's
 /// persisted config (~/.reasonix/config.json → dashboard.{host,port,token}).
 /// The CLI persists the actual bound port (saveDashboardPort) and the auth
@@ -1343,7 +1360,9 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
                 continue;
             }
             if is_dashboard_ready_line(&line) {
-                if let Some(url) = dashboard_url_from_config() {
+                if let Some(url) = extract_dashboard_url(&line)
+                    .or_else(dashboard_url_from_config)
+                {
                     if found_out
                         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
                         .is_ok()
@@ -1363,10 +1382,15 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
     thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines().map_while(Result::ok) {
+            // Diagnostic: CLI stderr goes to desktop.log too — a crash/panic
+            // message is otherwise only forwarded to a UI that may be gone.
+            log_line(&format!("cli[{id}] stderr: {line}"));
             let _ = app_stderr.emit("cli:stderr", line.clone());
             if !found_stderr.load(Ordering::SeqCst) {
                 if is_dashboard_ready_line(&line) {
-                    if let Some(url) = dashboard_url_from_config() {
+                    if let Some(url) = extract_dashboard_url(&line)
+                        .or_else(dashboard_url_from_config)
+                    {
                         if found_stderr
                             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
                             .is_ok()
@@ -1392,8 +1416,17 @@ fn spawn_instance(app: &AppHandle, state: &DesktopState, workspace: &Path) -> Re
                     let mut instances = instances_exit.lock();
                     match instances.iter().position(|i| i.id == id) {
                         Some(pos) => match instances[pos].child.try_wait() {
-                            Ok(Some(_)) | Err(_) => {
+                            Ok(Some(status)) => {
                                 instances.remove(pos);
+                                log_line(&format!(
+                                    "workspace exited id={id} rc={:?}",
+                                    status.code()
+                                ));
+                                true
+                            }
+                            Err(e) => {
+                                instances.remove(pos);
+                                log_line(&format!("workspace exited id={id} wait-err={e}"));
                                 true
                             }
                             Ok(None) => false,
