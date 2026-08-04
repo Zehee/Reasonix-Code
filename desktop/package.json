@@ -1,7 +1,7 @@
 {
   "name": "reasonix-code-desktop",
   "private": true,
- "version": "0.0.0",
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev-server.mjs",
@@ -13,6 +13,9 @@
     "@resvg/resvg-js": "^2.6.2",
     "@tauri-apps/cli": "^2.1.0",
     "icon-gen": "^5.0.0",
+    "sharp": "^0.35.3"
+  },
+  "overrides": {
     "sharp": "^0.35.3"
   }
 }
