@@ -56,12 +56,16 @@
         ; hiding the checkbox -- see MyFinishShow in template.nsi.
         ${If} ${FileExists} "$LOCALAPPDATA\Programs\nodejs\node.exe"
           ReadRegStr $2 HKCU "Environment" "Path"
-          ${If} $2 == ""
-            StrCpy $2 "$LOCALAPPDATA\Programs\nodejs"
-          ${Else}
-            StrCpy $2 "$2;$LOCALAPPDATA\Programs\nodejs"
+          StrCpy $5 "$LOCALAPPDATA\Programs\nodejs"
+          ; Append only if not already on PATH (reinstalls must not duplicate).
+          ${If} "$2" != "*$5*"
+            ${If} $2 == ""
+              StrCpy $2 "$5"
+            ${Else}
+              StrCpy $2 "$2;$5"
+            ${EndIf}
+            WriteRegExpandStr HKCU "Environment" "Path" "$2"
           ${EndIf}
-          WriteRegExpandStr HKCU "Environment" "Path" "$2"
           System::Call 'KERNEL32::SetEnvironmentVariable(t "Path", t r2)'
           ; Async notify — SendMessage(HWND_BROADCAST) blocks until EVERY
           ; top-level window answers; a hung window (explorer, FastGithub,
@@ -92,14 +96,18 @@
       Goto done
   path_setup:
     ; Make reasonix-code available in the user's terminals too: append the
-    ; npm-global bin dir to the user PATH (registry + this process + notify).
+    ; npm-global bin dir to the user PATH (registry + this process + notify),
+    ; but only if it isn't already there — reinstalls must not duplicate it.
     ReadRegStr $3 HKCU "Environment" "Path"
-    ${If} $3 == ""
-      StrCpy $3 "$PROFILE\.reasonix-code\npm-global"
-    ${Else}
-      StrCpy $3 "$3;$PROFILE\.reasonix-code\npm-global"
+    StrCpy $4 "$PROFILE\.reasonix-code\npm-global"
+    ${If} "$3" != "*$4*"
+      ${If} $3 == ""
+        StrCpy $3 "$4"
+      ${Else}
+        StrCpy $3 "$3;$4"
+      ${EndIf}
+      WriteRegExpandStr HKCU "Environment" "Path" "$3"
     ${EndIf}
-    WriteRegExpandStr HKCU "Environment" "Path" "$3"
     System::Call 'KERNEL32::SetEnvironmentVariable(t "Path", t r3)'
     ; Async notify — see path_setup above for why SendMessage is avoided.
     System::Call 'user32::PostMessage(i ${HWND_BROADCAST}, i ${WM_SETTINGCHANGE}, i 0, t "Environment")'
