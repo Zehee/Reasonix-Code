@@ -17,7 +17,7 @@
   EnableWindow $0 1
 
   DetailPrint "Checking reasonix-code CLI..."
-  ; PATH lookup first, then the canonical npm-global shim — a CLI installed
+  ; PATH lookup first, then the canonical npm-global shim -- a CLI installed
   ; there is valid even before it's on PATH, so we don't reinstall it.
   nsExec::ExecToStack /TIMEOUT=10000 'cmd /c reasonix-code --version'
   Pop $0
@@ -53,7 +53,7 @@
         ; finish page's "Run app" works right away (a child process
         ; inherits the installer's environment). If node.exe isn't at the
         ; canonical location (winget installed it elsewhere), fall back to
-        ; hiding the checkbox — see MyFinishShow in template.nsi.
+        ; hiding the checkbox -- see MyFinishShow in template.nsi.
         ${If} ${FileExists} "$LOCALAPPDATA\Programs\nodejs\node.exe"
           ReadRegStr $2 HKCU "Environment" "Path"
           ${If} $2 == ""
@@ -73,7 +73,7 @@
     DetailPrint "Installing reasonix-code CLI (first install may take a few minutes)..."
     ; Prefer the canonical npm location (a just-installed Node may not be
     ; on this process's PATH yet); fall back to PATH. Keep the command
-    ; simple — no cmd if/else parenthesis nesting, which can stall.
+    ; simple -- no cmd if/else parenthesis nesting, which can stall.
     ${If} ${FileExists} "$LOCALAPPDATA\Programs\nodejs\npm.cmd"
       nsExec::ExecToStack /TIMEOUT=120000 'cmd /c ""$LOCALAPPDATA\Programs\nodejs\npm.cmd" install -g --prefix "$PROFILE\.reasonix-code\npm-global" reasonix-code"'
     ${Else}
@@ -83,7 +83,7 @@
     Pop $1
     IntCmp $0 0 path_setup
       DetailPrint "npm install failed or timed out (exit code $0)."
-      DetailPrint "You can install it manually later: npm install -g --prefix ""$PROFILE\.reasonix-code\npm-global"" reasonix-code"
+      DetailPrint "You can install it manually later: npm install -g --prefix $\"$PROFILE\.reasonix-code\npm-global$\" reasonix-code"
       DetailPrint "The desktop app will also offer to install the CLI on first launch."
       Goto done
   path_setup:
