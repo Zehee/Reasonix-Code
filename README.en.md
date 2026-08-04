@@ -34,9 +34,9 @@
 
 ### Theme tracing
 
-Cross-session decision tracing — if you decided on JWT on day 1, the Agent won't suggest localStorage on day 30.
+**What happens without theme tracing?**
 
-**A real scenario** — you spend weeks building an auth module:
+You spend weeks building an auth module:
 
 ```
 Timeline
@@ -44,12 +44,17 @@ Timeline
   Day X          Days later       A week later     Weeks later
    │               │                │                │
    ▼               ▼                ▼                ▼
-[JWT decision] [Login endpoint] [Safari tweak] [Agent suggests localStorage]
-   │                                                   │
-   └────────────────── auth-flow theme ─────────────────┘
+[JWT decision] [Login endpoint] [Safari tweak] [New session starts]
+   │               │                │                │
+   ▼               ▼                ▼                ▼
+ Context swells → Early decisions compressed → Session boundary cuts → Agent suggests localStorage
 ```
 
-If the Agent can see the full timeline of the `auth-flow` theme, it won't suggest approaches that contradict earlier decisions. It will ask:
+**The root cause**: The Agent didn't "forget" — **context compaction + session boundaries** systematically destroyed the physical carrier (conversation turns) of those early decisions. The Agent wants to remember, but its "brain" no longer contains that information.
+
+**Theme tracing doesn't provide "memory" — it provides "salvage"** — decision records sit in `~/.reasonix/sessions/*.jsonl`, but no mechanism reassembles them. Theme tracing hooks fragmented decisions back onto a single timeline.
+
+**With theme tracing**, the Agent traces the full history of `auth-flow` before suggesting anything, then asks:
 
 > "We explicitly ruled out localStorage on Monday. Friday's adjustment was for Safari. Are you overturning the original decision or just supplementing it?"
 
@@ -78,12 +83,11 @@ list_themes
 ```
 
 **Design principles**:
-- **Search is weight** — Only refine content that has been searched for; decisions no one mentions stay in raw logs
-- **Search is also salvage** — `search_context` auto-triggers refinement when hitting unprocessed turns; the material library grows organically with use
+- **Search is weight** — Only refine content that has been searched for; unmentioned decisions stay in raw logs
+- **Search is salvage** — `search_context` auto-triggers refinement when hitting unprocessed turns; the material library grows organically
 - **Themes only store references** — Content remains in the material library and raw logs; deleting a theme doesn't lose data
 
 Themes are stored in `~/.reasonix/themes/<name>.json`, plain JSON readable and editable.
-
 ---
 
 ## Quick start
