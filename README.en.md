@@ -1,3 +1,5 @@
+# Reasonix-Code
+
 <p align="center">
   <img src="desktop/icons/source.svg" alt="Reasonix-Code" width="200"/>
 </p>
@@ -9,244 +11,206 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Zehee/Reasonix-Code"><img src="https://img.shields.io/github/v/release/Zehee/Reasonix-Code?style=flat-square&color=3fb950&labelColor=161b22&logo=github&logoColor=white" alt="release"/></a>
+  <a href="https://github.com/Zehee/Reasonix-Code/releases/latest"><img src="https://img.shields.io/github/v/release/Zehee/Reasonix-Code?style=flat-square&color=3fb950&labelColor=161b22&logo=github&logoColor=white" alt="release"/></a>
 </p>
 
 <p align="center">
   Desktop downloads: <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-desktop-windows.exe">Windows</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-desktop-macos.dmg">macOS</a> | <a href="https://github.com/Zehee/Reasonix-Code/releases/latest/download/reasonix-code-desktop-linux.deb">Linux</a>
 </p>
 
-> **Note:** The desktop app is only a launcher shell; underneath it calls the same `reasonix-code code` TUI / Dashboard loop. If the CLI is already installed, the desktop installer reuses it and just opens the window; otherwise the installer installs it automatically (installing Node.js via winget when missing) and appends the npm global dir to the user PATH so `reasonix-code` works in any terminal. The desktop shell natively supports **multiple workspaces** — one tab per workspace, processes stay resident, switching is instant and sessions are preserved; closing the window cleans up all background processes. The installer is only ~3 MB. **Installing the desktop app also makes the TUI available**: `cd` into a project directory in your terminal and run `reasonix-code` to enter code mode (the installer sets up the CLI and PATH for you).
-
-**Reasonix-Code** is a lightweight, transparent, and controllable coding agent for developers who need AI to remember decisions across sessions — no vector databases, knowledge graphs, opaque "AI memory" black boxes, or MCP servers required.
-
-Built-in memory (`remember`, `forget`, `recall_memory`) and 49 native tools covering filesystem, code search, shell, planning, theme tracking, and more — zero external dependencies, ready out of the box.
-
-Built on the cache-first, flash-first loop of DeepSeek-Reasonix, our memory architecture is designed from the ground up for **coding scenarios**: deterministic turn refinement (no LLM), keyword-based search (no embeddings), and cross-session theme tracing in plain JSON files you can read and edit.
-
-> **Status:** Active development. Independently evolved from the Reasonix TypeScript line (v0.x).
-
----
-
-## The problem
-
-Every coding agent faces the same fundamental fragmentation: **context compaction and session independence tear decisions apart.**
-
-A real example — you spend weeks building an auth module:
-- Day 1: decide on JWT + httpOnly cookie (vs localStorage)
-- Day 3: implement the login endpoint
-- Day 10: adjust cookie policy for Safari compatibility
-- Day 30: a new session, and the Agent suggests putting the refresh token in **localStorage** — contradicting the decision made 29 days ago.
-
-Each decision is in a separate session log. Between sessions, they're invisible to the Agent. This isn't a model capability problem — **it's an architecture problem.**
-
-Reasonix-Code's three-layer memory architecture solves this by automatically capturing, indexing, and linking decisions across sessions, so the Agent sees the full timeline before suggesting a contradictory approach.
+> **Reasonix-Code** is a lightweight, transparent, and controllable coding agent for developers who need AI to remember decisions across sessions — no vector databases, knowledge graphs, opaque "AI memory" black boxes, or MCP servers required.
 
 ---
 
 ## Key features
 
-### Three-layer memory architecture
-
-Designed for cross-session decision tracing. When you work on a project over weeks, decisions like "why we chose JWT over session cookies" or "Safari cookie policy adjustments" are scattered across multiple sessions. Reasonix-Code automatically captures and links them.
-
-```
-┌──────────────────────────────────────────────┐
-│  Layer 1: Raw (session logs)                  │
-│  ~/.reasonix/sessions/*.jsonl                 │
-│  Read-only audit trail                        │
-├──────────────────────────────────────────────┤
-│  Layer 2: Material Library                    │
-│  ~/.reasonix/refined/<ws>.sqlite              │
-│  ~/.reasonix/refined/<ws>/searches/*.json     │
-│  ~/.reasonix/refined/<ws>/folds/*.json        │
-│  Deterministic refinement + search + folds    │
-├──────────────────────────────────────────────┤
-│  Layer 3: Thematic (topic tracking)           │
-│  ~/.reasonix/themes/*.json                    │
-│  Cross-session topic timelines                │
-└──────────────────────────────────────────────┘
-```
-
-### Deterministic refinement (no LLM)
-
-Turn extraction uses keyword rules + Markdown structure analysis. Zero LLM calls, zero external dependencies. Fast, reproducible, explainable.
-
-> Note: refinement no longer runs as a separate gradual denoising loop; it is invoked on demand by `fold()` and `search_context`.
-
-```json
-{
-  "sessionId": "abcd-...",
-  "turnId": 12,
-  "summary": "Decided on JWT + httpOnly cookie over localStorage",
-  "facts": ["JWT + httpOnly cookie selected"],
-  "entities": { "files": ["src/auth/login.ts"], "tools": ["Write", "Edit"], "errors": [] }
-}
-```
-
-### Search-as-you-scan
-
-`search_context "auth JWT cookie"` hits the SQLite index, clusters adjacent turns (90s time window), and auto-refines unprocessed turns. Results carry a `sessionName` (live session name or archived file name) that can be passed directly to `load_turns_context` to restore the original transcript. If the skeleton is already available from a cluster/fold view, use `mode="material"` to load only the tool calls and tool results, avoiding duplication.
-
-### Cross-session theme tracing
-
-```
-tag_theme "auth-flow" with sessionName="..." turnId=12
-trace_theme "auth-flow"
-  → Timeline of all related decisions, sorted chronologically
-  → Even if they span 3 weeks and 8 sessions
-```
-
-### Cache-first, flash-first loop
-
-The original DeepSeek optimization core: automatic prefix caching, flash-model line for cost control, aggressive context folding only when needed.
-
----
-
-## Installation
-
-Requires **Node.js >= 22** and npm.
-
-```bash
-npm install -g reasonix-code
-```
+- **Three-layer memory architecture** — Raw JSONL logs → SQLite refinement index → cross-session theme tracing, all plain files you can read and edit
+- **49 native tools** — File operations, code search, shell execution, plan management, theme tracking, ready out of the box
+- **Cache-first loop** — Maximizes DeepSeek prefix cache hit rate; every cache hit is 50× cheaper than a miss
+- **Desktop app** — Multi-workspace tabs, CLI crash toasts, new tab focus, ~3 MB installer
+- **Robustness first** — Self-healing session IDs, crash-safe writes, .bak fallback chain
+- **Multi-channel** — Telegram / Weixin / QQ channel adapters
 
 ---
 
 ## Quick start
 
+### Installation
+
+Requires **Node.js >= 22**.
+
 ```bash
-# First run: setup wizard guides you through API key configuration.
-# After that, cd into your project directory and run:
-reasonix-code              # auto-detects cwd as workspace, enters code mode
-reasonix-code chat         # interactive chat (no filesystem)
+npm install -g reasonix-code
 ```
 
-### From source (Node.js >=22 required)
+### Usage
 
 ```bash
-git clone https://github.com/Zehee/Reasonix-Code.git
-cd Reasonix-Code
-npm install
-npm run dev code      # code mode
-npm run dev chat      # interactive chat
+# Setup wizard (first run)
+reasonix-code setup
+
+# Enter code mode (auto-detects current directory as workspace)
+reasonix-code code
+
+# Enter chat mode (no filesystem access)
+reasonix-code chat
+
+# View help
+reasonix-code --help
+```
+
+### Desktop
+
+```bash
+# Install desktop app (~3 MB)
+# Download: https://github.com/Zehee/Reasonix-Code/releases/tag/desktop-latest
+
+# After launching, the desktop app automatically:
+# 1. Detects/installs Node.js (if missing)
+# 2. Detects/installs reasonix-code CLI
+# 3. Opens multi-workspace tabs interface
 ```
 
 ---
 
-## Architecture overview
+## Command reference
 
-```
-src/
-├── cli/           Commander.js + Ink TUI
-├── code/          Code mode toolset setup
-├── tools/         Tool registry (filesystem, shell, memory, refine, theme)
-├── refine/        Turn refinement engine (deterministic, no LLM)
-├── themes/        Cross-session theme tracking
-├── memory/        Session storage, project memory, user memory
-├── loop/          CacheFirstLoop, dispatch, healing
-├── mcp/           MCP client + transports
-└── index/         Index exports
-```
+### CLI subcommands
 
-### Storage layout
+| Subcommand | Purpose |
+|---|---|
+| `reasonix-code code [dir]` | Code mode (file edits, plan mode, review gate) |
+| `reasonix-code chat` | Chat mode (no filesystem access) |
+| `reasonix-code run <task>` | Headless execution (CI-friendly) |
+| `reasonix-code setup` | Interactive setup wizard |
+| `reasonix-code sessions [name]` | List/open saved sessions |
+| `reasonix-code prune-sessions` | Delete sessions older than N days |
+| `reasonix-code replay <transcript>` | Replay JSONL transcript |
+| `reasonix-code diff <a> <b>` | Compare two transcripts |
+| `reasonix-code events <name>` | View session events |
+| `reasonix-code stats [transcript]` | One-shot cost/cache analysis |
+| `reasonix-code doctor` | Health check |
+| `reasonix-code commit` | Generate commit message |
+| `reasonix-code mcp` | MCP server management |
+| `reasonix-code index` | Build semantic index |
+| `reasonix-code version` / `reasonix-code update` | Version info |
+
+### Runtime flags
+
+| Flag | Purpose |
+|---|---|
+| `--no-session` | Don't persist session |
+| `--session <name>` | Resume/pin to named session |
+| `--continue` | Resume most recent session |
+| `--new` | Force new session |
+| `--budget <usd>` | Per-session USD cap |
+| `--preset <auto\|flash\|pro>` | Model preset |
+| `--mcp <spec>` | Attach MCP server |
+| `--no-dashboard` | Don't start Dashboard |
+| `--profile [path]` | CPU profiling |
+
+### TUI shortcuts
+
+| Key | Purpose |
+|---|---|
+| `Enter` | Send |
+| `Shift+Enter` | Newline |
+| `↑` / `↓` | Scroll history |
+| `Ctrl+W` | Delete previous word |
+| `Esc` | Cancel selection / abort turn |
+| `Ctrl+C` | Abort current turn |
+| `Tab` | Complete @-mention |
+
+---
+
+## Configuration
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DEEPSEEK_API_KEY` | - | DeepSeek API Key |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | API endpoint |
+| `REASONIX_LOG_LEVEL` | `INFO` | Log level |
+| `REASONIX_PARALLEL_MAX` | `3` | Max parallel tool calls |
+| `REASONIX_TOOL_DISPATCH` | - | Force serial dispatch |
+
+### Configuration file
+
+`~/.reasonix/config.json` stores user configuration.
+
+---
+
+## Storage layout
 
 ```
 ~/.reasonix/
 ├── sessions/                      ← All sessions
 │   ├── {workspace-slug}/          ← Workspace-isolated
-│   │   ├── active.jsonl           ← Active session (not yet folded; append-only, no skeleton/shadow)
-│   │   ├── {sessionId}__archive_{ts}.jsonl  ← Archived raw session (triggered by /new, clearLog, or fold)
-│   │   ├── {sessionId}.denoised.jsonl      ← Denoised skeleton generated at fold time
-│   │   ├── {sessionId}.toolcache.jsonl     ← Raw tool-result cache
+│   │   ├── active.jsonl           ← Active session
+│   │   ├── {sessionId}__archive_{ts}.jsonl  ← Archived raw session
+│   │   ├── {sessionId}.toolcache.jsonl     ← Tool result cache
 │   │   └── {sessionId}.meta.json           ← Metadata
-│   ├── __chat__/                  ← Non-workspace sessions
-│   ├── {root-hash}/checkpoints/   ← Git snapshots before file writes
-│   └── *.plan.json, *.pending.json
-├── refined/{workspace-slug}/      ← Refined index + fold/search views
+│   └── __chat__/                  ← Non-workspace sessions
+├── refined/{workspace-slug}/      ← Refinement index
 │   ├── refined.sqlite
-│   ├── folds/*.json               ← Fold views (decision clusters, turn refs)
-│   └── searches/*.json            ← search_context snapshots
-├── mcp-handshake/                 ← MCP handshake cache (global)
+│   ├── folds/*.json               ← Fold views
+│   └── searches/*.json            ← Search views
+├── mcp-handshake/                 ← MCP handshake cache
 ├── memory/                        ← User memory + project memory
-└── config.json
+└── config.json                    ← Global config
 ```
 
 ---
 
-## Cache strategy
+## Troubleshooting
 
-Reasonix-Code's **cache-first loop** maximizes DeepSeek prefix-cache hit rate — every cache hit is **50× cheaper** than a miss ($0.0028 vs $0.14 per 1M input tokens). The strategy has three layers:
+### Common issues
 
-### 1. Prefix stability
+| Problem | Solution |
+|---|---|
+| `command not found: reasonix-code` | Run `npm install -g reasonix-code` and restart terminal |
+| Desktop can't start CLI | Check Node.js >= 22 is installed |
+| Dashboard inaccessible | Check token in URL (`?token=...`) |
+| Low cache hit rate | Check `--preset` is `flash`, check tool results aren't truncated |
 
-The immutable prefix (system prompt + tool schemas + few-shots) is hashed and kept byte-identical across turns. Key mechanisms:
+### Logs
 
-- **`sortToolSpecs()`** — locale-independent codepoint sort so tool order never shuffles
-- **`canonicalizeMcpToolForCache()`** — sort JSON Schema keys recursively so MCP tool schemas are byte-stable
-- **`_frozenToolsCache`** — frozen tool-spec snapshot avoids repeated cloning
-- **Reasoning continuity** — old `reasoning_content` is not stripped between turns (preserves message content ⇒ cache hit)
+```bash
+# Enable debug logging
+REASONIX_LOG_LEVEL=DEBUG reasonix-code code
 
-### 2. Single-jump folding (no gradual denoising)
+# View session events
+reasonix-code events <session-name>
 
-**Gradual denoising loops have been removed.** Context management now has only two states:
-
-- **Phase 1: Append-only.** No compression; full tool results are kept.
-- **Phase 2: Trigger Fold.** When the context nears its threshold, the entire history is denoised, clustered, and persisted as a fold view; the live prompt then cold-starts with a new four-layer structure.
-
-Post-fold prompt structure:
-
-```
-<!-- fold: f-xxx -->           ← epoch summary of the previous fold's three artifacts (max 5; reset to the latest on the 6th)
-...
-<!-- current-fold: f-yyy -->   ← current fold marker
-[Decision clusters / related turn IDs]
-[Evolution framework: last 30 denoised turns]
-[Hot zone: last 5 turns full fidelity]
-[Current turn]
+# Health check
+reasonix-code doctor
 ```
 
-| Layer | Scope | Contents | Cache role |
-|------|------|------|----------|
-| Epoch summary | Earlier folds | Recursive strategic summary (≤1024 tokens) of the previous clusters/framework/hotzone | Long-term stable, cache hit |
-| Decision clusters | This fold | Decision facts, file refs, turn IDs | Highly stable, cache hit |
-| Evolution framework | Pre-fold 30 turns | User intent, tool calls, conclusions | Hits within stable window |
-| Hot zone | Last 5 turns | Full user/assistant/tool content | Changes every turn, expected miss |
+---
 
-A fold is a single jump, not a continuous process. The first fold produces only clusters/framework/hotzone; later folds invoke a lightweight summarizer against the previous fold's three artifacts. After the jump the original JSONL is archived as `{sessionId}__archive_{ts}.jsonl`, non-hot-zone tool results are moved verbatim to `{sessionId}.toolcache.jsonl`, and the prompt sees `[archived: ...]` placeholders. Every compressed turn remains restorable via `turnId` / `tool_call_id` from the archived JSONL, `.toolcache.jsonl`, or `fold_view.json`.
+## Development
 
-### 3. Error tolerance
-
-Tool-call errors are handled leniently to avoid wasting turns:
-
-- **`lenientJsonParse()`** — 5 repair strategies (brace wrap, trailing comma, single quotes, unquote keys)
-- **`inferToolArgs()`** — fuzzy param name matching (`path` ↔ `file` ↔ `filepath`), function-call style parsing, shell-KV format
-- **`fillMissingRequiredParam()`** — auto-fill missing required params with type defaults (string → `""`, number → `0`)
-- **Tool results kept verbatim** — tool results and tool_call args are no longer truncated on append or between turns; they remain intact until fold time, when they are archived to `.toolcache.jsonl`. This keeps the prefix-cache bytes identical across multiple API calls within the same turn
-
-### MCP handshake cache
-
-MCP server handshake results are persisted to `~/.reasonix/mcp-handshake/` keyed by a deterministic spec fingerprint (type, command/url, args, env, headers — sorted). On restart, tools register in the same order from cache — no handshake wait, no prefix-cache invalidation.
-
-### Benchmarks
-
-| Metric | Without optimizations | With cache strategy |
-|--------|---------------------|-------------------|
-| Input cost (20-turn session) | ~$0.037 | ~$0.016 (**57% less**) |
-| Turns before 75% fold | ~166 | ~277 (**+67%**) |
-| Cache miss on turn switch | 100% (reasoning stripped) | ~20% (reasoning preserved) |
-| Session resume cache hit | 0% (content healed) | ~80% (content preserved) |
-| MCP tool order restart | Random | Deterministic (cached) |
+```bash
+git clone https://github.com/Zehee/Reasonix-Code.git
+cd Reasonix-Code
+npm install
+npm run dev code      # Development mode
+npm test              # Run tests
+npm run lint          # Lint
+npm run typecheck     # Type check
+```
 
 ---
 
 ## Relationship to upstream
 
-Reasonix-Code is a fork of [DeepSeek-Reasonix](https://github.com/esengine/DeepSeek-Reasonix) (TypeScript v0.x line). Key differences:
+Reasonix-Code is a fork of [Reasonix](https://github.com/Reasonix/Reasonix) (TypeScript / Node.js line). Key differences:
 
-- **Independent direction** — not bound to the Go rewrite (main-v2) roadmap
-- **Three-layer memory** — RFC #5539 design, not the v5 memory model
-- **Robustness first** — self-healing session identifiers, redundant metadata, crash-safe writes
+- **Independent evolution** — not following the upstream Go rewrite
+- **Three-layer memory** — plain file architecture, no vector databases
+- **Desktop experience** — multi-workspace, CLI crash toasts, tab focus
+- **Robustness** — self-healing session IDs, crash-safe writes
 
 ---
 
