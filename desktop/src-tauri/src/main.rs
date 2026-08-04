@@ -1716,6 +1716,51 @@ fn main() {
 
 
             if let Some(w) = app.get_webview_window("main") {
+                // WebView2 enables browser accelerator keys (Ctrl+P print,
+                // Ctrl+F find, Ctrl+R reload, F12…) by default. Front-end
+                // keydown guards only work while their JS is alive — a
+                // blank/failed iframe has no listener, so Ctrl+P would still
+                // pop the browser print preview (its "quality" options page)
+                // over a black shell. Disable the keys at the WebView2 layer
+                // for the whole window; the shell/dashboard don't use any
+                // browser shortcut.
+                #[cfg(windows)]
+                unsafe {
+                    use windows_core::Interface;
+                    let _ = w.with_webview(|webview| {
+                        // ICoreWebView2Controller::get_CoreWebView2 →
+                        // ICoreWebView2::get_Settings → ICoreWebView2Settings.
+                        let settings = webview.controller().CoreWebView2().and_then(|c| c.Settings());
+                        match settings {
+                            Ok(settings) => {
+                                // webview2-com's bindings are trimmed —
+                                // put_IsBrowserAcceleratorKeysEnabled is
+                                // missing. Its vtable slot is 22 per the
+                                // official WebView2 IDL: 3 (IUnknown) + 9
+                                // get/put pairs + the 10th pair's getter.
+                                type PutAccel =
+                                    unsafe extern "system" fn(*mut core::ffi::c_void, i32) -> i32;
+                                // object → [vtable_ptr, …] → fn-ptr array
+                                let obj = Interface::as_raw(&settings) as *const *const core::ffi::c_void;
+                                let vtable: *const *const core::ffi::c_void =
+                                    *obj as *const *const core::ffi::c_void;
+                                let put: PutAccel = std::mem::transmute(*vtable.add(22));
+                                let hr = put(obj as *mut core::ffi::c_void, 0);
+                                if hr >= 0 {
+                                    log_line("[webview] browser accelerator keys disabled");
+                                } else {
+                                    log_line(&format!(
+                                        "[webview] put_IsBrowserAcceleratorKeysEnabled failed: 0x{hr:08X}"
+                                    ));
+                                }
+                            }
+                            Err(e) => log_line(&format!(
+                                "[webview] failed to get ICoreWebView2Settings: {e}"
+                            )),
+                        }
+                    });
+                }
+
                 // HiDPI fit: the JSON config asks for 1024x720 logical px.
                 // On Windows laptops at 200% scale (1920x1080 → 960x540
                 // effective logical px) that overflows the screen and the
