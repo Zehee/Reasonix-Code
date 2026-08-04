@@ -62,11 +62,14 @@
 
   npm_ok:
     DetailPrint "正在安装 reasonix-code 命令行版（首次安装可能需要几分钟，请耐心等待）..."
-    ; npm may have just been installed by winget — the current process's
-    ; PATH is stale, so try the canonical install location first and fall
-    ; back to PATH. A 5-minute timeout keeps the installer from hanging
-    ; forever on a stalled network.
-    nsExec::ExecToStack /TIMEOUT=300000 'cmd /c if exist "$LOCALAPPDATA\Programs\nodejs\npm.cmd" ("$LOCALAPPDATA\Programs\nodejs\npm.cmd" install -g --prefix "$PROFILE\.reasonix-code\npm-global" reasonix-code) else (npm install -g --prefix "$PROFILE\.reasonix-code\npm-global" reasonix-code)'
+    ; Prefer the canonical npm location (a just-installed Node may not be
+    ; on this process's PATH yet); fall back to PATH. Keep the command
+    ; simple — no cmd if/else parenthesis nesting, which can stall.
+    ${If} ${FileExists} "$LOCALAPPDATA\Programs\nodejs\npm.cmd"
+      nsExec::ExecToStack /TIMEOUT=300000 'cmd /c ""$LOCALAPPDATA\Programs\nodejs\npm.cmd" install -g --prefix "$PROFILE\.reasonix-code\npm-global" reasonix-code"'
+    ${Else}
+      nsExec::ExecToStack /TIMEOUT=300000 'cmd /c npm install -g --prefix "$PROFILE\.reasonix-code\npm-global" reasonix-code'
+    ${EndIf}
     Pop $0
     Pop $1
     IntCmp $0 0 path_setup
