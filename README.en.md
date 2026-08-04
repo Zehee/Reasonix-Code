@@ -256,7 +256,7 @@ npm run typecheck     # Type check
 
 ## Relationship to upstream
 
-Reasonix-Code is a fork of [Reasonix](https://github.com/Reasonix/Reasonix) (TypeScript / Node.js line). Key differences:
+Reasonix-Code is a fork of [Reasonix](https://github.com/esengine/DeepSeek-Reasonix) (TypeScript / Node.js line). Key differences:
 
 - **Independent evolution** — not following the upstream Go rewrite
 - **Three-layer memory** — plain file architecture, no vector databases

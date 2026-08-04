@@ -256,7 +256,7 @@ npm run typecheck     # 类型检查
 
 ## 与上游的关系
 
-Reasonix-Code 是 [Reasonix](https://github.com/Reasonix/Reasonix)（TypeScript / Node.js 分支）的 fork。主要区别：
+Reasonix-Code 是 [Reasonix](https://github.com/esengine/DeepSeek-Reasonix)（TypeScript / Node.js 分支）的 fork。主要区别：
 
 - **独立演进** — 不跟随上游 Go 重写版本
 - **三层记忆** — 纯文件架构，非向量数据库

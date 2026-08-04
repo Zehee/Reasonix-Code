@@ -2,7 +2,7 @@
 
 ## 项目定位
 
-Reasonix-Code 是 [Reasonix](https://github.com/Reasonix/Reasonix)（TypeScript / Node.js 分支）的 fork，独立演进。
+Reasonix-Code 是 [Reasonix](https://github.com/esengine/DeepSeek-Reasonix)（TypeScript / Node.js 分支）的 fork，独立演进。
 
 **核心改造方向**：
 - **独立路线** — 不跟随上游 Go 重写版本（main-v2）
