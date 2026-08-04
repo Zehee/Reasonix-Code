@@ -8,7 +8,7 @@ v0.2.0 是一次重大重构，以下是迁移要点。
 |---|---|---|
 | `reasonix-code code [dir]` | 不变 | 不变 |
 | `reasonix-code chat` | 不变 | 不变 |
-| `reasonix` | `reasonix-clear` | `reasonix-code` |
+| `reasonix-code` | `reasonix-code` | `reasonix-code` |
 
 ## 行为变化
 
