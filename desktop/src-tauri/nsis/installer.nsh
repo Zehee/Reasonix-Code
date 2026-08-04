@@ -63,7 +63,11 @@
           ${EndIf}
           WriteRegExpandStr HKCU "Environment" "Path" "$2"
           System::Call 'KERNEL32::SetEnvironmentVariable(t "Path", t r2)'
-          SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment"
+          ; Async notify — SendMessage(HWND_BROADCAST) blocks until EVERY
+          ; top-level window answers; a hung window (explorer, FastGithub,
+          ; another installer) stalls the installer. PostMessage returns
+          ; immediately; explorer picks the change up on its own.
+          System::Call 'user32::PostMessage(i ${HWND_BROADCAST}, i ${WM_SETTINGCHANGE}, i 0, t "Environment")'
         ${Else}
           StrCpy $InstalledNodeByUs 1
         ${EndIf}
@@ -97,7 +101,8 @@
     ${EndIf}
     WriteRegExpandStr HKCU "Environment" "Path" "$3"
     System::Call 'KERNEL32::SetEnvironmentVariable(t "Path", t r3)'
-    SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment"
+    ; Async notify — see path_setup above for why SendMessage is avoided.
+    System::Call 'user32::PostMessage(i ${HWND_BROADCAST}, i ${WM_SETTINGCHANGE}, i 0, t "Environment")'
     Goto done
   done:
 !macroend
