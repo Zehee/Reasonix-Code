@@ -105,9 +105,6 @@ reasonix-code setup
 # 进入代码模式（自动检测当前目录为工作区）
 reasonix-code code
 
-# 进入对话模式（无文件系统访问）
-reasonix-code chat
-
 # 查看帮助
 reasonix-code --help
 ```
@@ -133,7 +130,6 @@ reasonix-code --help
 | 子命令 | 用途 |
 |---|---|
 | `reasonix-code code [dir]` | 代码模式（文件编辑、计划模式、审查门） |
-| `reasonix-code chat` | 对话模式（无文件系统访问） |
 | `reasonix-code run <task>` | Headless 执行（CI 友好） |
 | `reasonix-code setup` | 交互式配置向导 |
 | `reasonix-code sessions [name]` | 列出/打开保存的会话 |

@@ -22,7 +22,6 @@ export const de: TranslationSchema = {
     description: "DeepSeek-natives Agent-Framework, gebaut für Cache-Treffer und günstige Tokens.",
     continue: "Die zuletzt verwendete Chat-Sitzung fortsetzen, ohne die Auswahl anzuzeigen.",
     setup: "Interaktiver Assistent für API-Schlüssel und MCP-Server. Jederzeit erneut ausführbar.",
-    chat: "Interaktive Ink-TUI mit Live-Cache- und Kostenanzeige.",
     run: "Eine einzelne Aufgabe nicht-interaktiv ausführen, Ausgabe wird gestreamt.",
     stats: "Nutzungsdashboard anzeigen.",
     doctor: "Gesundheitscheck mit einem Befehl.",

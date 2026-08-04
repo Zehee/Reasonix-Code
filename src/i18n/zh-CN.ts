@@ -19,7 +19,6 @@ export const zhCN: TranslationSchema = {
     continue: "恢复最近使用的聊天会话，不显示选择器。",
     setup: "交互式向导 — API 密钥、MCP 服务器。随时重新运行以重新配置。",
     code: "代码编辑聊天 — 以 <dir>（默认：cwd）为根的文件系统工具，编码系统提示词，v4-flash 基线。",
-    chat: "具有实时缓存/成本面板的交互式 Ink TUI。",
     run: "以非交互方式运行单个任务，流式输出。",
     stats: "显示使用情况仪表板。",
     doctor: "一键健康检查。",

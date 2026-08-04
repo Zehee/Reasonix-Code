@@ -166,7 +166,6 @@ program
 // `reasonix-code` with no subcommand → setup wizard on first run (no API key
 // configured yet), otherwise code mode in the current directory.
 // The current directory is automatically used as the workspace root.
-// Filesystem-less chat stays reachable via `reasonix-code chat`.
 program.action(async (opts: { continue?: boolean; mouse?: boolean }) => {
   const cfg = readConfig();
   const mode = resolveBareCommandMode(cfg);
@@ -271,94 +270,6 @@ program
         noMouse: opts.mouse === false,
         systemAppend: opts.systemAppend,
         systemAppendFile: opts.systemAppendFile,
-      });
-    } finally {
-      if (profiling) await stopAndSaveCpuProfile();
-    }
-  });
-
-program
-  .command("chat")
-  .description(t("cli.chat"))
-  .option("-m, --model <id>", t("ui.modelIdHint"))
-  .option("-s, --system <prompt>", t("ui.systemPromptHint"))
-  .option("--transcript <path>", t("ui.transcriptHint"))
-  .option("--effort <level>", t("ui.effortHint"))
-  .option("--budget <usd>", t("ui.budgetHint"), (v) => Number.parseFloat(v))
-  .option("--session <name>", t("ui.sessionNameHint"))
-  .option("--no-session", t("ui.ephemeralHint"))
-  .option("--no-mouse", t("ui.noMouseHint"))
-  .option("--no-proxy", t("ui.noProxyHint"))
-  .option("-r, --resume", t("ui.resumeHint"))
-  .option("-c, --continue", t("cli.continue"))
-  .option("-n, --new", t("ui.newHint"))
-  .option(
-    "--mcp <spec>",
-    t("ui.mcpSpecHint"),
-    (value: string, previous: string[] = []) => [...previous, value],
-    [] as string[],
-  )
-  .option("--mcp-prefix <str>", t("ui.mcpPrefixHint"))
-  .option("--no-config", t("ui.noConfigHint"))
-  .option("--no-dashboard", t("ui.noDashboard"))
-  .option("--open-dashboard", t("ui.openDashboardHint"))
-  .option("--dashboard-port <port>", t("ui.dashboardPortHint"))
-  .option(
-    "--dashboard-host <host>",
-    "bind address for the dashboard (default 127.0.0.1; use 0.0.0.0 for LAN access — the URL token is then the only auth)",
-  )
-  .option(
-    "--profile [path]",
-    "record a V8 CPU profile; saved on exit. Send the .cpuprofile back if you're reporting a perf bug.",
-  )
-  .action(async (opts) => {
-    const profiling = await maybeStartCpuProfile(opts.profile);
-    try {
-      persistEffortFlag(opts.effort);
-      const defaults = resolveDefaults({
-        model: opts.model,
-        mcp: opts.mcp as string[],
-        session: opts.session,
-        effort: opts.effort,
-        noConfig: opts.config === false,
-      });
-      // `-c` is "newest-touched session" + auto-resume; `-r` is "this
-      // session's prior messages, even if you also passed --session".
-      // When both are set we prefer the explicit `--session` + `-r`
-      // (more specific input wins). `-c` only kicks in if `-r` wasn't.
-      const continueOpts = opts.resume
-        ? { session: defaults.session, forceResume: true }
-        : resolveContinueFlag(
-            opts.continue,
-            defaults.session,
-            () => listSessions()[0],
-            (msg) => process.stderr.write(`${msg}\n`),
-          );
-      const { chatCommand } = await import("./commands/chat.js");
-      const chatBase = opts.system ?? defaultSystemPrompt(defaults.model);
-      const chatCwd = process.cwd();
-      const chatRebuildSystem = () => applyMemoryStack(chatBase, chatCwd);
-      await chatCommand({
-        model: defaults.model,
-        reasoningEffort: defaults.reasoningEffort,
-        system: chatRebuildSystem(),
-        rebuildSystem: chatRebuildSystem,
-        transcript: opts.transcript,
-        budgetUsd: parseBudgetFlag(opts.budget),
-        session: continueOpts.session,
-        mcp: defaults.mcp,
-        mcpPrefix: opts.mcpPrefix,
-        forceResume: continueOpts.forceResume,
-        forceNew: !!opts.new || !!defaults.forceNew,
-        noDashboard: opts.dashboard === false || !loadDashboardEnabled(opts.config === false),
-        openDashboard: opts.openDashboard === true,
-        dashboardPort: resolveDashboardPort(
-          parseDashboardPortFlag(opts.dashboardPort),
-          opts.config === false,
-        ),
-        dashboardHost: resolveDashboardHost(opts.dashboardHost, opts.config === false),
-        dashboardToken: resolveDashboardToken(opts.config === false),
-        noMouse: opts.mouse === false,
       });
     } finally {
       if (profiling) await stopAndSaveCpuProfile();

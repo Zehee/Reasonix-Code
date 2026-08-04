@@ -111,16 +111,6 @@ describe("bare CLI routing", () => {
     );
   });
 
-  it("keeps explicit reasonix-code chat in chat mode even inside a project", async () => {
-    writeConfig({ setupCompleted: true }, join(home, ".reasonix", "config.json"));
-    writeFileSync(join(cwd, "package.json"), "{}\n", "utf8");
-
-    await importCli(["chat"]);
-
-    await vi.waitFor(() => expect(chatCommand).toHaveBeenCalled());
-    expect(codeCommand).not.toHaveBeenCalled();
-  });
-
   it("keeps first-run bare reasonix on the setup wizard", async () => {
     writeConfig({ setupCompleted: false }, join(home, ".reasonix", "config.json"));
     mkdirSync(join(cwd, ".git"));

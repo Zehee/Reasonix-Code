@@ -19,7 +19,6 @@ export interface TranslationSchema {
     continue: string;
     setup: string;
     code: string;
-    chat: string;
     run: string;
     stats: string;
     doctor: string;
