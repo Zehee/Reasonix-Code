@@ -8,7 +8,7 @@
 
 实际查找链 REASONIX.md → .claude/CLAUDE.md → CLAUDE.md → AGENTS.md → AGENT.md，8000 字符截断。`${filename}` / `${mem.content}` 为插入点。
 
-## 原文
+## 原文（中文翻译稿，供对照）
 
 > ${basePrompt}
 >
@@ -19,6 +19,7 @@
 > ```
 > ${mem.content}
 > ```
+
 
 ## v2
 

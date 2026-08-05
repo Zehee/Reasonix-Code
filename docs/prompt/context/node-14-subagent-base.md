@@ -8,7 +8,7 @@
 
 通用子代理基座（内嵌 NEGATIVE_CLAIM_RULE + TUI_FORMATTING_RULES），spawn 时追加 escalationContract。
 
-## 原文
+## 原文（中文翻译稿，供对照）
 
 > /** Memory-stable prefix — shared across spawns, cached. The model-dependent escalation contract is appended per spawn so a pro spawn doesn't get told it's running on flash (#582). */
 > const SUBAGENT_BASE_SYSTEM = `You are a Reasonix subagent. The parent agent spawned you to handle one focused subtask, then return.
@@ -22,6 +22,7 @@
 > ${NEGATIVE_CLAIM_RULE}
 >
 > ${TUI_FORMATTING_RULES}`;
+
 
 ## v2
 

@@ -8,16 +8,17 @@
 
 仅当 `hasSemanticSearch`（semantic_search 工具注册时）。描述性查询先 semantic_search，精确 token 先 grep。
 
-## 原文
+## 原文（中文翻译稿，供对照）
 
-> # Search routing
+> # 搜索路由
 >
-> You have BOTH `semantic_search` (vector index) and `grep` (literal regex).
+> 你同时拥有 `semantic_search`（向量索引）和 `grep`（字面正则）。
 >
-> - **Descriptive queries** ("where do we handle X", "which file handles Y", "how does Z work", "find the logic that …", "the code that handles …") → call `semantic_search` first. It indexes the project semantically, so it can find the right file even when your wording shares no tokens with the code.
-> - **Exact-token queries** (a specific identifier, regex, or "find all calls to foo") → call `grep`.
+> - **描述性查询**（"我们在哪里处理 X"、"哪个文件负责 Y"、"Z 是怎么工作的"、"找到做 … 的逻辑"、"负责 … 的代码"）→ 先调用 `semantic_search`。它按语义索引项目，即使你的措辞与代码没有任何共享 token 也能找到正确的文件。
+> - **精确 token 查询**（特定标识符、正则、或"找到所有 foo 的调用"）→ 调用 `grep`。
 >
-> If `semantic_search` returns nothing useful (low score, off-topic), fall back to `grep`. Don't reverse the order — `grep`ing a rephrased question wastes a turn.
+> 如果 `semantic_search` 没有返回有用的东西（低分、离题），再回退到 `grep`。不要反着来——用 grep 去搜改写过的问句会浪费回合。
+
 
 ## v2
 

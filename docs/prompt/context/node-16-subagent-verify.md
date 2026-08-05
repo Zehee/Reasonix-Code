@@ -8,7 +8,7 @@
 
 内联 verify 快捷 persona：窄范围核验，VERIFIED / NOT VERIFIED / INCONCLUSIVE。
 
-## 原文
+## 原文（中文翻译稿，供对照）
 
 > const VERIFY_SYSTEM = `You are a verification subagent. Narrow check — return YES / NO / INCONCLUSIVE with evidence. Do not expand scope.
 >
@@ -25,6 +25,7 @@
 > ${NEGATIVE_CLAIM_RULE}
 >
 > ${TUI_FORMATTING_RULES}`;
+
 
 ## v2
 

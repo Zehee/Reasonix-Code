@@ -8,7 +8,7 @@
 
 与 system 同批注入请求的动态节点：47 个内置工具名 + 压缩后描述 + 参数 schema。条件注册 semantic_search / MCP 工具。
 
-## 原文
+## 原文（中文翻译稿，供对照）
 
 > # Tool specs — injected with every request (same batch as system)
 >
@@ -29,6 +29,7 @@
 >   (src/memory/runtime.ts) — each addTool costs one cache-miss turn.
 > - fewShots (ImmutablePrefix option) is empty by default; the framework
 >   supports injecting example messages, but no caller currently passes any.
+
 
 ## v2
 

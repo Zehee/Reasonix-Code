@@ -8,7 +8,7 @@
 
 内联 explore 快捷 persona：只读广撒网调查，返回单一蒸馏结论。
 
-## 原文
+## 原文（中文翻译稿，供对照）
 
 > const EXPLORE_SYSTEM = `You are an exploration subagent. Wide-net read-only investigation; return one distilled answer.
 >
@@ -26,6 +26,7 @@
 > ${NEGATIVE_CLAIM_RULE}
 >
 > ${TUI_FORMATTING_RULES}`;
+
 
 ## v2
 

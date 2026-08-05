@@ -8,7 +8,7 @@
 
 非 system 文本，但与 system 同批进请求：工具描述压缩到 ≤120 字符（保留首句/句边界）。
 
-## 原文
+## 原文（中文翻译稿，供对照）
 
 > export function shrinkDescription(description: string): string {
 >   // If the description ends in '.' and the first sentence fits in
@@ -26,6 +26,7 @@
 >   if (lastDot > 10) return truncated.slice(0, lastDot + 1);
 >   return truncated;
 > }
+
 
 ## v2
 

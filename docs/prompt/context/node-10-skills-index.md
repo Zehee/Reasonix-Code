@@ -8,7 +8,7 @@
 
 `[🧬 subagent]` 标签说明 + 一行索引清单（截断保护）。
 
-## 原文
+## 原文（中文翻译稿，供对照）
 
 > ${basePrompt}
 >
@@ -20,6 +20,7 @@
 > - <skill-name>[ 🧬 subagent] — <clipped description>
 > （索引行，超长截断）
 > ```
+
 
 ## v2
 
