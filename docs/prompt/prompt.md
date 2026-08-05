@@ -131,6 +131,79 @@
 > __ESCALATION_CONTRACT__  
 >
 > ${TUI_FORMATTING_RULES}  
+---
+
+### v2 草案区 · 节点 1（CODE_SYSTEM_TEMPLATE）— 阶段：v1 现状复述与核验发现
+
+> 本区段用于讨论 v1 → v2 的迭代。v2 文本定稿后会写入 src/code/prompt.ts。
+
+#### v1 原文规模与结构
+
+- 来源：`src/code/prompt.ts:13-133`（121 行，模板字面量）
+- 大小：~10-12k 字符（含占位符 `__ESCALATION_CONTRACT__` 和 `${TUI_FORMATTING_RULES}`）
+- 渲染路径：`codeSystemBase(modelId)` → `CODE_SYSTEM_TEMPLATE.replace("__ESCALATION_CONTRACT__", escalationContract(modelId))`，再由 `${TUI_FORMATTING_RULES}` 替换
+- 章节数：19 段标题 + 2 个占位符（见 prompt.ts:15-132）
+
+#### v1 章节清单（按行号）
+
+1. `:13` 身份声明（You are Reasonix Code...pick by tool name）
+2. `:15` # Identity is fixed by this prompt — never inferred from the workspace
+3. `:19` # Cite or shut up — non-negotiable（含模板内嵌 NEGATIVE 断言规则）
+4. `:23` # When auditing or reviewing this codebase（6 条护栏）
+5. `:34` # Picking the right tool: submit_plan / ask_choice / todo_write
+6. `:40` # Plan mode (/plan)
+7. `:44` # Delegating to subagents via Skills
+8. `:50` # When to edit vs. when to explore
+9. `:54` Edit gate 文案（review/auto 模式路由）
+10. `:59` # Editing files（SEARCH/REPLACE 格式 + 8 条规则）
+11. `:85` # Trust what you already know
+12. `:89` # Exploration
+13. `:98` # Path conventions
+14. `:104` # Workspace is pinned
+15. `:108` # Foreground vs background
+16. `:112` # Scope discipline on "run it" / "start it" requests
+17. `:116` # Style
+18. `:122` # Tool Selection
+19. `:126` # Task integrity — non-negotiable
+20. `:130` 占位符 `__ESCALATION_CONTRACT__`（节点 2）
+21. `:132` 占位符 `${TUI_FORMATTING_RULES}`（节点 3）
+
+#### 核验报告（verification.md）针对节点 1 的发现
+
+- **🔴 1 引用校验** — 已实现（2026-08-04，commit d47cf5d9）：`src/cli/ui/citation-check.ts` + markdown.tsx/markdown-view.tsx 红色删除线 ❌。**v1 文案（prompt.ts:21）仍在说"Reasonix VALIDATES citations and broken paths render in red strikethrough with ❌"**，与已实现完全一致 ✓
+- **🔴 2 自动升级** — 已实现（commit d47cf5d9）：`src/loop.ts` 回合内 repair/工具错误 ≥3 → deepseek-v4-pro 重试 + typed breakdown warning。**v1 文案（prompt-fragments.ts:24）"the system also escalates automatically if you hit 3+ repair / SEARCH-mismatch errors" 已与实现一致** ✓
+- **⚠️ 1 `ls` 引用** — 已修复（commit d47cf5d9）：prompt.ts:17 `ls` → `list_directory` ✓
+- **⚠️ 2 MCP fallback 语气** — v1 prompt.ts:124 "If an MCP tool fails or times out, fall back to the built-in" 仍是"系统保证"口吻；实现是模型指导
+- **⚠️ 3 前导 `/` 机制描述** — v1 prompt.ts:101 "Never use a leading `/` in arguments" 措辞不精确（实现是"逃逸 workspace 才拒绝"）
+- **其他核验**（来自 verification.md）：工具层 47/47 全部真实注册；read-before-edit、multi_edit 回滚、plan mode、`/plan`、`/skill`、HIGH PRIORITY 等机制与 v1 文案一致
+
+#### v1 已知冗余 / 可优化点（待你确认是否改）
+
+- **冗余 A**："# Trust what you already know"（`:85`）与"# Trust"语境在多段已表达（`# Cite or shut up`、上下文管理），可考虑合并或删除
+- **冗余 B**："# When to edit vs. when to explore" + Edit gate + "Editing files" 三段围绕同一主题（编辑门控），可压缩为 1-2 段
+- **冗余 C**："# Style"（`:116`）只有 2 条，建议并入"# Editing files"或"# Trust"
+- **冗余 D**：每段都"# title — non-negotiable"或"# title — explanation"风格一致，但缺"反升级"或"可拒绝升级"提示——模型在 pro 给出更差答案时无路可退
+- **弱信号**：审计护栏（`:23`）的 6 条措辞较散（"Auto-preview is for locating"等），可重组为更明确的清单
+
+#### v2 设计方向（待你确认 / 调整）
+
+1. **去冗余**：合并 A/B/C，预计节省 ~10-15% 字符（对前缀缓存更友好）
+2. **加反升级提示**：在节点 1 内追加"# 反升级"小节（5 行内）—— 若 pro 答案明显比 flash 差，模型应主动反馈
+3. **校准措辞**：
+   - "MCP fallback" 改为"you may fall back to the built-in"
+   - "Never use a leading `/`" 改为更精确的"absolute paths resolving outside the workspace are rejected"
+4. **结构优化**：把"# 任务完整性"提到首段（紧跟身份声明），让最重要的不变量最先被读到
+5. **本地化**：v2 中文版直接写中文正文（与 v1 英文保持双版本：节点 1 在 prompt.en.md 仍为英文）
+6. **保持**：19 段里大量措辞保留（这些是上游深耕沉淀的，v1 已通过用户长使用验证）
+
+#### 不改的边界
+
+- **不动占位符 `__ESCALATION_CONTRACT__` / `${TUI_FORMATTING_RULES}` 的协议**（节点 2/3 渲染）
+- **不动 read-before-edit / multi_edit 回滚 / plan mode 等机制描述**（这些与已实现代码完全一致，验证过）
+- **不动已修复的"ls"和"VALIDATES"措辞**
+
+---
+
 
 ---
 
