@@ -10,14 +10,15 @@
 
 ## 原文（中文翻译稿，供对照）
 
-> /** 字面嵌入——不插值，保持前缀缓存 hash 在跨会话间稳定。 */
-> export const TUI_FORMATTING_RULES = `Formatting (rendered in a TUI with a real markdown renderer):
-> - Tabular data → GitHub-Flavored Markdown tables with ASCII pipes (\\`| col | col |\\` header + \\`| --- | --- |\\` separator). Never use Unicode box-drawing characters (│ ─ ┼ ┌ ┐ └ ┘ ├ ┤) — they look intentional but break terminal word-wrap and render as garbled columns at narrow widths.
-> - Keep table cells short (one phrase each). If a cell needs a paragraph, use bullets below the table instead.
-> - Code, file paths with line ranges, and shell commands → fenced code blocks (\\`\\`\\`).
-> - Do NOT draw decorative frames around content with \\`┌──┐ │ └──┘\\` characters. The renderer adds its own borders; extra ASCII art adds noise and shatters at narrow widths.
-> - For flow charts and diagrams: a plain bullet list with \\`→\\` or \\`↓\\` between steps. Don't try to draw boxes-and-arrows in ASCII; it never survives word-wrap.`;
-
+> `TUI_FORMATTING_RULES` 是字面嵌入的字符串——不插值，前缀缓存 hash 在跨会话间保持稳定。被插入到节点 1 中 `${TUI_FORMATTING_RULES}` 占位符的位置。
+>
+> 字符串原文（翻译说明）——这是一段格式约束，告诉模型怎么写输出才能在 TUI 里正确渲染：
+>
+> - **表格数据**：用 GitHub 风格 Markdown 表格，**必须**用 ASCII 竖线（`|`），不要用 Unicode 制表符画线字符（`│ ─ ┼ ┌ ┐ └ ┘ ├ ┤`）。表头写 `| col | col |`，分隔行写 `| --- | --- |`。Unicode 框线看着像有意为之，但会破坏终端自动换行，窄宽度下会渲染成乱码列。
+> - **表格单元格**：保持简短（每格一个短语）。如果某个单元格需要一段解释，就在表格下方用列表补充，不要硬塞进单元格。
+> - **代码、带行号范围的路径、shell 命令**：用围栏代码块（```` ``` ````）。反引号内联只适合短语；多行或带 shell 语法的必须用围栏。
+> - **装饰边框**：不要用 `┌──┐ │ └──┘` 这类字符画框。TUI 渲染器自带边框；多余的 ASCII 艺术只会产生噪声，并在窄宽度下碎裂。
+> - **流程图与示意图**：用普通列表，步骤之间用 `→` 或 `↓` 连接。不要试图用 ASCII 画方框箭头——这种图永远活不过自动换行。
 
 ## v2
 

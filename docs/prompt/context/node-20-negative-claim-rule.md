@@ -10,14 +10,17 @@
 
 ## 原文（中文翻译稿，供对照）
 
-> export const NEGATIVE_CLAIM_RULE = `Negative claims ("X is missing", "Y isn't implemented", "there's no Z") are the #1 hallucination shape. They feel safe to write because no citation seems possible — but that's exactly why you must NOT write them on instinct.
+> `NEGATIVE_CLAIM_RULE` 是共享片段，被嵌入到节点 14、15、16 与节点 17.1-17.4 共 7 处。被嵌入处用 `${NEGATIVE_CLAIM_RULE}` 引用。**注意**：节点 17.5（test）和 17.6（qq）不引用此片段（它们是内联而非 subagent）。
 >
-> If you have a search tool (\\`grep\\`, web search), call it FIRST before asserting absence:
-> - Returns matches → you were wrong; correct yourself and cite the matches.
-> - Returns nothing → state the absence WITH the search query as evidence: \\`No callers of \\\\`foo()\\\\` found (grep "foo").\\`
+> 原文（翻译字符串字面量）——
 >
-> If you have no search tool, qualify hard: "I haven't verified — this is a guess." Never assert absence with fake authority.`;
-
+> > 否定性陈述（"X 不存在"、"Y 没有实现"、"没有 Z"）是头号幻觉形态。它们写起来很安全，因为似乎无需引用——但正因如此，你绝不能凭本能去写。
+> >
+> > 如果你有搜索工具（`grep`、web 搜索），断言缺失前先调用它：
+> > - 有匹配 → 你错了；纠正自己并引用匹配结果。
+> > - 无匹配 → 把"不存在"连同搜索查询一起作为证据陈述：`No callers of `foo()` found (grep "foo").`
+> >
+> > 如果没有搜索工具，严格限定："我还没验证——这是猜测。"绝不要带着虚假的权威断言缺失。
 
 ## v2
 

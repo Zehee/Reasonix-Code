@@ -10,16 +10,17 @@
 
 ## 原文（中文翻译稿，供对照）
 
-> ${basePrompt}
+> 动态模板。`applyGlobalClaudeMemory` 在节点 7 之后追加（如果 `~/.claude/CLAUDE.md` 存在）。承接 Claude Code 配置的跨项目笔记。
 >
-> # Global memory (~/.claude/CLAUDE.md)
+> 原文——
 >
-> Cross-project notes from your Claude Code configuration. Treat as authoritative — same level of trust as project memory.
->
-> ```
-> ${mem.content}
-> ```
-
+> > # 全局记忆（~/.claude/CLAUDE.md）
+> >
+> > 来自你的 Claude Code 配置的跨项目笔记。视为权威——与项目记忆同等信任级别。
+> >
+> > ```
+> > ${mem.content}
+> > ```
 
 ## v2
 

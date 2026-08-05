@@ -10,16 +10,17 @@
 
 ## 原文（中文翻译稿，供对照）
 
-> ${withMemory}
+> 动态模板。`codeSystemPrompt` 在记忆栈（节点 6-10）之后追加（如果项目根有 `.gitignore`）。`${withMemory}` 是含记忆栈的全部 system，`${gitignore 内容}` 是 .gitignore 文件正文（2000 字符截断，溢出标 `… (truncated N chars)`）。
 >
-> # Project .gitignore
+> 原文——
 >
-> The user's repo ships this .gitignore — treat every pattern as "don't traverse or edit inside these paths unless explicitly asked":
->
-> ```
-> ${gitignore 内容，2000 字符截断}
-> ```
-
+> > # 项目 .gitignore
+> >
+> > 用户的仓库自带这份 .gitignore——把每个模式都当作"除非明确要求，不要遍历或编辑这些路径"：
+> >
+> > ```
+> > ${gitignore 内容，2000 字符截断}
+> > ```
 
 ## v2
 

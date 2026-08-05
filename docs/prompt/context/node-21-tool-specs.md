@@ -10,26 +10,18 @@
 
 ## 原文（中文翻译稿，供对照）
 
-> # Tool specs — injected with every request (same batch as system)
+> 这不是 system 文本，而是与 system 同批进请求的**动态节点**：工具规范数组。`src/tools/*.ts` 注册的工具通过 `normalizeToolDescriptor` → `shrinkDescription`（节点 19）压缩后随每次请求发出。
 >
-> 47 built-in tools registered by src/tools/*.ts (list extracted statically from the register calls):
+> 清单原文（47 个内置工具名，静态提取自注册调用）——
 >
-> add_mcp_server ask_choice copy_file create_directory create_skill delete_directory delete_file delete_range delete_symbol directory_tree edit_file find_in_code forget get_file_info get_symbols glob grep install_skill java_source job_output list_directory list_fold_views list_jobs list_search_views list_themes load_turns_context mark_step_complete move_file multi_edit read_file recall_memory remember revise_plan run_background run_command run_skill search_context search_files stop_job submit_plan tag_theme todo_write trace_theme wait_for_job web_fetch web_search write_file
+> `add_mcp_server` `ask_choice` `copy_file` `create_directory` `create_skill` `delete_directory` `delete_file` `delete_range` `delete_symbol` `directory_tree` `edit_file` `find_in_code` `forget` `get_file_info` `get_symbols` `glob` `grep` `install_skill` `java_source` `job_output` `list_directory` `list_fold_views` `list_jobs` `list_search_views` `list_themes` `load_turns_context` `mark_step_complete` `move_file` `multi_edit` `read_file` `recall_memory` `remember` `revise_plan` `run_background` `run_command` `run_skill` `search_context` `search_files` `stop_job` `submit_plan` `tag_theme` `todo_write` `trace_theme` `wait_for_job` `web_fetch` `web_search` `write_file`
 >
-> Notes:
-> - Every tool's description is canonicalized + shrunk to <=120 chars by
->   normalizeToolDescriptor / shrinkDescription (node 19) before it ships.
-> - parameters JSON schema rides along in the same spec; see src/tools/*.ts
->   for the full schemas.
-> - Conditional registrations: semantic_search (enabled when ollama is
->   reachable — see src/code/setup.ts:97; when enabled, node 4 is appended
->   to the system prompt), MCP-provided tools (user-installed servers,
->   resolved at runtime).
-> - The toolSpecs hash feeds the prefix-cache fingerprint
->   (src/memory/runtime.ts) — each addTool costs one cache-miss turn.
-> - fewShots (ImmutablePrefix option) is empty by default; the framework
->   supports injecting example messages, but no caller currently passes any.
-
+> 关键说明：
+> - 每个工具的描述在发出前都已规范化并压缩到 ≤120 字符（节点 19）。
+> - `parameters` JSON schema 随同一 spec 发送；完整 schema 见 `src/tools/*.ts`。
+> - **条件注册**：`semantic_search`（ollama 可达时启用，启用时会在 system 后附加节点 4）、MCP 提供的工具（用户安装的服务器，运行时解析）。
+> - `toolSpecs` 的哈希参与前缀缓存指纹（`src/memory/runtime.ts`）——每次 `addTool` 都会损失一次缓存命中回合。
+> - `fewShots`（`ImmutablePrefix` 选项）默认空；框架支持注入示例消息，但目前没有调用方传入。
 
 ## v2
 
